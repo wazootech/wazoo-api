@@ -10,6 +10,7 @@ export type AuthContext = {
   tokenId: string;
   organizationId: string | null;
   scope: string;
+  expiresAt: string | null;
 };
 
 export type AppEnv = {

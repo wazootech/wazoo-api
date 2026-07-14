@@ -36,7 +36,10 @@ export const tokens = new Hono<AppEnv>()
     }
     return c.json({ token: c.req.param("tokenName") });
   })
-  .get("/auth/api-tokens/validate", (c) => c.json({ exp: -1 }))
+  .get("/auth/api-tokens/validate", (c) => {
+    const auth = c.get("auth");
+    return c.json({ exp: auth.expiresAt ? Math.floor(new Date(auth.expiresAt).getTime() / 1000) : 0 });
+  })
   .get("/organizations/:organizationId/platform-tokens", async (c) => {
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const rows = await all(

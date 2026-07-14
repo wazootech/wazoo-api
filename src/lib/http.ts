@@ -67,16 +67,16 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
   const { sha256Hex } = await import("./crypto");
   const hash = await sha256Hex(token);
   const row = await c.env.DB.prepare(
-    "SELECT id, organization_id, scope FROM platform_api_tokens WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > ?)"
+    "SELECT id, organization_id, scope, expires_at FROM platform_api_tokens WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > ?)"
   )
     .bind(hash, new Date().toISOString())
-    .first<{ id: string; organization_id: string | null; scope: string }>();
+    .first<{ id: string; organization_id: string | null; scope: string; expires_at: string | null }>();
 
   if (!row) {
     throw new HTTPException(401, { message: "Invalid platform API token" });
   }
 
-  c.set("auth", { tokenId: row.id, organizationId: row.organization_id, scope: row.scope });
+  c.set("auth", { tokenId: row.id, organizationId: row.organization_id, scope: row.scope, expiresAt: row.expires_at });
   c.executionCtx.waitUntil(
     c.env.DB.prepare("UPDATE platform_api_tokens SET last_used_at = ? WHERE id = ?")
       .bind(new Date().toISOString(), row.id)
