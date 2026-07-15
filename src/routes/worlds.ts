@@ -36,7 +36,7 @@ export const worlds = new Hono<AppEnv>()
     const body = await jsonBody(c);
     const worldBody = body.world;
     if (!worldBody || typeof worldBody !== "object" || Array.isArray(worldBody)) {
-      return c.json({ error: { message: "world is required" } }, 400);
+      return c.json({ error: { code: "INVALID_ARGUMENT", message: "world is required" } }, 400);
     }
     const world = {
       id: `w_${id()}`,
@@ -71,11 +71,11 @@ export const worlds = new Hono<AppEnv>()
     const updateMask = requireString(body, "updateMask").split(",").map((field) => field.trim()).filter(Boolean);
     const allowed = new Set(["displayName", "region", "state"]);
     if (updateMask.some((field) => !allowed.has(field))) {
-      return c.json({ error: { message: "updateMask contains unknown fields" } }, 400);
+      return c.json({ error: { code: "INVALID_ARGUMENT", message: "updateMask contains unknown fields" } }, 400);
     }
     const worldBody = body.world;
     if (!worldBody || typeof worldBody !== "object" || Array.isArray(worldBody)) {
-      return c.json({ error: { message: "world is required" } }, 400);
+      return c.json({ error: { code: "INVALID_ARGUMENT", message: "world is required" } }, 400);
     }
     const patch = worldBody as Record<string, unknown>;
     await c.env.DB.prepare("UPDATE worlds SET name = COALESCE(?, name), region = COALESCE(?, region), status = COALESCE(?, status), updated_at = ? WHERE id = ?")
@@ -104,7 +104,7 @@ export const worlds = new Hono<AppEnv>()
     const existing = await first<{ id: string; status: string }>(c.env.DB.prepare("SELECT * FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
     if (!existing) return c.notFound();
     if (existing.status !== "deleted") {
-      return c.json({ error: { message: "World is not deleted" } }, 400);
+      return c.json({ error: { code: "FAILED_PRECONDITION", message: "World is not deleted" } }, 400);
     }
     await c.env.DB.prepare("UPDATE worlds SET status = 'active', deleted_at = NULL, expire_at = NULL, updated_at = ? WHERE id = ?").bind(now(), existing.id).run();
     const row = await first<WorldRow>(c.env.DB.prepare("SELECT * FROM worlds WHERE id = ?").bind(existing.id));

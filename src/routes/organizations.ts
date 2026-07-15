@@ -30,7 +30,7 @@ export const organizations = new Hono<AppEnv>()
     const body = await jsonBody(c);
     const organizationBody = body.organization;
     if (!organizationBody || typeof organizationBody !== "object" || Array.isArray(organizationBody)) {
-      return c.json({ error: { message: "organization is required" } }, 400);
+      return c.json({ error: { code: "INVALID_ARGUMENT", message: "organization is required" } }, 400);
     }
     const organization = { id: `org_${id()}`, slug: requireResourceId(body, "organizationId"), name: requireString(organizationBody as Record<string, unknown>, "displayName"), now: now() };
     await c.env.DB.prepare("INSERT INTO organizations (id, slug, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
@@ -49,11 +49,11 @@ export const organizations = new Hono<AppEnv>()
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const body = await jsonBody(c);
     if (body.updateMask !== "displayName") {
-      return c.json({ error: { message: "updateMask must be displayName" } }, 400);
+      return c.json({ error: { code: "INVALID_ARGUMENT", message: "updateMask must be displayName" } }, 400);
     }
     const organizationBody = body.organization;
     if (!organizationBody || typeof organizationBody !== "object" || Array.isArray(organizationBody)) {
-      return c.json({ error: { message: "organization is required" } }, 400);
+      return c.json({ error: { code: "INVALID_ARGUMENT", message: "organization is required" } }, 400);
     }
     await c.env.DB.prepare("UPDATE organizations SET name = ?, updated_at = ? WHERE id = ?").bind(requireString(organizationBody as Record<string, unknown>, "displayName"), now(), organization.id).run();
     const row = await first<OrganizationRow>(c.env.DB.prepare("SELECT * FROM organizations WHERE id = ?").bind(organization.id));

@@ -58,11 +58,20 @@ export async function notFound() {
 
 export async function errorHandler(error: Error, c: Context<AppEnv>) {
   if (error instanceof HTTPException) {
-    return c.json({ error: { message: error.message } }, error.status);
+    return c.json({ error: { code: errorCode(error.status), message: error.message } }, error.status);
   }
 
   console.error(JSON.stringify({ level: "error", message: error.message, stack: error.stack }));
-  return c.json({ error: { message: "Internal server error" } }, 500);
+  return c.json({ error: { code: "INTERNAL", message: "Internal server error" } }, 500);
+}
+
+function errorCode(status: number): string {
+  if (status === 400) return "INVALID_ARGUMENT";
+  if (status === 401) return "UNAUTHENTICATED";
+  if (status === 403) return "PERMISSION_DENIED";
+  if (status === 404) return "NOT_FOUND";
+  if (status === 409) return "ALREADY_EXISTS";
+  return "UNKNOWN";
 }
 
 export async function requireAuth(c: Context<AppEnv>, next: Next) {

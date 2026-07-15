@@ -29,7 +29,7 @@ export const usage = new Hono<AppEnv>()
     const body = await jsonBody(c);
     const quantity = body.quantity;
     if (typeof quantity !== "number" || !Number.isInteger(quantity) || quantity < 1) {
-      return c.json({ error: { message: "quantity must be a positive integer" } }, 400);
+      return c.json({ error: { code: "INVALID_ARGUMENT", message: "quantity must be a positive integer" } }, 400);
     }
     await c.env.DB.prepare(
       "INSERT INTO usage_events (id, organization_id, world_id, metric, quantity, occurred_at) VALUES (?, ?, ?, ?, ?, ?)"

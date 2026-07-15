@@ -21,7 +21,7 @@ export const tokens = new Hono<AppEnv>()
     const body = await jsonBody(c).catch(() => ({}));
     const organizationId = auth.organizationId ?? optionalString(body, "organizationId") ?? optionalString(body, "organization");
     if (!organizationId) {
-      return c.json({ error: { message: "organizationId or organization is required for unscoped root tokens" } }, 400);
+      return c.json({ error: { code: "INVALID_ARGUMENT", message: "organizationId or organization is required for unscoped root tokens" } }, 400);
     }
     const organization = await resolveOrg(c, organizationId);
     const token = createToken("wzp");
