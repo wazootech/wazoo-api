@@ -71,6 +71,7 @@ function errorCode(status: number): string {
   if (status === 403) return "PERMISSION_DENIED";
   if (status === 404) return "NOT_FOUND";
   if (status === 409) return "ALREADY_EXISTS";
+  if (status === 429) return "RESOURCE_EXHAUSTED";
   return "UNKNOWN";
 }
 

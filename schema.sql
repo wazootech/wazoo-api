@@ -56,6 +56,15 @@ CREATE TABLE usage_events (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
+CREATE TABLE organization_limits (
+  organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  metric TEXT NOT NULL,
+  limit_quantity INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  PRIMARY KEY (organization_id, metric)
+);
+
 CREATE INDEX idx_worlds_org ON worlds(organization_id);
 CREATE INDEX idx_world_tokens_world ON world_auth_tokens(world_id);
 CREATE INDEX idx_usage_org_time ON usage_events(organization_id, occurred_at);

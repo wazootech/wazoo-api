@@ -9,6 +9,7 @@ Production-oriented TypeScript API server for Cloudflare Workers, Hono, and Turs
 - World auth tokens: `/v1/organizations/:organizationId/worlds/:worldId/auth/tokens`
 - Platform API tokens: `/v1/auth/api-tokens/:tokenName`
 - Usage: `/v1/organizations/:organizationId/usage`
+- Limits: `/v1/organizations/:organizationId/limits`
 - Billing stubs: `/v1/organizations/:organizationId/billing`, `/v1/organizations/:organizationId/billing:openPortal`, `/v1/stripe/webhook`
 - Health: `/health`
 - OpenAPI-ish route list: `/openapi.json`
@@ -53,4 +54,4 @@ World auth tokens use a separate `wzw_` prefix and live in `world_auth_tokens`; 
 
 ## Billing
 
-Stripe variables are present for sandbox wiring. Billing responses are Stripe-shaped stubs and do not require live payment for beta-free organizations.
+Stripe variables are present for sandbox wiring. Billing responses are Stripe-shaped stubs and do not require live payment for beta-free organizations. Usage and limits are compute-time oriented; usage ingestion returns `RESOURCE_EXHAUSTED` when a configured metric limit would be exceeded.

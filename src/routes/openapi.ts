@@ -28,6 +28,7 @@ const routes = [
   "POST /v1/organizations/:organizationId/platform-tokens",
   "DELETE /v1/organizations/:organizationId/platform-tokens/:tokenId",
   "GET /v1/organizations/:organizationId/usage",
+  "GET /v1/organizations/:organizationId/limits",
   "POST /v1/organizations/:organizationId/usage",
   "GET /v1/organizations/:organizationId/billing",
   "GET /v1/organizations/:organizationId/billing/invoices",
