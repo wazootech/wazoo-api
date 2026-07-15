@@ -21,13 +21,15 @@ npm install
 cp .dev.vars.example .dev.vars
 ```
 
-Create a Turso/libSQL database, put `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in `.dev.vars`, then apply the schema with the Turso CLI:
+Create a Turso/libSQL control database, put `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in `.dev.vars`, then apply the schema with the Turso CLI:
 
 ```sh
 turso db shell <database-name> < schema.sql
 ```
 
-For production, set `TURSO_AUTH_TOKEN` with `wrangler secret put TURSO_AUTH_TOKEN` and configure `TURSO_DATABASE_URL` in `wrangler.toml` or your deployment environment.
+For production, set `TURSO_AUTH_TOKEN` and `TURSO_PLATFORM_API_TOKEN` with `wrangler secret put`, then configure `TURSO_DATABASE_URL`, `TURSO_ORGANIZATION_SLUG`, `TURSO_GROUP`, and `WAZOO_ENV` in `wrangler.toml` or your deployment environment.
+
+`TURSO_PLATFORM_API_TOKEN` is used to create one Turso database per World and mint short-lived database auth tokens for schema initialization. The generated database tokens are not stored.
 
 ## Development
 

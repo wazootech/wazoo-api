@@ -6,6 +6,9 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 API_BASE_URL = "http://localhost:8787"
 TURSO_DATABASE_URL = ""
+TURSO_ORGANIZATION_SLUG = ""
+TURSO_GROUP = "default"
+WAZOO_ENV = "dev"
 STRIPE_PRICE_ID = ""
 
 [observability]
