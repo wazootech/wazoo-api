@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import type { AppEnv } from "../env";
 import { all, db, first, id } from "../lib/db";
 import { jsonBody, optionalString, requireScope, requireString, resolveOrg } from "../lib/http";
@@ -40,7 +41,17 @@ export const usage = new Hono<AppEnv>()
       return c.json({ error: { code: "INVALID_ARGUMENT", message: "quantity must be a positive integer" } }, 400);
     }
     const metric = requireString(body, "metric");
+    const unit = optionalString(body, "unit") ?? "count";
+    const providerCostMicrocents = optionalInteger(body, "providerCostMicrocents");
+    const wazooMarkupMicrocents = optionalInteger(body, "wazooMarkupMicrocents") ?? 0;
+    const estimatedCostMicrocents = optionalInteger(body, "estimatedCostMicrocents") ?? providerCostMicrocents;
+    const billingSource = optionalString(body, "billingSource") ?? "BETA_FREE";
     const database = db(c.env);
+    const worldResourceId = optionalString(body, "worldId") ?? optionalString(body, "world");
+    const world = worldResourceId
+      ? await first<{ id: string }>(database.prepare("SELECT id FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldResourceId))
+      : null;
+    if (worldResourceId && !world) return c.notFound();
     const limit = await first<{ limit_quantity: number }>(
       database.prepare("SELECT limit_quantity FROM organization_limits WHERE organization_id = ? AND metric = ?").bind(organization.id, metric)
     );
@@ -49,13 +60,22 @@ export const usage = new Hono<AppEnv>()
         database.prepare("SELECT COALESCE(SUM(quantity), 0) AS quantity FROM usage_events WHERE organization_id = ? AND metric = ?").bind(organization.id, metric)
       );
       if ((current?.quantity ?? 0) + quantity > limit.limit_quantity) {
-        return c.json({ error: { code: "RESOURCE_EXHAUSTED", message: `Limit exceeded for ${metric}` } }, 429);
+        return c.json({ error: { code: "RESOURCE_EXHAUSTED", message: `Limit exceeded for ${metric}` }, quota: { state: "THROTTLED", reason: `${metric.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_EXCEEDED` } }, 429);
       }
     }
     await database.prepare(
-      "INSERT INTO usage_events (id, organization_id, world_id, metric, quantity, occurred_at) VALUES (?, ?, ?, ?, ?, ?)"
+      "INSERT INTO usage_events (id, organization_id, world_id, metric, quantity, unit, provider_cost_microcents, wazoo_markup_microcents, estimated_cost_microcents, billing_source, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
-      .bind(id(), organization.id, optionalString(body, "worldId"), metric, quantity, optionalString(body, "occurredAt") ?? new Date().toISOString())
+      .bind(id(), organization.id, world?.id ?? null, metric, quantity, unit, providerCostMicrocents, wazooMarkupMicrocents, estimatedCostMicrocents, billingSource, optionalString(body, "occurredAt") ?? new Date().toISOString())
       .run();
     return c.json({ accepted: true }, 201);
   });
+
+function optionalInteger(body: Record<string, unknown>, key: string): number | null {
+  const value = body[key];
+  if (value == null) return null;
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new HTTPException(400, { message: `${key} must be an integer` });
+  }
+  return value;
+}

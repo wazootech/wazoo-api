@@ -73,8 +73,12 @@ export type OrganizationRef = {
   state: string;
 };
 
+export function resourceId(name: string, collection: string): string {
+  return name.startsWith(`${collection}/`) ? name.slice(collection.length + 1) : name;
+}
+
 export async function organizationByIdentifier(db: Database, identifier: string): Promise<OrganizationRef | null> {
   return first<OrganizationRef>(
-    db.prepare("SELECT id, slug, name, state FROM organizations WHERE slug = ?").bind(identifier),
+    db.prepare("SELECT id, slug, name, state FROM organizations WHERE slug = ?").bind(resourceId(identifier, "organizations")),
   );
 }

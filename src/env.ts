@@ -11,6 +11,7 @@ export type AuthContext = {
   tokenId: string;
   organizationId: string | null;
   scope: string;
+  kind: "ORGANIZATION" | "ADMIN";
   expiresAt: string | null;
 };
 

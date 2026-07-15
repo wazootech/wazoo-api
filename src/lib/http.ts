@@ -86,16 +86,16 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
   const hash = await sha256Hex(token);
   const database = db(c.env);
   const row = await database.prepare(
-    "SELECT id, organization_id, scope, expires_at FROM platform_api_tokens WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > ?)"
+    "SELECT id, organization_id, scope, kind, expires_at FROM platform_api_tokens WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > ?)"
   )
     .bind(hash, new Date().toISOString())
-    .first<{ id: string; organization_id: string | null; scope: string; expires_at: string | null }>();
+    .first<{ id: string; organization_id: string | null; scope: string; kind: "ORGANIZATION" | "ADMIN" | null; expires_at: string | null }>();
 
   if (!row) {
     throw new HTTPException(401, { message: "Invalid platform API token" });
   }
 
-  c.set("auth", { tokenId: row.id, organizationId: row.organization_id, scope: row.scope, expiresAt: row.expires_at });
+  c.set("auth", { tokenId: row.id, organizationId: row.organization_id, scope: row.scope, kind: row.kind ?? "ORGANIZATION", expiresAt: row.expires_at });
   c.executionCtx.waitUntil(
     database.prepare("UPDATE platform_api_tokens SET last_used_at = ? WHERE id = ?")
       .bind(new Date().toISOString(), row.id)
@@ -106,14 +106,20 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
 
 export function requireOrgAccess(c: Context<AppEnv>, organizationId: string) {
   const auth = c.get("auth");
+  if (auth.kind === "ADMIN") return;
   if (auth.organizationId && auth.organizationId !== organizationId) {
     throw new HTTPException(403, { message: "Token cannot access this organization" });
   }
 }
 
+export function isAdmin(c: Context<AppEnv>): boolean {
+  const auth = c.get("auth");
+  return auth.kind === "ADMIN" && auth.scope.split(/\s+/).includes("admin") && auth.organizationId === null;
+}
+
 export function requireScope(c: Context<AppEnv>, scope: string) {
   const scopes = new Set(c.get("auth").scope.split(/\s+/).filter(Boolean));
-  if (!scopes.has(scope) && !scopes.has("admin")) {
+  if (!scopes.has(scope) && !isAdmin(c)) {
     throw new HTTPException(403, { message: `Missing required scope: ${scope}` });
   }
 }

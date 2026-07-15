@@ -54,4 +54,4 @@ World auth tokens use a separate `wzw_` prefix and live in `world_auth_tokens`; 
 
 ## Billing
 
-Stripe variables are present for sandbox wiring. Billing responses are Stripe-shaped stubs and do not require live payment for beta-free organizations. Usage and limits are compute-time oriented; usage ingestion returns `RESOURCE_EXHAUSTED` when a configured metric limit would be exceeded.
+Stripe variables are present for sandbox wiring. Billing responses are Stripe-shaped stubs and do not require live payment for beta-free organizations. Usage and limits use transparent resource accounting; usage ingestion returns `RESOURCE_EXHAUSTED` when a configured metric limit would be exceeded.
