@@ -8,6 +8,7 @@ const routes = [
   "POST /v1/organizations",
   "GET /v1/organizations/:organizationId",
   "PATCH /v1/organizations/:organizationId",
+  "DELETE /v1/organizations/:organizationId",
   "GET /v1/organizations/:organizationId/worlds",
   "POST /v1/organizations/:organizationId/worlds",
   "GET /v1/organizations/:organizationId/worlds/:worldId",

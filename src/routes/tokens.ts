@@ -67,7 +67,7 @@ export const tokens = new Hono<AppEnv>()
   .get("/organizations/:organizationId/worlds/:worldId/auth/tokens", async (c) => {
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const worldId = c.req.param("worldId");
-    const world = await first<{ id: string; organization_id: string }>(c.env.DB.prepare("SELECT id, organization_id FROM worlds WHERE organization_id = ? AND (id = ? OR slug = ?)").bind(organization.id, worldId, worldId));
+    const world = await first<{ id: string; organization_id: string }>(c.env.DB.prepare("SELECT id, organization_id FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
     if (!world) return c.notFound();
     const rows = await all(
       c.env.DB.prepare("SELECT id, world_id, name, last_used_at, expires_at, created_at FROM world_auth_tokens WHERE world_id = ? ORDER BY created_at DESC").bind(world.id)
@@ -77,7 +77,7 @@ export const tokens = new Hono<AppEnv>()
   .post("/organizations/:organizationId/worlds/:worldId/auth/tokens", async (c) => {
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const worldId = c.req.param("worldId");
-    const world = await first<{ id: string; organization_id: string }>(c.env.DB.prepare("SELECT id, organization_id FROM worlds WHERE organization_id = ? AND (id = ? OR slug = ?)").bind(organization.id, worldId, worldId));
+    const world = await first<{ id: string; organization_id: string }>(c.env.DB.prepare("SELECT id, organization_id FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
     if (!world) return c.notFound();
     const body = await jsonBody(c).catch(() => ({}));
     const token = createToken("wzw");
@@ -90,7 +90,7 @@ export const tokens = new Hono<AppEnv>()
   .post("/organizations/:organizationId/worlds/:worldId/auth/rotate", async (c) => {
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const worldId = c.req.param("worldId");
-    const world = await first<{ id: string }>(c.env.DB.prepare("SELECT id FROM worlds WHERE organization_id = ? AND (id = ? OR slug = ?)").bind(organization.id, worldId, worldId));
+    const world = await first<{ id: string }>(c.env.DB.prepare("SELECT id FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
     if (!world) return c.notFound();
     await c.env.DB.prepare("DELETE FROM world_auth_tokens WHERE world_id = ?").bind(world.id).run();
     return c.body(null, 204);
@@ -98,7 +98,7 @@ export const tokens = new Hono<AppEnv>()
   .delete("/organizations/:organizationId/worlds/:worldId/auth/tokens/:tokenId", async (c) => {
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const worldId = c.req.param("worldId");
-    const world = await first<{ id: string }>(c.env.DB.prepare("SELECT id FROM worlds WHERE organization_id = ? AND (id = ? OR slug = ?)").bind(organization.id, worldId, worldId));
+    const world = await first<{ id: string }>(c.env.DB.prepare("SELECT id FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
     if (!world) return c.notFound();
     await c.env.DB.prepare("DELETE FROM world_auth_tokens WHERE world_id = ? AND id = ?").bind(world.id, c.req.param("tokenId")).run();
     return c.body(null, 204);

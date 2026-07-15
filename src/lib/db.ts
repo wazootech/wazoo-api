@@ -21,10 +21,11 @@ export type OrganizationRef = {
   id: string;
   slug: string;
   name: string;
+  state: string;
 };
 
 export async function organizationByIdentifier(db: D1Database, identifier: string): Promise<OrganizationRef | null> {
   return first<OrganizationRef>(
-    db.prepare("SELECT id, slug, name FROM organizations WHERE id = ? OR slug = ?").bind(identifier, identifier),
+    db.prepare("SELECT id, slug, name, state FROM organizations WHERE slug = ?").bind(identifier),
   );
 }

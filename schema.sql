@@ -4,6 +4,7 @@ CREATE TABLE organizations (
   id TEXT PRIMARY KEY,
   slug TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'ACTIVE',
   stripe_customer_id TEXT,
   billing_state TEXT NOT NULL DEFAULT 'BETA_FREE',
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),

@@ -42,7 +42,9 @@ Authorization: Bearer wzp_...
 
 To bootstrap the first platform token, generate a random token, hash it with SHA-256, and insert the hash into `platform_api_tokens`. Token creation endpoints only return plaintext once.
 
-`organizationId` route params accept either the organization id or slug, mirroring Turso's Platform API ergonomics.
+Public resource IDs must match `^[a-z][a-z0-9-]{2,62}$`. Internal UIDs use prefixes like `org_` and `w_` and are output-only.
+
+Create organizations with `organizationId` and `organization.displayName`; create worlds with `worldId` and `world.displayName`. Responses use AIP-style `name`, `uid`, and `displayName` fields.
 
 World auth tokens use a separate `wzw_` prefix and live in `world_auth_tokens`; they are intended for future data-plane access, not platform administration.
 

@@ -16,7 +16,7 @@ export const usage = new Hono<AppEnv>()
   .get("/organizations/:organizationId/worlds/:worldId/usage", async (c) => {
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const worldId = c.req.param("worldId");
-    const world = await first<{ id: string }>(c.env.DB.prepare("SELECT id FROM worlds WHERE organization_id = ? AND (id = ? OR slug = ?)").bind(organization.id, worldId, worldId));
+    const world = await first<{ id: string }>(c.env.DB.prepare("SELECT id FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
     if (!world) return c.notFound();
     const rows = await all(c.env.DB.prepare("SELECT metric, SUM(quantity) AS quantity FROM usage_events WHERE organization_id = ? AND world_id = ? GROUP BY metric ORDER BY metric").bind(organization.id, world.id));
     return c.json({ usage: { world: world.id, total: rows } });

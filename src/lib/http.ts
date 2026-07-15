@@ -35,6 +35,14 @@ export function requireString(body: JsonObject, key: string): string {
   return value.trim();
 }
 
+export function requireResourceId(body: JsonObject, key: string): string {
+  const value = requireString(body, key);
+  if (!/^[a-z][a-z0-9-]{2,62}$/.test(value)) {
+    throw new HTTPException(400, { message: `${key} must match ^[a-z][a-z0-9-]{2,62}$` });
+  }
+  return value;
+}
+
 export function optionalString(body: JsonObject, key: string): string | null {
   const value = body[key];
   if (value == null) return null;
