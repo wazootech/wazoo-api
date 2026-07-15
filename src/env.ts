@@ -13,7 +13,7 @@ export type Bindings = {
 
 export type AuthContext = {
   tokenId: string;
-  organizationId: string | null;
+  organizationUid: string | null;
   scope: string;
   kind: "ORGANIZATION" | "ADMIN";
   expiresAt: string | null;

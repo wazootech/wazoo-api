@@ -67,10 +67,12 @@ export async function first<T extends Row>(statement: BoundStatement): Promise<T
 }
 
 export type OrganizationRef = {
-  id: string;
-  slug: string;
-  name: string;
+  uid: string;
+  organizationId: string;
+  displayName: string;
   state: string;
+  deleteTime?: string | null;
+  expireTime?: string | null;
 };
 
 export function resourceId(name: string, collection: string): string {
@@ -79,6 +81,6 @@ export function resourceId(name: string, collection: string): string {
 
 export async function organizationByIdentifier(db: Database, identifier: string): Promise<OrganizationRef | null> {
   return first<OrganizationRef>(
-    db.prepare("SELECT id, slug, name, state FROM organizations WHERE slug = ?").bind(resourceId(identifier, "organizations")),
+    db.prepare("SELECT uid, organization_id AS organizationId, display_name AS displayName, state, delete_time AS deleteTime, expire_time AS expireTime FROM organizations WHERE organization_id = ?").bind(resourceId(identifier, "organizations")),
   );
 }

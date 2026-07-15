@@ -13,17 +13,18 @@ export type QuotaStatus = {
   usagePercent?: number;
 };
 
-export async function activeWorldCount(c: Context<AppEnv>, organizationId: string): Promise<number> {
+export async function activeWorldCount(c: Context<AppEnv>, organizationUid: string): Promise<number> {
   const row = await first<{ count: number }>(
-    db(c.env).prepare("SELECT COUNT(*) AS count FROM worlds WHERE organization_id = ? AND status != 'deleted'").bind(organizationId)
+    db(c.env).prepare("SELECT COUNT(*) AS count FROM worlds WHERE organization_uid = ? AND state != 'deleted'").bind(organizationUid)
   );
   return row?.count ?? 0;
 }
 
-export async function quotaStatus(c: Context<AppEnv>, organizationId: string, organizationState: string): Promise<QuotaStatus> {
+export async function quotaStatus(c: Context<AppEnv>, organizationUid: string, organizationState: string): Promise<QuotaStatus> {
   if (organizationState === "SUSPENDED") return { state: "SUSPENDED", reason: "ORGANIZATION_SUSPENDED" };
+  if (organizationState === "DELETED") return { state: "SUSPENDED", reason: "ORGANIZATION_DELETED" };
 
-  const count = await activeWorldCount(c, organizationId);
+  const count = await activeWorldCount(c, organizationUid);
   if (count >= privateBetaQuota.maxWorlds) {
     return { state: "THROTTLED", reason: "MAX_WORLDS_EXCEEDED", usagePercent: 100 };
   }

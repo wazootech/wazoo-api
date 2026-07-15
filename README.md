@@ -52,6 +52,8 @@ Public resource IDs must match `^[a-z][a-z0-9-]{2,62}$`. Internal UIDs use prefi
 
 Create organizations with `organizationId` and `organization.displayName`; create worlds with `worldId` and `world.displayName`. Responses use AIP-style `name`, `uid`, and `displayName` fields.
 
+The control schema mirrors that language with `organization_id`, `world_id`, and `display_name` columns. Organization and World deletes are soft-retained with `delete_time` and `expire_time`; purge is an internal follow-up path.
+
 World auth tokens use a separate `wzw_` prefix and live in `world_auth_tokens`; they are intended for future data-plane access, not platform administration.
 
 ## Billing

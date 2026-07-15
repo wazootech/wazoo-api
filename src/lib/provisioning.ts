@@ -17,6 +17,7 @@ export type ProvisioningResult = {
 };
 
 type TursoDatabase = { Name?: string; Hostname?: string };
+type DatabaseState = { database: TursoDatabase; created: boolean };
 
 function requireTursoConfig(env: Bindings) {
   if (!env.TURSO_PLATFORM_API_TOKEN || !env.TURSO_ORGANIZATION_SLUG) {
@@ -37,27 +38,28 @@ export function worldDatabaseName(env: Bindings, worldUid: string): string {
 
 export async function provisionWorldDatabase(env: Bindings, worldUid: string, organizationUid: string): Promise<ProvisioningResult> {
   const databaseName = worldDatabaseName(env, worldUid);
-  const database = await ensureDatabase(env, databaseName);
+  const { database, created } = await ensureDatabase(env, databaseName);
   const databaseUrl = `libsql://${database.Hostname}`;
   const token = await createDatabaseToken(env, databaseName);
-  await initializeWorldSchema(databaseUrl, token, worldUid, organizationUid);
+  const initialized = await initializeWorldSchema(databaseUrl, token, worldUid, organizationUid);
+  const repaired = created || initialized;
 
   return {
     databaseName,
     databaseUrl,
     syncReport: {
-      status: "REPAIRED",
-      actions: [{ code: "TURSO_DATABASE_READY", message: "Turso database exists and schema metadata is initialized" }],
+      status: repaired ? "REPAIRED" : "HEALTHY",
+      actions: repaired ? [{ code: "TURSO_DATABASE_READY", message: "Turso database exists and schema metadata is initialized" }] : [],
       warnings: [],
       errors: [],
     },
   };
 }
 
-async function ensureDatabase(env: Bindings, databaseName: string): Promise<TursoDatabase> {
+async function ensureDatabase(env: Bindings, databaseName: string): Promise<DatabaseState> {
   const config = requireTursoConfig(env);
   const existing = await retrieveDatabase(env, databaseName).catch(() => null);
-  if (existing) return existing;
+  if (existing) return { database: existing, created: false };
 
   const response = await fetch(`https://api.turso.tech/v1/organizations/${config.organization}/databases`, {
     method: "POST",
@@ -65,11 +67,11 @@ async function ensureDatabase(env: Bindings, databaseName: string): Promise<Turs
     body: JSON.stringify({ name: databaseName, group: config.group }),
   });
 
-  if (response.status === 409) return await retrieveDatabase(env, databaseName);
+  if (response.status === 409) return { database: await retrieveDatabase(env, databaseName), created: false };
   if (!response.ok) throw new Error(await tursoError(response));
   const body = await response.json<{ database: TursoDatabase }>();
   if (!body.database?.Hostname) throw new Error("Turso database response did not include a hostname");
-  return body.database;
+  return { database: body.database, created: true };
 }
 
 async function retrieveDatabase(env: Bindings, databaseName: string): Promise<TursoDatabase> {
@@ -95,9 +97,10 @@ async function createDatabaseToken(env: Bindings, databaseName: string): Promise
   return body.jwt;
 }
 
-async function initializeWorldSchema(url: string, authToken: string, worldUid: string, organizationUid: string) {
+async function initializeWorldSchema(url: string, authToken: string, worldUid: string, organizationUid: string): Promise<boolean> {
   const client = createClient({ url, authToken });
   const metadata = await client.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'world_metadata'");
+  const hadMetadata = metadata.rows.length > 0;
   if (metadata.rows.length > 0) {
     const rows = await client.execute("SELECT key, value FROM world_metadata WHERE key IN ('world_uid', 'organization_uid')");
     const existing = new Map(rows.rows.map((row) => [String(row.key), String(row.value)]));
@@ -115,7 +118,9 @@ async function initializeWorldSchema(url: string, authToken: string, worldUid: s
     { sql: "INSERT OR REPLACE INTO world_metadata (key, value) VALUES (?, ?)", args: ["organization_uid", organizationUid] },
     { sql: "INSERT OR REPLACE INTO world_metadata (key, value) VALUES (?, ?)", args: ["schema_version", WORLD_SCHEMA_VERSION] },
     { sql: "INSERT OR REPLACE INTO world_metadata (key, value) VALUES (?, ?)", args: ["created_by", "wazoo-api"] },
+    { sql: "INSERT OR IGNORE INTO world_metadata (key, value) VALUES (?, ?)", args: ["create_time", new Date().toISOString()] },
   ], "write");
+  return !hadMetadata;
 }
 
 async function tursoError(response: Response): Promise<string> {

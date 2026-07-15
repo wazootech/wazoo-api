@@ -86,16 +86,16 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
   const hash = await sha256Hex(token);
   const database = db(c.env);
   const row = await database.prepare(
-    "SELECT id, organization_id, scope, kind, expires_at FROM platform_api_tokens WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > ?)"
+    "SELECT id, organization_uid, scope, kind, expires_at FROM platform_api_tokens WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > ?)"
   )
     .bind(hash, new Date().toISOString())
-    .first<{ id: string; organization_id: string | null; scope: string; kind: "ORGANIZATION" | "ADMIN" | null; expires_at: string | null }>();
+    .first<{ id: string; organization_uid: string | null; scope: string; kind: "ORGANIZATION" | "ADMIN" | null; expires_at: string | null }>();
 
   if (!row) {
     throw new HTTPException(401, { message: "Invalid platform API token" });
   }
 
-  c.set("auth", { tokenId: row.id, organizationId: row.organization_id, scope: row.scope, kind: row.kind ?? "ORGANIZATION", expiresAt: row.expires_at });
+  c.set("auth", { tokenId: row.id, organizationUid: row.organization_uid, scope: row.scope, kind: row.kind ?? "ORGANIZATION", expiresAt: row.expires_at });
   c.executionCtx.waitUntil(
     database.prepare("UPDATE platform_api_tokens SET last_used_at = ? WHERE id = ?")
       .bind(new Date().toISOString(), row.id)
@@ -104,17 +104,17 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
   await next();
 }
 
-export function requireOrgAccess(c: Context<AppEnv>, organizationId: string) {
+export function requireOrgAccess(c: Context<AppEnv>, organizationUid: string) {
   const auth = c.get("auth");
   if (auth.kind === "ADMIN") return;
-  if (auth.organizationId && auth.organizationId !== organizationId) {
+  if (auth.organizationUid && auth.organizationUid !== organizationUid) {
     throw new HTTPException(403, { message: "Token cannot access this organization" });
   }
 }
 
 export function isAdmin(c: Context<AppEnv>): boolean {
   const auth = c.get("auth");
-  return auth.kind === "ADMIN" && auth.scope.split(/\s+/).includes("admin") && auth.organizationId === null;
+  return auth.kind === "ADMIN" && auth.scope.split(/\s+/).includes("admin") && auth.organizationUid === null;
 }
 
 export function requireScope(c: Context<AppEnv>, scope: string) {
@@ -129,6 +129,6 @@ export async function resolveOrg(c: Context<AppEnv>, identifier: string) {
   if (!organization) {
     throw new HTTPException(404, { message: "Organization not found" });
   }
-  requireOrgAccess(c, organization.id);
+  requireOrgAccess(c, organization.uid);
   return organization;
 }
