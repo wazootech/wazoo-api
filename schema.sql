@@ -18,6 +18,8 @@ CREATE TABLE worlds (
   name TEXT NOT NULL,
   region TEXT NOT NULL DEFAULT 'auto',
   status TEXT NOT NULL DEFAULT 'active',
+  deleted_at TEXT,
+  expire_at TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   UNIQUE (organization_id, slug)

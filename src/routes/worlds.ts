@@ -3,7 +3,7 @@ import type { AppEnv } from "../env";
 import { all, first, id, now } from "../lib/db";
 import { jsonBody, optionalString, requireOrgAccess, requireResourceId, requireString, resolveOrg } from "../lib/http";
 
-type WorldRow = { id: string; slug: string; name: string; region: string; status: string; created_at?: string; updated_at?: string; deleted_at?: string | null };
+type WorldRow = { id: string; slug: string; name: string; region: string; status: string; created_at?: string; updated_at?: string; deleted_at?: string | null; expire_at?: string | null };
 
 function worldResource(organizationId: string, row: WorldRow) {
   return {
@@ -18,7 +18,8 @@ function worldResource(organizationId: string, row: WorldRow) {
     durability: { backend: "R2", state: "NOT_CONFIGURED" },
     createTime: row.created_at,
     updateTime: row.updated_at,
-    deleteTime: row.deleted_at ?? undefined
+    deleteTime: row.deleted_at ?? undefined,
+    expireTime: row.expire_at ?? undefined
   };
 }
 
@@ -84,6 +85,31 @@ export const worlds = new Hono<AppEnv>()
     const worldId = c.req.param("worldId");
     const existing = await first<{ id: string }>(c.env.DB.prepare("SELECT * FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
     if (!existing) return c.notFound();
-    await c.env.DB.prepare("DELETE FROM worlds WHERE id = ?").bind(existing.id).run();
-    return c.body(null, 204);
+    const deletedAt = now();
+    const expireAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    await c.env.DB.prepare("UPDATE worlds SET status = 'deleted', deleted_at = ?, expire_at = ?, updated_at = ? WHERE id = ?").bind(deletedAt, expireAt, deletedAt, existing.id).run();
+    await c.env.DB.prepare("DELETE FROM world_auth_tokens WHERE world_id = ?").bind(existing.id).run();
+    const row = await first<WorldRow>(c.env.DB.prepare("SELECT * FROM worlds WHERE id = ?").bind(existing.id));
+    return c.json({ world: row ? worldResource(organization.slug, row) : null });
+  })
+  .post("/organizations/:organizationId/worlds/:worldId\\:undelete", async (c) => {
+    const organization = await resolveOrg(c, c.req.param("organizationId"));
+    const worldId = c.req.param("worldId");
+    const existing = await first<{ id: string; status: string }>(c.env.DB.prepare("SELECT * FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
+    if (!existing) return c.notFound();
+    if (existing.status !== "deleted") {
+      return c.json({ error: { message: "World is not deleted" } }, 400);
+    }
+    await c.env.DB.prepare("UPDATE worlds SET status = 'active', deleted_at = NULL, expire_at = NULL, updated_at = ? WHERE id = ?").bind(now(), existing.id).run();
+    const row = await first<WorldRow>(c.env.DB.prepare("SELECT * FROM worlds WHERE id = ?").bind(existing.id));
+    return c.json({ world: row ? worldResource(organization.slug, row) : null });
+  })
+  .post("/organizations/:organizationId/worlds/:worldId\\:sync", async (c) => {
+    const organization = await resolveOrg(c, c.req.param("organizationId"));
+    const worldId = c.req.param("worldId");
+    const existing = await first<{ id: string }>(c.env.DB.prepare("SELECT * FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
+    if (!existing) return c.notFound();
+    await c.env.DB.prepare("UPDATE worlds SET updated_at = ? WHERE id = ?").bind(now(), existing.id).run();
+    const row = await first<WorldRow>(c.env.DB.prepare("SELECT * FROM worlds WHERE id = ?").bind(existing.id));
+    return c.json({ world: row ? worldResource(organization.slug, row) : null });
   });

@@ -14,6 +14,8 @@ const routes = [
   "GET /v1/organizations/:organizationId/worlds/:worldId",
   "PATCH /v1/organizations/:organizationId/worlds/:worldId",
   "DELETE /v1/organizations/:organizationId/worlds/:worldId",
+  "POST /v1/organizations/:organizationId/worlds/:worldId:undelete",
+  "POST /v1/organizations/:organizationId/worlds/:worldId:sync",
   "GET /v1/organizations/:organizationId/worlds/:worldId/auth/tokens",
   "POST /v1/organizations/:organizationId/worlds/:worldId/auth/tokens",
   "POST /v1/organizations/:organizationId/worlds/:worldId/auth/rotate",
