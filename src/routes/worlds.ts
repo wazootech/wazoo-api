@@ -4,6 +4,7 @@ import { all, db, first, id, now } from "../lib/db";
 import { jsonBody, optionalString, requireOrgAccess, requireResourceId, requireScope, requireString, resolveOrg } from "../lib/http";
 import { provisionWorldDatabase, WORLD_SCHEMA_VERSION } from "../lib/provisioning";
 import { activeWorldCount, privateBetaQuota, quotaError, quotaStatus } from "../lib/quota";
+import { recordUsage } from "../lib/usage";
 
 type WorldRow = { id: string; organization_id?: string; slug: string; name: string; region: string; status: string; provisioning_status?: string; provisioning_error?: string | null; turso_database_name?: string | null; turso_database_url?: string | null; schema_version?: string | null; durability_status?: string; durability_error?: string | null; created_at?: string; updated_at?: string; deleted_at?: string | null; expire_at?: string | null };
 
@@ -62,6 +63,8 @@ export const worlds = new Hono<AppEnv>()
       await database.prepare("UPDATE worlds SET status = 'active', provisioning_status = 'active', provisioning_error = NULL, turso_database_name = ?, turso_database_url = ?, schema_version = ?, durability_status = 'configured', updated_at = ? WHERE id = ?")
         .bind(provisioned.databaseName, provisioned.databaseUrl, WORLD_SCHEMA_VERSION, now(), world.id)
         .run();
+      await recordUsage(c.env, { organizationId: organization.id, worldId: world.id, metric: "world.create.count" });
+      await recordUsage(c.env, { organizationId: organization.id, worldId: world.id, metric: "world.provision.count" });
       const row = await first<WorldRow>(database.prepare("SELECT * FROM worlds WHERE id = ?").bind(world.id));
       return c.json({ world: row ? worldResource(organization.slug, row) : null, syncReport: provisioned.syncReport }, 201);
     } catch (error) {
@@ -147,6 +150,7 @@ export const worlds = new Hono<AppEnv>()
       await database.prepare("UPDATE worlds SET provisioning_status = 'active', provisioning_error = NULL, turso_database_name = ?, turso_database_url = ?, schema_version = ?, durability_status = 'configured', updated_at = ? WHERE id = ?")
         .bind(provisioned.databaseName, provisioned.databaseUrl, WORLD_SCHEMA_VERSION, now(), existing.id)
         .run();
+      await recordUsage(c.env, { organizationId: organization.id, worldId: existing.id, metric: "world.sync.count" });
       const updated = await first<WorldRow>(database.prepare("SELECT * FROM worlds WHERE id = ?").bind(existing.id));
       return c.json({ world: updated ? worldResource(organization.slug, updated) : null, syncReport: provisioned.syncReport });
     } catch (error) {
@@ -171,6 +175,7 @@ export const worlds = new Hono<AppEnv>()
       await database.prepare("UPDATE worlds SET status = CASE WHEN status IN ('failed', 'active') THEN 'active' ELSE status END, provisioning_status = 'active', provisioning_error = NULL, turso_database_name = ?, turso_database_url = ?, schema_version = ?, durability_status = 'configured', updated_at = ? WHERE id = ?")
         .bind(provisioned.databaseName, provisioned.databaseUrl, WORLD_SCHEMA_VERSION, now(), existing.id)
         .run();
+      await recordUsage(c.env, { organizationId: organization.id, worldId: existing.id, metric: "world.sync.count" });
       const row = await first<WorldRow>(database.prepare("SELECT * FROM worlds WHERE id = ?").bind(existing.id));
       return c.json({ world: row ? worldResource(organization.slug, row) : null, syncReport: provisioned.syncReport });
     } catch (error) {
