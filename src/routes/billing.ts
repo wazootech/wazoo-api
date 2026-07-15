@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
-import { first } from "../lib/db";
+import { db, first } from "../lib/db";
 import { requireScope, resolveOrg } from "../lib/http";
 
 export const billing = new Hono<AppEnv>()
@@ -8,7 +8,7 @@ export const billing = new Hono<AppEnv>()
     requireScope(c, "billing.read");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const row = await first<{ stripe_customer_id: string | null; billing_state: string }>(
-      c.env.DB.prepare("SELECT stripe_customer_id, billing_state FROM organizations WHERE id = ?").bind(organization.id)
+      db(c.env).prepare("SELECT stripe_customer_id, billing_state FROM organizations WHERE id = ?").bind(organization.id)
     );
     return c.json({
       billing: {

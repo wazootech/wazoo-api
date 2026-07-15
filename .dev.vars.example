@@ -1,4 +1,6 @@
 API_BASE_URL="http://localhost:8787"
+TURSO_DATABASE_URL="libsql://replace-me.turso.io"
+TURSO_AUTH_TOKEN="replace_me"
 STRIPE_SECRET_KEY="sk_test_replace_me"
 STRIPE_WEBHOOK_SECRET="whsec_replace_me"
 STRIPE_PRICE_ID="price_replace_me"

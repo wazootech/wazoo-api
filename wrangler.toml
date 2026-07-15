@@ -3,13 +3,9 @@ main = "src/index.ts"
 compatibility_date = "2026-07-13"
 compatibility_flags = ["nodejs_compat"]
 
-[[d1_databases]]
-binding = "DB"
-database_name = "wazoo-api"
-database_id = "00000000-0000-0000-0000-000000000000"
-
 [vars]
 API_BASE_URL = "http://localhost:8787"
+TURSO_DATABASE_URL = ""
 STRIPE_PRICE_ID = ""
 
 [observability]

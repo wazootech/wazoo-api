@@ -1,5 +1,6 @@
 export type Bindings = {
-  DB: D1Database;
+  TURSO_DATABASE_URL: string;
+  TURSO_AUTH_TOKEN: string;
   API_BASE_URL?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;

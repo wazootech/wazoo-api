@@ -2,7 +2,7 @@ import type { Context, Next } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { AppEnv } from "../env";
-import { organizationByIdentifier } from "./db";
+import { db, organizationByIdentifier } from "./db";
 
 export type JsonObject = Record<string, unknown>;
 
@@ -83,7 +83,8 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
 
   const { sha256Hex } = await import("./crypto");
   const hash = await sha256Hex(token);
-  const row = await c.env.DB.prepare(
+  const database = db(c.env);
+  const row = await database.prepare(
     "SELECT id, organization_id, scope, expires_at FROM platform_api_tokens WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > ?)"
   )
     .bind(hash, new Date().toISOString())
@@ -95,7 +96,7 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
 
   c.set("auth", { tokenId: row.id, organizationId: row.organization_id, scope: row.scope, expiresAt: row.expires_at });
   c.executionCtx.waitUntil(
-    c.env.DB.prepare("UPDATE platform_api_tokens SET last_used_at = ? WHERE id = ?")
+    database.prepare("UPDATE platform_api_tokens SET last_used_at = ? WHERE id = ?")
       .bind(new Date().toISOString(), row.id)
       .run()
   );
@@ -117,7 +118,7 @@ export function requireScope(c: Context<AppEnv>, scope: string) {
 }
 
 export async function resolveOrg(c: Context<AppEnv>, identifier: string) {
-  const organization = await organizationByIdentifier(c.env.DB, identifier);
+  const organization = await organizationByIdentifier(db(c.env), identifier);
   if (!organization) {
     throw new HTTPException(404, { message: "Organization not found" });
   }

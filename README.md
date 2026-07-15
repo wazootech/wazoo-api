@@ -1,6 +1,6 @@
 # Wazoo Platform API
 
-Production-oriented TypeScript API server for Cloudflare Workers, Hono, and D1. It models platform metadata separately from data-plane world authentication.
+Production-oriented TypeScript API server for Cloudflare Workers, Hono, and Turso/libSQL. It models platform metadata separately from data-plane world authentication.
 
 ## Resources
 
@@ -18,14 +18,15 @@ Production-oriented TypeScript API server for Cloudflare Workers, Hono, and D1. 
 ```sh
 npm install
 cp .dev.vars.example .dev.vars
-wrangler d1 create wazoo-api
 ```
 
-Put the generated D1 `database_id` in `wrangler.toml`, then apply the schema:
+Create a Turso/libSQL database, put `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in `.dev.vars`, then apply the schema with the Turso CLI:
 
 ```sh
-wrangler d1 execute wazoo-api --local --file schema.sql
+turso db shell <database-name> < schema.sql
 ```
+
+For production, set `TURSO_AUTH_TOKEN` with `wrangler secret put TURSO_AUTH_TOKEN` and configure `TURSO_DATABASE_URL` in `wrangler.toml` or your deployment environment.
 
 ## Development
 
