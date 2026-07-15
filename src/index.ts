@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "./env";
 import { billing } from "./routes/billing";
-import { groups } from "./routes/groups";
 import { health } from "./routes/health";
 import { openapi } from "./routes/openapi";
 import { organizations } from "./routes/organizations";
@@ -21,7 +20,6 @@ app.route("/", openapi);
 const v1 = new Hono<AppEnv>();
 v1.use("*", requireAuth);
 v1.route("/", organizations);
-v1.route("/", groups);
 v1.route("/", worlds);
 v1.route("/", tokens);
 v1.route("/", usage);

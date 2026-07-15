@@ -8,20 +8,9 @@ CREATE TABLE organizations (
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
-CREATE TABLE groups (
-  id TEXT PRIMARY KEY,
-  organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  slug TEXT NOT NULL,
-  name TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  UNIQUE (organization_id, slug)
-);
-
 CREATE TABLE worlds (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  group_id TEXT REFERENCES groups(id) ON DELETE SET NULL,
   slug TEXT NOT NULL,
   name TEXT NOT NULL,
   region TEXT NOT NULL DEFAULT 'auto',
@@ -62,7 +51,6 @@ CREATE TABLE usage_events (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
-CREATE INDEX idx_groups_org ON groups(organization_id);
 CREATE INDEX idx_worlds_org ON worlds(organization_id);
 CREATE INDEX idx_world_tokens_world ON world_auth_tokens(world_id);
 CREATE INDEX idx_usage_org_time ON usage_events(organization_id, occurred_at);

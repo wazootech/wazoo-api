@@ -17,16 +17,15 @@ export const worlds = new Hono<AppEnv>()
       id: id(),
       slug: optionalString(body, "slug") ?? label,
       name: label,
-      groupId: optionalString(body, "groupId"),
       region: optionalString(body, "region") ?? "auto",
       now: now()
     };
     await c.env.DB.prepare(
-      "INSERT INTO worlds (id, organization_id, group_id, slug, name, region, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO worlds (id, organization_id, slug, name, region, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
     )
-      .bind(world.id, organization.id, world.groupId, world.slug, world.name, world.region, world.now, world.now)
+      .bind(world.id, organization.id, world.slug, world.name, world.region, world.now, world.now)
       .run();
-    return c.json({ world: { id: world.id, organizationId: organization.id, groupId: world.groupId, slug: world.slug, label: world.name, name: world.name, region: world.region } }, 201);
+    return c.json({ world: { id: world.id, organizationId: organization.id, slug: world.slug, label: world.name, name: world.name, region: world.region } }, 201);
   })
   .get("/organizations/:organizationId/worlds/:worldId", async (c) => {
     const organization = await resolveOrg(c, c.req.param("organizationId"));

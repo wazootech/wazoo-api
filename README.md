@@ -5,7 +5,6 @@ Production-oriented TypeScript API server for Cloudflare Workers, Hono, and D1. 
 ## Resources
 
 - Organizations: `/v1/organizations`
-- Groups: `/v1/organizations/:organizationId/groups`
 - Worlds: `/v1/organizations/:organizationId/worlds`
 - World auth tokens: `/v1/organizations/:organizationId/worlds/:worldId/auth/tokens`
 - Platform API tokens: `/v1/auth/api-tokens/:tokenName`
