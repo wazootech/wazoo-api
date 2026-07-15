@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { all, first, id, now } from "../lib/db";
-import { jsonBody, requireResourceId, requireString, resolveOrg } from "../lib/http";
+import { jsonBody, requireResourceId, requireScope, requireString, resolveOrg } from "../lib/http";
 
 type OrganizationRow = { id: string; slug: string; name: string; state: string; created_at?: string; updated_at?: string };
 
@@ -18,6 +18,7 @@ function organizationResource(row: OrganizationRow) {
 
 export const organizations = new Hono<AppEnv>()
   .get("/organizations", async (c) => {
+    requireScope(c, "organizations.read");
     const auth = c.get("auth");
     const rows = auth.organizationId
       ? await all(c.env.DB.prepare("SELECT * FROM organizations WHERE id = ? ORDER BY created_at DESC").bind(auth.organizationId))
@@ -25,6 +26,7 @@ export const organizations = new Hono<AppEnv>()
     return c.json({ organizations: rows.map((row) => organizationResource(row as OrganizationRow)) });
   })
   .post("/organizations", async (c) => {
+    requireScope(c, "organizations.write");
     const body = await jsonBody(c);
     const organizationBody = body.organization;
     if (!organizationBody || typeof organizationBody !== "object" || Array.isArray(organizationBody)) {
@@ -37,11 +39,13 @@ export const organizations = new Hono<AppEnv>()
     return c.json({ organization: organizationResource({ ...organization, state: "ACTIVE", created_at: organization.now, updated_at: organization.now }) }, 201);
   })
   .get("/organizations/:organizationId", async (c) => {
+    requireScope(c, "organizations.read");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const row = await first<OrganizationRow>(c.env.DB.prepare("SELECT * FROM organizations WHERE id = ?").bind(organization.id));
     return c.json({ organization: row ? organizationResource(row) : null });
   })
   .patch("/organizations/:organizationId", async (c) => {
+    requireScope(c, "organizations.write");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const body = await jsonBody(c);
     if (body.updateMask !== "displayName") {
@@ -56,6 +60,7 @@ export const organizations = new Hono<AppEnv>()
     return c.json({ organization: row ? organizationResource(row) : null });
   })
   .delete("/organizations/:organizationId", async (c) => {
+    requireScope(c, "organizations.write");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     await c.env.DB.prepare("DELETE FROM organizations WHERE id = ?").bind(organization.id).run();
     return c.body(null, 204);

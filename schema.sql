@@ -30,7 +30,7 @@ CREATE TABLE platform_api_tokens (
   organization_id TEXT REFERENCES organizations(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   token_hash TEXT NOT NULL UNIQUE,
-  scope TEXT NOT NULL DEFAULT 'platform:read platform:write',
+  scope TEXT NOT NULL DEFAULT 'organizations.read worlds.read usage.read billing.read',
   last_used_at TEXT,
   expires_at TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))

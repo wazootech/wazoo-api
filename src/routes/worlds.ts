@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { all, first, id, now } from "../lib/db";
-import { jsonBody, optionalString, requireOrgAccess, requireResourceId, requireString, resolveOrg } from "../lib/http";
+import { jsonBody, optionalString, requireOrgAccess, requireResourceId, requireScope, requireString, resolveOrg } from "../lib/http";
 
 type WorldRow = { id: string; slug: string; name: string; region: string; status: string; created_at?: string; updated_at?: string; deleted_at?: string | null; expire_at?: string | null };
 
@@ -25,11 +25,13 @@ function worldResource(organizationId: string, row: WorldRow) {
 
 export const worlds = new Hono<AppEnv>()
   .get("/organizations/:organizationId/worlds", async (c) => {
+    requireScope(c, "worlds.read");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const rows = await all<WorldRow>(c.env.DB.prepare("SELECT * FROM worlds WHERE organization_id = ? ORDER BY created_at DESC").bind(organization.id));
     return c.json({ worlds: rows.map((row) => worldResource(organization.slug, row)) });
   })
   .post("/organizations/:organizationId/worlds", async (c) => {
+    requireScope(c, "worlds.write");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const body = await jsonBody(c);
     const worldBody = body.world;
@@ -51,6 +53,7 @@ export const worlds = new Hono<AppEnv>()
     return c.json({ world: worldResource(organization.slug, { ...world, status: "active", created_at: world.now, updated_at: world.now }) }, 201);
   })
   .get("/organizations/:organizationId/worlds/:worldId", async (c) => {
+    requireScope(c, "worlds.read");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const worldId = c.req.param("worldId");
     const world = await first<WorldRow>(c.env.DB.prepare("SELECT * FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
@@ -58,6 +61,7 @@ export const worlds = new Hono<AppEnv>()
     return c.json({ world: worldResource(organization.slug, world) });
   })
   .patch("/organizations/:organizationId/worlds/:worldId", async (c) => {
+    requireScope(c, "worlds.write");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const worldId = c.req.param("worldId");
     const existing = await first<{ id: string; organization_id: string }>(c.env.DB.prepare("SELECT * FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
@@ -81,6 +85,7 @@ export const worlds = new Hono<AppEnv>()
     return c.json({ world: row ? worldResource(organization.slug, row) : null });
   })
   .delete("/organizations/:organizationId/worlds/:worldId", async (c) => {
+    requireScope(c, "worlds.write");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const worldId = c.req.param("worldId");
     const existing = await first<{ id: string }>(c.env.DB.prepare("SELECT * FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
@@ -93,6 +98,7 @@ export const worlds = new Hono<AppEnv>()
     return c.json({ world: row ? worldResource(organization.slug, row) : null });
   })
   .post("/organizations/:organizationId/worlds/:worldId\\:undelete", async (c) => {
+    requireScope(c, "worlds.write");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const worldId = c.req.param("worldId");
     const existing = await first<{ id: string; status: string }>(c.env.DB.prepare("SELECT * FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
@@ -105,6 +111,7 @@ export const worlds = new Hono<AppEnv>()
     return c.json({ world: row ? worldResource(organization.slug, row) : null });
   })
   .post("/organizations/:organizationId/worlds/:worldId\\:sync", async (c) => {
+    requireScope(c, "worlds.admin");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const worldId = c.req.param("worldId");
     const existing = await first<{ id: string }>(c.env.DB.prepare("SELECT * FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));

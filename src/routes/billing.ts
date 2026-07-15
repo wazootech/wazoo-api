@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { first } from "../lib/db";
-import { resolveOrg } from "../lib/http";
+import { requireScope, resolveOrg } from "../lib/http";
 
 export const billing = new Hono<AppEnv>()
   .get("/organizations/:organizationId/billing", async (c) => {
+    requireScope(c, "billing.read");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const row = await first<{ stripe_customer_id: string | null; billing_state: string }>(
       c.env.DB.prepare("SELECT stripe_customer_id, billing_state FROM organizations WHERE id = ?").bind(organization.id)
@@ -20,10 +21,12 @@ export const billing = new Hono<AppEnv>()
     });
   })
   .get("/organizations/:organizationId/billing/invoices", async (c) => {
+    requireScope(c, "billing.read");
     await resolveOrg(c, c.req.param("organizationId"));
     return c.json({ invoices: [] });
   })
   .post("/organizations/:organizationId/billing\\:openPortal", async (c) => {
+    requireScope(c, "billing.read");
     await resolveOrg(c, c.req.param("organizationId"));
     return c.json(
       {

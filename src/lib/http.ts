@@ -100,6 +100,13 @@ export function requireOrgAccess(c: Context<AppEnv>, organizationId: string) {
   }
 }
 
+export function requireScope(c: Context<AppEnv>, scope: string) {
+  const scopes = new Set(c.get("auth").scope.split(/\s+/).filter(Boolean));
+  if (!scopes.has(scope) && !scopes.has("admin")) {
+    throw new HTTPException(403, { message: `Missing required scope: ${scope}` });
+  }
+}
+
 export async function resolveOrg(c: Context<AppEnv>, identifier: string) {
   const organization = await organizationByIdentifier(c.env.DB, identifier);
   if (!organization) {

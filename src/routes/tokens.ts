@@ -2,10 +2,13 @@ import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { createToken, sha256Hex } from "../lib/crypto";
 import { all, first, id } from "../lib/db";
-import { jsonBody, optionalString, requireOrgAccess, requireString, resolveOrg } from "../lib/http";
+import { jsonBody, optionalString, requireScope, requireString, resolveOrg } from "../lib/http";
+
+const defaultPlatformScopes = "organizations.read organizations.write worlds.read worlds.write usage.read billing.read";
 
 export const tokens = new Hono<AppEnv>()
   .get("/auth/api-tokens", async (c) => {
+    requireScope(c, "organizations.read");
     const auth = c.get("auth");
     const rows = auth.organizationId
       ? await all(c.env.DB.prepare("SELECT id, name, scope, last_used_at, expires_at, created_at FROM platform_api_tokens WHERE organization_id = ? ORDER BY created_at DESC").bind(auth.organizationId))
@@ -13,6 +16,7 @@ export const tokens = new Hono<AppEnv>()
     return c.json({ tokens: rows });
   })
   .post("/auth/api-tokens/:tokenName", async (c) => {
+    requireScope(c, "organizations.write");
     const auth = c.get("auth");
     const body = await jsonBody(c).catch(() => ({}));
     const organizationId = auth.organizationId ?? optionalString(body, "organizationId") ?? optionalString(body, "organization");
@@ -23,11 +27,12 @@ export const tokens = new Hono<AppEnv>()
     const token = createToken("wzp");
     const tokenId = id();
     await c.env.DB.prepare("INSERT INTO platform_api_tokens (id, organization_id, name, token_hash, scope, expires_at) VALUES (?, ?, ?, ?, ?, ?)")
-      .bind(tokenId, organization.id, c.req.param("tokenName"), await sha256Hex(token), optionalString(body, "scope") ?? "platform:read platform:write", optionalString(body, "expiresAt"))
+      .bind(tokenId, organization.id, c.req.param("tokenName"), await sha256Hex(token), optionalString(body, "scope") ?? defaultPlatformScopes, optionalString(body, "expiresAt"))
       .run();
     return c.json({ id: tokenId, name: c.req.param("tokenName"), token }, 201);
   })
   .delete("/auth/api-tokens/:tokenName", async (c) => {
+    requireScope(c, "organizations.write");
     const auth = c.get("auth");
     if (auth.organizationId) {
       await c.env.DB.prepare("DELETE FROM platform_api_tokens WHERE organization_id = ? AND name = ?").bind(auth.organizationId, c.req.param("tokenName")).run();
@@ -41,6 +46,7 @@ export const tokens = new Hono<AppEnv>()
     return c.json({ exp: auth.expiresAt ? Math.floor(new Date(auth.expiresAt).getTime() / 1000) : 0 });
   })
   .get("/organizations/:organizationId/platform-tokens", async (c) => {
+    requireScope(c, "organizations.read");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const rows = await all(
       c.env.DB.prepare("SELECT id, organization_id, name, scope, last_used_at, expires_at, created_at FROM platform_api_tokens WHERE organization_id = ? ORDER BY created_at DESC").bind(organization.id)
@@ -48,6 +54,7 @@ export const tokens = new Hono<AppEnv>()
     return c.json({ tokens: rows });
   })
   .post("/organizations/:organizationId/platform-tokens", async (c) => {
+    requireScope(c, "organizations.write");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const body = await jsonBody(c);
     const token = createToken("wzp");
@@ -55,16 +62,18 @@ export const tokens = new Hono<AppEnv>()
     await c.env.DB.prepare(
       "INSERT INTO platform_api_tokens (id, organization_id, name, token_hash, scope, expires_at) VALUES (?, ?, ?, ?, ?, ?)"
     )
-      .bind(tokenId, organization.id, requireString(body, "name"), await sha256Hex(token), optionalString(body, "scope") ?? "platform:read platform:write", optionalString(body, "expiresAt"))
+      .bind(tokenId, organization.id, requireString(body, "name"), await sha256Hex(token), optionalString(body, "scope") ?? defaultPlatformScopes, optionalString(body, "expiresAt"))
       .run();
     return c.json({ id: tokenId, token }, 201);
   })
   .delete("/organizations/:organizationId/platform-tokens/:tokenId", async (c) => {
+    requireScope(c, "organizations.write");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     await c.env.DB.prepare("DELETE FROM platform_api_tokens WHERE organization_id = ? AND id = ?").bind(organization.id, c.req.param("tokenId")).run();
     return c.body(null, 204);
   })
   .get("/organizations/:organizationId/worlds/:worldId/auth/tokens", async (c) => {
+    requireScope(c, "worlds.admin");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const worldId = c.req.param("worldId");
     const world = await first<{ id: string; organization_id: string }>(c.env.DB.prepare("SELECT id, organization_id FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
@@ -75,6 +84,7 @@ export const tokens = new Hono<AppEnv>()
     return c.json({ tokens: rows });
   })
   .post("/organizations/:organizationId/worlds/:worldId/auth/tokens", async (c) => {
+    requireScope(c, "worlds.admin");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const worldId = c.req.param("worldId");
     const world = await first<{ id: string; organization_id: string }>(c.env.DB.prepare("SELECT id, organization_id FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
@@ -88,6 +98,7 @@ export const tokens = new Hono<AppEnv>()
     return c.json({ id: tokenId, token }, 201);
   })
   .post("/organizations/:organizationId/worlds/:worldId/auth/rotate", async (c) => {
+    requireScope(c, "worlds.admin");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const worldId = c.req.param("worldId");
     const world = await first<{ id: string }>(c.env.DB.prepare("SELECT id FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
@@ -96,6 +107,7 @@ export const tokens = new Hono<AppEnv>()
     return c.body(null, 204);
   })
   .delete("/organizations/:organizationId/worlds/:worldId/auth/tokens/:tokenId", async (c) => {
+    requireScope(c, "worlds.admin");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const worldId = c.req.param("worldId");
     const world = await first<{ id: string }>(c.env.DB.prepare("SELECT id FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));

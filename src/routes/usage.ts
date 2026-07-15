@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { all, first, id } from "../lib/db";
-import { jsonBody, optionalString, requireString, resolveOrg } from "../lib/http";
+import { jsonBody, optionalString, requireScope, requireString, resolveOrg } from "../lib/http";
 
 export const usage = new Hono<AppEnv>()
   .get("/organizations/:organizationId/usage", async (c) => {
+    requireScope(c, "usage.read");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const rows = await all(
       c.env.DB.prepare(
@@ -14,6 +15,7 @@ export const usage = new Hono<AppEnv>()
     return c.json({ usage: { organization: organization.id, total: rows } });
   })
   .get("/organizations/:organizationId/worlds/:worldId/usage", async (c) => {
+    requireScope(c, "usage.read");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const worldId = c.req.param("worldId");
     const world = await first<{ id: string }>(c.env.DB.prepare("SELECT id FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
@@ -22,6 +24,7 @@ export const usage = new Hono<AppEnv>()
     return c.json({ usage: { world: world.id, total: rows } });
   })
   .post("/organizations/:organizationId/usage", async (c) => {
+    requireScope(c, "admin");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const body = await jsonBody(c);
     const quantity = body.quantity;
