@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "./env";
-import { billing } from "./routes/billing";
+import { billing, stripeWebhook } from "./routes/billing";
 import { health } from "./routes/health";
 import { openapi } from "./routes/openapi";
 import { organizations } from "./routes/organizations";
@@ -16,6 +16,7 @@ app.notFound((c) => c.json({ error: { message: "Not found" } }, 404));
 
 app.route("/", health);
 app.route("/", openapi);
+app.route("/", stripeWebhook);
 
 const v1 = new Hono<AppEnv>();
 v1.use("*", requireAuth);

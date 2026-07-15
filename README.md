@@ -9,7 +9,7 @@ Production-oriented TypeScript API server for Cloudflare Workers, Hono, and D1. 
 - World auth tokens: `/v1/organizations/:organizationId/worlds/:worldId/auth/tokens`
 - Platform API tokens: `/v1/auth/api-tokens/:tokenName`
 - Usage: `/v1/organizations/:organizationId/usage`
-- Billing placeholders: `/v1/organizations/:organizationId/billing`
+- Billing stubs: `/v1/organizations/:organizationId/billing`, `/v1/organizations/:organizationId/billing:openPortal`, `/v1/stripe/webhook`
 - Health: `/health`
 - OpenAPI-ish route list: `/openapi.json`
 
@@ -48,4 +48,4 @@ World auth tokens use a separate `wzw_` prefix and live in `world_auth_tokens`; 
 
 ## Billing
 
-Stripe variables are present as placeholders. This repo intentionally returns billing stubs until real billing integration is added.
+Stripe variables are present for sandbox wiring. Billing responses are Stripe-shaped stubs and do not require live payment for beta-free organizations.

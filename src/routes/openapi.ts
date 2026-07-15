@@ -26,7 +26,10 @@ const routes = [
   "DELETE /v1/organizations/:organizationId/platform-tokens/:tokenId",
   "GET /v1/organizations/:organizationId/usage",
   "POST /v1/organizations/:organizationId/usage",
-  "GET /v1/organizations/:organizationId/billing"
+  "GET /v1/organizations/:organizationId/billing",
+  "GET /v1/organizations/:organizationId/billing/invoices",
+  "POST /v1/organizations/:organizationId/billing:openPortal",
+  "POST /v1/stripe/webhook"
 ];
 
 export const openapi = new Hono<AppEnv>().get("/openapi.json", (c) => {
