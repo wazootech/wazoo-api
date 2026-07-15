@@ -8,12 +8,14 @@ export const usage = new Hono<AppEnv>()
   .get("/organizations/:organizationId/usage", async (c) => {
     requireScope(c, "usage.read");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
+    const database = db(c.env);
     const rows = await all(
-      db(c.env).prepare(
+      database.prepare(
         "SELECT metric, SUM(quantity) AS quantity FROM usage_events WHERE organization_id = ? GROUP BY metric ORDER BY metric"
       ).bind(organization.id)
     );
-    return c.json({ usage: { organization: organization.id, total: rows } });
+    const events = await all(database.prepare("SELECT id, world_id AS world, metric, quantity, unit, provider_cost_microcents AS providerCostMicrocents, wazoo_markup_microcents AS wazooMarkupMicrocents, estimated_cost_microcents AS estimatedCostMicrocents, billing_source AS billingSource, occurred_at AS occurredAt, created_at AS createTime FROM usage_events WHERE organization_id = ? ORDER BY occurred_at DESC LIMIT 100").bind(organization.id));
+    return c.json({ usage: { organization: organization.id, total: rows, events } });
   })
   .get("/organizations/:organizationId/limits", async (c) => {
     requireScope(c, "usage.read");
@@ -27,10 +29,12 @@ export const usage = new Hono<AppEnv>()
     requireScope(c, "usage.read");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const worldId = c.req.param("worldId");
-    const world = await first<{ id: string }>(db(c.env).prepare("SELECT id FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
+    const database = db(c.env);
+    const world = await first<{ id: string }>(database.prepare("SELECT id FROM worlds WHERE organization_id = ? AND slug = ?").bind(organization.id, worldId));
     if (!world) return c.notFound();
-    const rows = await all(db(c.env).prepare("SELECT metric, SUM(quantity) AS quantity FROM usage_events WHERE organization_id = ? AND world_id = ? GROUP BY metric ORDER BY metric").bind(organization.id, world.id));
-    return c.json({ usage: { world: world.id, total: rows } });
+    const rows = await all(database.prepare("SELECT metric, SUM(quantity) AS quantity FROM usage_events WHERE organization_id = ? AND world_id = ? GROUP BY metric ORDER BY metric").bind(organization.id, world.id));
+    const events = await all(database.prepare("SELECT id, world_id AS world, metric, quantity, unit, provider_cost_microcents AS providerCostMicrocents, wazoo_markup_microcents AS wazooMarkupMicrocents, estimated_cost_microcents AS estimatedCostMicrocents, billing_source AS billingSource, occurred_at AS occurredAt, created_at AS createTime FROM usage_events WHERE organization_id = ? AND world_id = ? ORDER BY occurred_at DESC LIMIT 100").bind(organization.id, world.id));
+    return c.json({ usage: { world: world.id, total: rows, events } });
   })
   .post("/organizations/:organizationId/usage", async (c) => {
     requireScope(c, "admin");
