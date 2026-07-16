@@ -5,6 +5,7 @@ import { db, first } from "./db";
 export const privateBetaQuota = {
   name: "PRIVATE_BETA_DEFAULT",
   maxWorlds: 10,
+  maxPendingApplications: 200,
 };
 
 export type QuotaStatus = {

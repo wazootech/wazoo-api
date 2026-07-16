@@ -90,6 +90,22 @@ CREATE TABLE organization_limits (
   PRIMARY KEY (organization_uid, metric)
 );
 
+CREATE TABLE beta_applications (
+  uid TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  applicant_name TEXT NOT NULL,
+  company TEXT,
+  use_case TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'PENDING',
+  organization_uid TEXT REFERENCES organizations(uid) ON DELETE SET NULL,
+  reviewer_token_uid TEXT,
+  review_note TEXT,
+  create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  update_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  review_time TEXT,
+  CHECK (state IN ('PENDING', 'APPROVED', 'REJECTED'))
+);
+
 CREATE TABLE admin_audit_events (
   uid TEXT PRIMARY KEY,
   actor_token_uid TEXT,
@@ -103,3 +119,5 @@ CREATE TABLE admin_audit_events (
 CREATE INDEX idx_worlds_org ON worlds(organization_uid);
 CREATE INDEX idx_world_tokens_world ON world_auth_tokens(world_uid);
 CREATE INDEX idx_usage_org_time ON usage_events(organization_uid, create_time);
+CREATE INDEX idx_beta_applications_state ON beta_applications(state, create_time);
+CREATE UNIQUE INDEX idx_beta_applications_open_email ON beta_applications(lower(email)) WHERE state IN ('PENDING', 'APPROVED');

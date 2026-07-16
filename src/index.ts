@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "./env";
+import { betaApplicationsAdmin, betaApplicationsPublic } from "./routes/beta-applications";
 import { billing, stripeWebhook } from "./routes/billing";
 import { health } from "./routes/health";
 import { openapi } from "./routes/openapi";
@@ -19,7 +20,9 @@ app.route("/", openapi);
 app.route("/", stripeWebhook);
 
 const v1 = new Hono<AppEnv>();
+v1.route("/", betaApplicationsPublic);
 v1.use("*", requireAuth);
+v1.route("/", betaApplicationsAdmin);
 v1.route("/", organizations);
 v1.route("/", worlds);
 v1.route("/", tokens);

@@ -11,6 +11,7 @@ Production-oriented TypeScript API server for Cloudflare Workers, Hono, and Turs
 - Usage: `/v1/organizations/:organizationId/usage`
 - Limits: `/v1/organizations/:organizationId/limits`
 - Billing stubs: `/v1/organizations/:organizationId/billing`, `/v1/organizations/:organizationId/billing:openPortal`, `/v1/stripe/webhook`
+- Beta applications: `POST /v1/betaApplications`, admin review at `/v1/betaApplications`
 - Health: `/health`
 - OpenAPI-ish route list: `/openapi.json`
 
@@ -27,7 +28,7 @@ Create a Turso/libSQL control database, put `TURSO_DATABASE_URL` and `TURSO_AUTH
 turso db shell <database-name> < schema.sql
 ```
 
-For production, set `TURSO_AUTH_TOKEN` and `TURSO_PLATFORM_API_TOKEN` with `wrangler secret put`, then configure `TURSO_DATABASE_URL`, `TURSO_ORGANIZATION_SLUG`, `TURSO_GROUP`, and `WAZOO_ENV` in `wrangler.toml` or your deployment environment.
+For production, set `TURSO_AUTH_TOKEN`, `TURSO_PLATFORM_API_TOKEN`, and `TURNSTILE_SECRET_KEY` with `wrangler secret put`, then configure `TURSO_DATABASE_URL`, `TURSO_ORGANIZATION_SLUG`, `TURSO_GROUP`, and `WAZOO_ENV` in `wrangler.toml` or your deployment environment.
 
 `TURSO_PLATFORM_API_TOKEN` is used to create one Turso database per World and mint short-lived database auth tokens for schema initialization. The generated database tokens are not stored.
 

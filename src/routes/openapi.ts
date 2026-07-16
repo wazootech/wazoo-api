@@ -4,6 +4,10 @@ import type { AppEnv } from "../env";
 const routes = [
   "GET /health",
   "GET /openapi.json",
+  "POST /v1/betaApplications",
+  "GET /v1/betaApplications",
+  "POST /v1/betaApplications/:applicationUid:approve",
+  "POST /v1/betaApplications/:applicationUid:reject",
   "GET /v1/organizations",
   "POST /v1/organizations",
   "GET /v1/organizations/:organizationId",
