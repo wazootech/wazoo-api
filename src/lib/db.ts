@@ -15,6 +15,7 @@ export type BoundStatement = {
 
 export type Database = {
   prepare(sql: string): PreparedStatement;
+  batch(statements: Array<{ sql: string; args?: unknown[] }>): Promise<void>;
 };
 
 export function db(env: Bindings): Database {
@@ -45,6 +46,9 @@ export function db(env: Bindings): Database {
         first: bound().first,
         run: bound().run,
       };
+    },
+    async batch(statements) {
+      await client.batch(statements.map((statement) => ({ sql: statement.sql, args: (statement.args ?? []) as InValue[] })), "write");
     },
   };
 }

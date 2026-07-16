@@ -38,6 +38,26 @@ npm run dev
 npm run typecheck
 ```
 
+Run the private-beta smoke test against a local or deployed API with a manually
+seeded global admin token:
+
+```sh
+API_BASE_URL="http://localhost:8787" \
+WAZOO_ADMIN_TOKEN="wzp_..." \
+npm run smoke:beta
+```
+
+Optional smoke-test inputs:
+
+```sh
+WAZOO_SMOKE_ORG="beta-smoke"
+WAZOO_SMOKE_WORLD="smoke-manual"
+```
+
+The smoke test creates or reuses the organization, provisions a new World, syncs
+it, creates/rotates/revokes a world token, reads usage/limits/billing,
+soft-deletes, undeletes, and soft-deletes the World again.
+
 Most routes require a platform token:
 
 ```http
@@ -45,6 +65,9 @@ Authorization: Bearer wzp_...
 ```
 
 To bootstrap the first platform token, generate a random token, hash it with SHA-256, and insert the hash into `platform_api_tokens`. Token creation endpoints only return plaintext once.
+
+Global admin tokens must be manually seeded with `kind = 'ADMIN'`,
+`organization_uid = NULL`, and a scope containing `admin`.
 
 Supported platform scopes include `organizations.read`, `organizations.write`, `worlds.read`, `worlds.write`, `worlds.admin`, `usage.read`, `billing.read`, and `admin`.
 

@@ -1,5 +1,6 @@
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../env";
+import { recordAdminAudit } from "../lib/audit";
 import { all, db, first, id, now } from "../lib/db";
 import { isAdmin, jsonBody, requireResourceId, requireScope, requireString, resolveOrg } from "../lib/http";
 import { quotaStatus } from "../lib/quota";
@@ -80,9 +81,7 @@ export const organizations = new Hono<AppEnv>()
       .bind(updateMask.includes("displayName") ? requireString(patch, "displayName") : null, nextState, now(), organization.uid)
       .run();
     if (nextState) {
-      await db(c.env).prepare("INSERT INTO admin_audit_events (id, actor_token_uid, action, target_resource_name, outcome) VALUES (?, ?, ?, ?, ?)")
-        .bind(id(), c.get("auth").tokenId, "organizations.patch_state", `organizations/${organization.organizationId}`, "SUCCESS")
-        .run();
+      await recordAdminAudit(c, { action: "organizations.patch_state", targetResourceName: `organizations/${organization.organizationId}` });
     }
     const row = await first<OrganizationRow>(db(c.env).prepare("SELECT * FROM organizations WHERE uid = ?").bind(organization.uid));
     return c.json({ organization: row ? await organizationResource(c, row) : null });

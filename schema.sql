@@ -28,7 +28,7 @@ CREATE TABLE worlds (
   state TEXT NOT NULL DEFAULT 'active',
   provisioning_state TEXT NOT NULL DEFAULT 'pending',
   provisioning_error TEXT,
-  turso_database_name TEXT,
+  turso_database_name TEXT UNIQUE,
   turso_database_url TEXT,
   schema_version TEXT,
   durability_state TEXT NOT NULL DEFAULT 'not_configured',
@@ -44,7 +44,7 @@ CREATE TABLE worlds (
 );
 
 CREATE TABLE platform_api_tokens (
-  id TEXT PRIMARY KEY,
+  uid TEXT PRIMARY KEY,
   organization_uid TEXT REFERENCES organizations(uid) ON DELETE CASCADE,
   name TEXT NOT NULL,
   token_hash TEXT NOT NULL UNIQUE,
@@ -52,11 +52,13 @@ CREATE TABLE platform_api_tokens (
   scope TEXT NOT NULL DEFAULT 'organizations.read worlds.read usage.read billing.read',
   last_used_at TEXT,
   expires_at TEXT,
-  create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  CHECK (kind IN ('ORGANIZATION', 'ADMIN')),
+  CHECK (kind != 'ADMIN' OR (organization_uid IS NULL AND instr(scope, 'admin') > 0))
 );
 
 CREATE TABLE world_auth_tokens (
-  id TEXT PRIMARY KEY,
+  uid TEXT PRIMARY KEY,
   world_uid TEXT NOT NULL REFERENCES worlds(uid) ON DELETE CASCADE,
   name TEXT NOT NULL,
   token_hash TEXT NOT NULL UNIQUE,
@@ -66,7 +68,7 @@ CREATE TABLE world_auth_tokens (
 );
 
 CREATE TABLE usage_events (
-  id TEXT PRIMARY KEY,
+  uid TEXT PRIMARY KEY,
   organization_uid TEXT NOT NULL REFERENCES organizations(uid) ON DELETE CASCADE,
   world_uid TEXT REFERENCES worlds(uid) ON DELETE SET NULL,
   metric TEXT NOT NULL,
@@ -76,7 +78,6 @@ CREATE TABLE usage_events (
   wazoo_markup_microcents INTEGER NOT NULL DEFAULT 0,
   estimated_cost_microcents INTEGER,
   billing_source TEXT NOT NULL DEFAULT 'BETA_FREE',
-  occurred_at TEXT NOT NULL,
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
@@ -90,7 +91,7 @@ CREATE TABLE organization_limits (
 );
 
 CREATE TABLE admin_audit_events (
-  id TEXT PRIMARY KEY,
+  uid TEXT PRIMARY KEY,
   actor_token_uid TEXT,
   action TEXT NOT NULL,
   target_resource_name TEXT NOT NULL,
@@ -101,4 +102,4 @@ CREATE TABLE admin_audit_events (
 
 CREATE INDEX idx_worlds_org ON worlds(organization_uid);
 CREATE INDEX idx_world_tokens_world ON world_auth_tokens(world_uid);
-CREATE INDEX idx_usage_org_time ON usage_events(organization_uid, occurred_at);
+CREATE INDEX idx_usage_org_time ON usage_events(organization_uid, create_time);

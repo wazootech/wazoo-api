@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { AppEnv } from "../env";
+import { recordAdminAudit } from "../lib/audit";
 import { all, db, first, id } from "../lib/db";
 import { jsonBody, optionalString, requireScope, requireString, resolveOrg } from "../lib/http";
 
@@ -15,7 +16,7 @@ export const usage = new Hono<AppEnv>()
         `SELECT metric, SUM(quantity) AS quantity FROM usage_events WHERE organization_uid = ?${range.where} GROUP BY metric ORDER BY metric`
       ).bind(organization.uid, ...range.args)
     );
-    const eventRows = await all<UsageEventRow>(database.prepare(`SELECT u.id, w.world_id AS worldId, u.metric, u.quantity, u.unit, u.provider_cost_microcents AS providerCostMicrocents, u.wazoo_markup_microcents AS wazooMarkupMicrocents, u.estimated_cost_microcents AS estimatedCostMicrocents, u.billing_source AS billingSource, u.occurred_at AS occurredAt, u.create_time AS createTime FROM usage_events u LEFT JOIN worlds w ON w.uid = u.world_uid WHERE u.organization_uid = ?${range.where.replaceAll("occurred_at", "u.occurred_at")} ORDER BY u.occurred_at DESC LIMIT 100`).bind(organization.uid, ...range.args));
+    const eventRows = await all<UsageEventRow>(database.prepare(`SELECT u.uid, w.world_id AS worldResourceId, u.metric, u.quantity, u.unit, u.provider_cost_microcents AS providerCostMicrocents, u.wazoo_markup_microcents AS wazooMarkupMicrocents, u.estimated_cost_microcents AS estimatedCostMicrocents, u.billing_source AS billingSource, u.create_time AS createTime FROM usage_events u LEFT JOIN worlds w ON w.uid = u.world_uid WHERE u.organization_uid = ?${range.where.replaceAll("create_time", "u.create_time")} ORDER BY u.create_time DESC LIMIT 100`).bind(organization.uid, ...range.args));
     return c.json({ usage: { organization: `organizations/${organization.organizationId}`, total: rows, events: eventRows.map((row) => usageEventResource(organization.organizationId, row)) } });
   })
   .get("/organizations/:organizationId/limits", async (c) => {
@@ -35,7 +36,7 @@ export const usage = new Hono<AppEnv>()
     if (!world) return c.notFound();
     const range = usageRange(c);
     const rows = await all(database.prepare(`SELECT metric, SUM(quantity) AS quantity FROM usage_events WHERE organization_uid = ? AND world_uid = ?${range.where} GROUP BY metric ORDER BY metric`).bind(organization.uid, world.uid, ...range.args));
-    const eventRows = await all<UsageEventRow>(database.prepare(`SELECT u.id, w.world_id AS worldId, u.metric, u.quantity, u.unit, u.provider_cost_microcents AS providerCostMicrocents, u.wazoo_markup_microcents AS wazooMarkupMicrocents, u.estimated_cost_microcents AS estimatedCostMicrocents, u.billing_source AS billingSource, u.occurred_at AS occurredAt, u.create_time AS createTime FROM usage_events u LEFT JOIN worlds w ON w.uid = u.world_uid WHERE u.organization_uid = ? AND u.world_uid = ?${range.where.replaceAll("occurred_at", "u.occurred_at")} ORDER BY u.occurred_at DESC LIMIT 100`).bind(organization.uid, world.uid, ...range.args));
+    const eventRows = await all<UsageEventRow>(database.prepare(`SELECT u.uid, w.world_id AS worldResourceId, u.metric, u.quantity, u.unit, u.provider_cost_microcents AS providerCostMicrocents, u.wazoo_markup_microcents AS wazooMarkupMicrocents, u.estimated_cost_microcents AS estimatedCostMicrocents, u.billing_source AS billingSource, u.create_time AS createTime FROM usage_events u LEFT JOIN worlds w ON w.uid = u.world_uid WHERE u.organization_uid = ? AND u.world_uid = ?${range.where.replaceAll("create_time", "u.create_time")} ORDER BY u.create_time DESC LIMIT 100`).bind(organization.uid, world.uid, ...range.args));
     return c.json({ usage: { world: `organizations/${organization.organizationId}/worlds/${world.world_id}`, total: rows, events: eventRows.map((row) => usageEventResource(organization.organizationId, row)) } });
   })
   .post("/organizations/:organizationId/usage", async (c) => {
@@ -53,7 +54,7 @@ export const usage = new Hono<AppEnv>()
     const estimatedCostMicrocents = optionalInteger(body, "estimatedCostMicrocents") ?? providerCostMicrocents;
     const billingSource = optionalString(body, "billingSource") ?? "BETA_FREE";
     const database = db(c.env);
-    const worldResourceId = optionalString(body, "worldId") ?? optionalString(body, "world");
+    const worldResourceId = optionalString(body, "world");
     const resolvedWorldId = worldResourceId ? worldIdFromResource(worldResourceId) : null;
     const world = worldResourceId
       ? await first<{ uid: string }>(database.prepare("SELECT uid FROM worlds WHERE organization_uid = ? AND world_id = ?").bind(organization.uid, resolvedWorldId))
@@ -71,10 +72,11 @@ export const usage = new Hono<AppEnv>()
       }
     }
     await database.prepare(
-      "INSERT INTO usage_events (id, organization_uid, world_uid, metric, quantity, unit, provider_cost_microcents, wazoo_markup_microcents, estimated_cost_microcents, billing_source, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO usage_events (uid, organization_uid, world_uid, metric, quantity, unit, provider_cost_microcents, wazoo_markup_microcents, estimated_cost_microcents, billing_source, create_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
-      .bind(id(), organization.uid, world?.uid ?? null, metric, quantity, unit, providerCostMicrocents, wazooMarkupMicrocents, estimatedCostMicrocents, billingSource, optionalString(body, "occurredAt") ?? new Date().toISOString())
+      .bind(id(), organization.uid, world?.uid ?? null, metric, quantity, unit, providerCostMicrocents, wazooMarkupMicrocents, estimatedCostMicrocents, billingSource, optionalString(body, "createTime") ?? new Date().toISOString())
       .run();
+    await recordAdminAudit(c, { action: "usage.record", targetResourceName: `organizations/${organization.organizationId}/usageEvents` });
     return c.json({ accepted: true }, 201);
   });
 
@@ -88,8 +90,8 @@ function optionalInteger(body: Record<string, unknown>, key: string): number | n
 }
 
 type UsageEventRow = {
-  id: string;
-  worldId?: string | null;
+  uid: string;
+  worldResourceId?: string | null;
   metric: string;
   quantity: number;
   unit: string;
@@ -97,15 +99,14 @@ type UsageEventRow = {
   wazooMarkupMicrocents?: number;
   estimatedCostMicrocents?: number | null;
   billingSource: string;
-  occurredAt: string;
   createTime: string;
 };
 
 function usageEventResource(organizationId: string, row: UsageEventRow) {
   return {
-    name: `organizations/${organizationId}/usageEvents/${row.id}`,
+    name: `organizations/${organizationId}/usageEvents/${row.uid}`,
     organization: `organizations/${organizationId}`,
-    world: row.worldId ? `organizations/${organizationId}/worlds/${row.worldId}` : undefined,
+    world: row.worldResourceId ? `organizations/${organizationId}/worlds/${row.worldResourceId}` : undefined,
     metric: row.metric,
     quantity: row.quantity,
     unit: row.unit,
@@ -113,7 +114,6 @@ function usageEventResource(organizationId: string, row: UsageEventRow) {
     wazooMarkupMicrocents: row.wazooMarkupMicrocents,
     estimatedCostMicrocents: row.estimatedCostMicrocents,
     billingSource: row.billingSource,
-    occurredAt: row.occurredAt,
     createTime: row.createTime,
   };
 }
@@ -124,11 +124,11 @@ function usageRange(c: { req: { query(name: string): string | undefined } }) {
   const from = c.req.query("from");
   const to = c.req.query("to");
   if (from) {
-    where += " AND occurred_at >= ?";
+    where += " AND create_time >= ?";
     args.push(from);
   }
   if (to) {
-    where += " AND occurred_at <= ?";
+    where += " AND create_time <= ?";
     args.push(to);
   }
   return { where, args };

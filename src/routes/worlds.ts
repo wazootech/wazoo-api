@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
+import { recordAdminAudit } from "../lib/audit";
 import { all, db, first, id, now } from "../lib/db";
 import { isAdmin, jsonBody, optionalString, requireOrgAccess, requireResourceId, requireScope, requireString, resolveOrg } from "../lib/http";
-import { provisionWorldDatabase, WORLD_SCHEMA_VERSION } from "../lib/provisioning";
+import { provisionWorldDatabase, WORLD_SCHEMA_VERSION, worldDatabaseName } from "../lib/provisioning";
 import { activeWorldCount, privateBetaQuota, quotaError, quotaStatus } from "../lib/quota";
 import { recordUsage } from "../lib/usage";
 
@@ -52,14 +53,18 @@ export const worlds = new Hono<AppEnv>()
       region: optionalString(worldBody as Record<string, unknown>, "region") ?? "auto",
       now: now()
     };
+    const databaseName = worldDatabaseName(c.env, world.id);
     const database = db(c.env);
     await database.prepare(
-      "INSERT INTO worlds (uid, organization_uid, world_id, display_name, region, provisioning_state, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO worlds (uid, organization_uid, world_id, display_name, region, turso_database_name, provisioning_state, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
-      .bind(world.id, organization.uid, world.worldId, world.displayName, world.region, "pending", world.now, world.now)
+      .bind(world.id, organization.uid, world.worldId, world.displayName, world.region, databaseName, "pending", world.now, world.now)
       .run();
+    if (isAdmin(c) && quota.state !== "OK" && quota.state !== "WARN") {
+      await recordAdminAudit(c, { action: "worlds.create_quota_bypass", targetResourceName: `organizations/${organization.organizationId}/worlds/${world.worldId}` });
+    }
     try {
-      const provisioned = await provisionWorldDatabase(c.env, world.id, organization.uid);
+      const provisioned = await provisionWorldDatabase(c.env, world.id, organization.uid, databaseName);
       await database.prepare("UPDATE worlds SET state = 'active', provisioning_state = 'active', provisioning_error = NULL, turso_database_name = ?, turso_database_url = ?, schema_version = ?, durability_state = 'configured', update_time = ? WHERE uid = ?")
         .bind(provisioned.databaseName, provisioned.databaseUrl, WORLD_SCHEMA_VERSION, now(), world.id)
         .run();
@@ -137,6 +142,8 @@ export const worlds = new Hono<AppEnv>()
     if (existing.expire_time && new Date(existing.expire_time).getTime() <= Date.now()) {
       return c.json({ error: { code: "WORLD_RESTORE_EXPIRED", message: "World undelete window has expired" } }, 400);
     }
+    const quota = await quotaStatus(c, organization.uid, organization.state);
+    if (!isAdmin(c) && quota.state === "SUSPENDED") return quotaError(c, "Organization is suspended", quota);
     const activeCount = await activeWorldCount(c, organization.uid);
     if (!isAdmin(c) && activeCount >= privateBetaQuota.maxWorlds) {
       return quotaError(c, "Maximum active Worlds exceeded", { state: "THROTTLED", reason: "MAX_WORLDS_EXCEEDED", usagePercent: 100 });
@@ -144,8 +151,11 @@ export const worlds = new Hono<AppEnv>()
     const database = db(c.env);
     const row = await first<WorldRow>(database.prepare("SELECT * FROM worlds WHERE uid = ?").bind(existing.uid));
     if (!row) return c.notFound();
+    if (isAdmin(c) && (quota.state === "SUSPENDED" || activeCount >= privateBetaQuota.maxWorlds)) {
+      await recordAdminAudit(c, { action: "worlds.undelete_quota_bypass", targetResourceName: `organizations/${organization.organizationId}/worlds/${worldId}` });
+    }
     try {
-      const provisioned = await provisionWorldDatabase(c.env, row.uid, organization.uid);
+      const provisioned = await provisionWorldDatabase(c.env, row.uid, organization.uid, row.turso_database_name);
       await database.prepare("UPDATE worlds SET state = 'active', provisioning_state = 'active', provisioning_error = NULL, turso_database_name = ?, turso_database_url = ?, schema_version = ?, durability_state = 'configured', delete_time = NULL, expire_time = NULL, update_time = ? WHERE uid = ?")
         .bind(provisioned.databaseName, provisioned.databaseUrl, WORLD_SCHEMA_VERSION, now(), existing.uid)
         .run();
@@ -156,24 +166,28 @@ export const worlds = new Hono<AppEnv>()
       const message = error instanceof Error ? error.message : "World sync failed";
       await database.prepare("UPDATE worlds SET provisioning_state = 'failed', provisioning_error = ?, update_time = ? WHERE uid = ?").bind(message, now(), existing.uid).run();
       const updated = await first<WorldRow>(database.prepare("SELECT * FROM worlds WHERE uid = ?").bind(existing.uid));
-      return c.json({ error: { code: "WORLD_RESTORE_BLOCKED", message }, world: updated ? worldResource(organization.organizationId, updated) : null }, 409);
+      return c.json({ error: { code: "WORLD_RESTORE_BLOCKED", message }, world: updated ? worldResource(organization.organizationId, updated) : null, syncReport: failedSyncReport(message) }, 409);
     }
   })
   .post("/organizations/:organizationId/worlds/:worldId\\:sync", async (c) => {
     requireScope(c, "worlds.admin");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     if (!isAdmin(c) && organization.state !== "ACTIVE") {
-      return c.json({ error: { code: "PERMISSION_DENIED", message: "Organization is not active" } }, 403);
+      return c.json({ error: { code: "PERMISSION_DENIED", message: "Organization is not active" }, syncReport: blockedSyncReport("ORGANIZATION_NOT_ACTIVE", "Organization is not active") }, 403);
     }
     const worldId = c.req.param("worldId");
     const existing = await first<{ uid: string; state: string }>(db(c.env).prepare("SELECT * FROM worlds WHERE organization_uid = ? AND world_id = ?").bind(organization.uid, worldId));
     if (!existing) return c.notFound();
     if (existing.state === "deleted") {
-      return c.json({ error: { code: "FAILED_PRECONDITION", message: "Deleted Worlds cannot be synced" } }, 400);
+      return c.json({ error: { code: "FAILED_PRECONDITION", message: "Deleted Worlds cannot be synced" }, syncReport: blockedSyncReport("WORLD_DELETED", "Deleted Worlds cannot be synced") }, 400);
     }
     const database = db(c.env);
+    const rowBefore = await first<WorldRow>(database.prepare("SELECT * FROM worlds WHERE uid = ?").bind(existing.uid));
+    if (isAdmin(c) && organization.state !== "ACTIVE") {
+      await recordAdminAudit(c, { action: "worlds.sync_state_bypass", targetResourceName: `organizations/${organization.organizationId}/worlds/${worldId}` });
+    }
     try {
-      const provisioned = await provisionWorldDatabase(c.env, existing.uid, organization.uid);
+      const provisioned = await provisionWorldDatabase(c.env, existing.uid, organization.uid, rowBefore?.turso_database_name);
       await database.prepare("UPDATE worlds SET state = CASE WHEN state IN ('failed', 'active') THEN 'active' ELSE state END, provisioning_state = 'active', provisioning_error = NULL, turso_database_name = ?, turso_database_url = ?, schema_version = ?, durability_state = 'configured', update_time = ? WHERE uid = ?")
         .bind(provisioned.databaseName, provisioned.databaseUrl, WORLD_SCHEMA_VERSION, now(), existing.uid)
         .run();
@@ -184,6 +198,14 @@ export const worlds = new Hono<AppEnv>()
       const message = error instanceof Error ? error.message : "World sync failed";
       await database.prepare("UPDATE worlds SET provisioning_state = 'failed', provisioning_error = ?, update_time = ? WHERE uid = ?").bind(message, now(), existing.uid).run();
       const row = await first<WorldRow>(database.prepare("SELECT * FROM worlds WHERE uid = ?").bind(existing.uid));
-      return c.json({ error: { code: "WORLD_SYNC_BLOCKED", message }, world: row ? worldResource(organization.organizationId, row) : null }, 409);
+      return c.json({ error: { code: "WORLD_SYNC_BLOCKED", message }, world: row ? worldResource(organization.organizationId, row) : null, syncReport: failedSyncReport(message) }, 409);
     }
   });
+
+function blockedSyncReport(code: string, message: string) {
+  return { status: "BLOCKED", actions: [], warnings: [], errors: [{ code, message }] };
+}
+
+function failedSyncReport(message: string) {
+  return { status: "FAILED", actions: [], warnings: [], errors: [{ code: "SYNC_FAILED", message }] };
+}

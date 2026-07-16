@@ -32,12 +32,12 @@ function requireTursoConfig(env: Bindings) {
 
 export function worldDatabaseName(env: Bindings, worldUid: string): string {
   const environment = (env.WAZOO_ENV || "dev").toLowerCase().replace(/[^a-z0-9-]+/g, "-");
-  const uid = worldUid.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
-  return `wz-${environment}-world-${uid}`.slice(0, 64).replace(/-+$/g, "");
+  const uid = worldUid.toLowerCase().replace(/_/g, "-");
+  return `wz-${environment}-world-${uid}`;
 }
 
-export async function provisionWorldDatabase(env: Bindings, worldUid: string, organizationUid: string): Promise<ProvisioningResult> {
-  const databaseName = worldDatabaseName(env, worldUid);
+export async function provisionWorldDatabase(env: Bindings, worldUid: string, organizationUid: string, storedDatabaseName?: string | null): Promise<ProvisioningResult> {
+  const databaseName = storedDatabaseName ?? worldDatabaseName(env, worldUid);
   const { database, created } = await ensureDatabase(env, databaseName);
   const databaseUrl = `libsql://${database.Hostname}`;
   const token = await createDatabaseToken(env, databaseName);
