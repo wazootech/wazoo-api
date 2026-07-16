@@ -3,12 +3,16 @@ main = "src/index.ts"
 compatibility_date = "2026-07-13"
 compatibility_flags = ["nodejs_compat"]
 
+routes = [
+  { pattern = "api.wazoo.dev", custom_domain = true }
+]
+
 [vars]
-API_BASE_URL = "http://localhost:8787"
+API_BASE_URL = "https://api.wazoo.dev"
 TURSO_DATABASE_URL = ""
 TURSO_ORGANIZATION_SLUG = ""
 TURSO_GROUP = "default"
-WAZOO_ENV = "dev"
+WAZOO_ENV = "prod"
 STRIPE_PRICE_ID = ""
 
 [observability]
