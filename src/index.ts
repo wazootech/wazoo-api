@@ -13,7 +13,9 @@ import { errorHandler, requireAuth } from "./lib/http";
 const app = new Hono<AppEnv>();
 
 app.onError(errorHandler);
-app.notFound((c) => c.json({ error: { code: "NOT_FOUND", message: "Not found" } }, 404));
+app.notFound((c) =>
+  c.json({ error: { code: "NOT_FOUND", message: "Not found" } }, 404),
+);
 
 app.route("/", health);
 app.route("/", openapi);

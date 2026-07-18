@@ -35,7 +35,7 @@ const routes = [
   "GET /v1/organizations/:organizationId/billing",
   "GET /v1/organizations/:organizationId/billing/invoices",
   "POST /v1/organizations/:organizationId/billing/openPortal",
-  "POST /v1/stripe/webhook"
+  "POST /v1/stripe/webhook",
 ];
 
 export const openapi = new Hono<AppEnv>().get("/openapi.json", (c) => {
@@ -43,6 +43,6 @@ export const openapi = new Hono<AppEnv>().get("/openapi.json", (c) => {
     openapi: "3.1.0-ish",
     info: { title: "Wazoo Platform API", version: "0.1.0" },
     security: [{ bearerPlatformToken: [] }],
-    routes
+    routes,
   });
 });

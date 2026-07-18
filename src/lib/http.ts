@@ -6,7 +6,11 @@ import { db, organizationByIdentifier } from "./db";
 
 export type JsonObject = Record<string, unknown>;
 
-export function ok(c: Context<AppEnv>, data: unknown, status: ContentfulStatusCode = 200) {
+export function ok(
+  c: Context<AppEnv>,
+  data: unknown,
+  status: ContentfulStatusCode = 200,
+) {
   return c.json({ data }, status);
 }
 
@@ -14,7 +18,9 @@ export function created(c: Context<AppEnv>, data: unknown) {
   return ok(c, data, 201);
 }
 
-export async function jsonBody<T extends JsonObject>(c: Context<AppEnv>): Promise<T> {
+export async function jsonBody<T extends JsonObject>(
+  c: Context<AppEnv>,
+): Promise<T> {
   try {
     const body = await c.req.json<T>();
     if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -30,7 +36,9 @@ export async function jsonBody<T extends JsonObject>(c: Context<AppEnv>): Promis
 export function requireString(body: JsonObject, key: string): string {
   const value = body[key];
   if (typeof value !== "string" || value.trim() === "") {
-    throw new HTTPException(400, { message: `Missing required string: ${key}` });
+    throw new HTTPException(400, {
+      message: `Missing required string: ${key}`,
+    });
   }
   return value.trim();
 }
@@ -38,7 +46,9 @@ export function requireString(body: JsonObject, key: string): string {
 export function requireResourceId(body: JsonObject, key: string): string {
   const value = requireString(body, key);
   if (!/^[a-z][a-z0-9-]{2,62}$/.test(value)) {
-    throw new HTTPException(400, { message: `${key} must match ^[a-z][a-z0-9-]{2,62}$` });
+    throw new HTTPException(400, {
+      message: `${key} must match ^[a-z][a-z0-9-]{2,62}$`,
+    });
   }
   return value;
 }
@@ -58,11 +68,23 @@ export async function notFound() {
 
 export async function errorHandler(error: Error, c: Context<AppEnv>) {
   if (error instanceof HTTPException) {
-    return c.json({ error: { code: errorCode(error.status), message: error.message } }, error.status);
+    return c.json(
+      { error: { code: errorCode(error.status), message: error.message } },
+      error.status,
+    );
   }
 
-  console.error(JSON.stringify({ level: "error", message: error.message, stack: error.stack }));
-  return c.json({ error: { code: "INTERNAL", message: "Internal server error" } }, 500);
+  console.error(
+    JSON.stringify({
+      level: "error",
+      message: error.message,
+      stack: error.stack,
+    }),
+  );
+  return c.json(
+    { error: { code: "INTERNAL", message: "Internal server error" } },
+    500,
+  );
 }
 
 function errorCode(status: number): string {
@@ -85,21 +107,35 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
   const { sha256Hex } = await import("./crypto");
   const hash = await sha256Hex(token);
   const database = db(c.env);
-  const row = await database.prepare(
-    "SELECT uid, organization_uid, scope, kind, expires_at FROM platform_api_tokens WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > ?)"
-  )
+  const row = await database
+    .prepare(
+      "SELECT uid, organization_uid, scope, kind, expires_at FROM platform_api_tokens WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > ?)",
+    )
     .bind(hash, new Date().toISOString())
-    .first<{ uid: string; organization_uid: string | null; scope: string; kind: "ORGANIZATION" | "ADMIN" | null; expires_at: string | null }>();
+    .first<{
+      uid: string;
+      organization_uid: string | null;
+      scope: string;
+      kind: "ORGANIZATION" | "ADMIN" | null;
+      expires_at: string | null;
+    }>();
 
   if (!row) {
     throw new HTTPException(401, { message: "Invalid platform API token" });
   }
 
-  c.set("auth", { tokenId: row.uid, organizationUid: row.organization_uid, scope: row.scope, kind: row.kind ?? "ORGANIZATION", expiresAt: row.expires_at });
+  c.set("auth", {
+    tokenId: row.uid,
+    organizationUid: row.organization_uid,
+    scope: row.scope,
+    kind: row.kind ?? "ORGANIZATION",
+    expiresAt: row.expires_at,
+  });
   c.executionCtx.waitUntil(
-    database.prepare("UPDATE platform_api_tokens SET last_used_at = ? WHERE uid = ?")
+    database
+      .prepare("UPDATE platform_api_tokens SET last_used_at = ? WHERE uid = ?")
       .bind(new Date().toISOString(), row.uid)
-      .run()
+      .run(),
   );
   await next();
 }
@@ -111,23 +147,34 @@ export function requireOrgAccess(c: Context<AppEnv>, organizationUid: string) {
     throw new HTTPException(403, { message: "Invalid admin token shape" });
   }
   if (auth.organizationUid && auth.organizationUid !== organizationUid) {
-    throw new HTTPException(403, { message: "Token cannot access this organization" });
+    throw new HTTPException(403, {
+      message: "Token cannot access this organization",
+    });
   }
 }
 
 export function isAdmin(c: Context<AppEnv>): boolean {
   const auth = c.get("auth");
-  return auth.kind === "ADMIN" && auth.scope.split(/\s+/).includes("admin") && auth.organizationUid === null;
+  return (
+    auth.kind === "ADMIN" &&
+    auth.scope.split(/\s+/).includes("admin") &&
+    auth.organizationUid === null
+  );
 }
 
 export function requireScope(c: Context<AppEnv>, scope: string) {
   if (scope === "admin") {
-    if (!isAdmin(c)) throw new HTTPException(403, { message: "Missing required scope: admin" });
+    if (!isAdmin(c))
+      throw new HTTPException(403, {
+        message: "Missing required scope: admin",
+      });
     return;
   }
   const scopes = new Set(c.get("auth").scope.split(/\s+/).filter(Boolean));
   if (!scopes.has(scope) && !isAdmin(c)) {
-    throw new HTTPException(403, { message: `Missing required scope: ${scope}` });
+    throw new HTTPException(403, {
+      message: `Missing required scope: ${scope}`,
+    });
   }
 }
 
