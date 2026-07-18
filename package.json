@@ -11,7 +11,9 @@
     "launch:apply-schema": "node scripts/apply-control-schema.mjs",
     "launch:seed-admin": "node scripts/seed-admin-token.mjs",
     "smoke:beta": "node scripts/private-beta-smoke.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "format": "prettier \"src/**/*.ts\" --write",
+    "format:check": "prettier \"src/**/*.ts\" --check"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",
@@ -19,6 +21,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "latest",
+    "prettier": "^3.9.5",
     "typescript": "^5.9.2",
     "wrangler": "latest"
   }
