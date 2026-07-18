@@ -15,7 +15,7 @@ try {
   await step("health", () => request("/health", { auth: false }));
   await step("ensure organization", ensureOrganization);
   await step("create world", createWorld);
-  await step("sync world", () => request(`/v1/organizations/${organizationId}/worlds/${worldId}:sync`, { method: "POST" }));
+  await step("sync world", () => request(`/v1/organizations/${organizationId}/worlds/${worldId}/sync`, { method: "POST" }));
   await step("create world token", createWorldToken);
   await step("rotate world token", rotateWorldToken);
   await step("revoke replacement token", revokeWorldToken);
@@ -23,7 +23,7 @@ try {
   await step("read limits", () => request(`/v1/organizations/${organizationId}/limits`));
   await step("read billing", () => request(`/v1/organizations/${organizationId}/billing`));
   await step("soft-delete world", () => request(`/v1/organizations/${organizationId}/worlds/${worldId}`, { method: "DELETE" }));
-  await step("undelete world", () => request(`/v1/organizations/${organizationId}/worlds/${worldId}:undelete`, { method: "POST" }));
+  await step("undelete world", () => request(`/v1/organizations/${organizationId}/worlds/${worldId}/undelete`, { method: "POST" }));
   await step("final soft-delete world", () => request(`/v1/organizations/${organizationId}/worlds/${worldId}`, { method: "DELETE" }));
   console.log(`\nPrivate beta smoke test passed for organizations/${organizationId}/worlds/${worldId}`);
 } catch (error) {

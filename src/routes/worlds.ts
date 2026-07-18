@@ -130,7 +130,7 @@ export const worlds = new Hono<AppEnv>()
     const row = await first<WorldRow>(db(c.env).prepare("SELECT * FROM worlds WHERE uid = ?").bind(existing.uid));
     return c.json({ world: row ? worldResource(organization.organizationId, row) : null });
   })
-  .post("/organizations/:organizationId/worlds/:worldId\\:undelete", async (c) => {
+  .post("/organizations/:organizationId/worlds/:worldId/undelete", async (c) => {
     requireScope(c, "worlds.write");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     const worldId = c.req.param("worldId");
@@ -169,7 +169,7 @@ export const worlds = new Hono<AppEnv>()
       return c.json({ error: { code: "WORLD_RESTORE_BLOCKED", message }, world: updated ? worldResource(organization.organizationId, updated) : null, syncReport: failedSyncReport(message) }, 409);
     }
   })
-  .post("/organizations/:organizationId/worlds/:worldId\\:sync", async (c) => {
+  .post("/organizations/:organizationId/worlds/:worldId/sync", async (c) => {
     requireScope(c, "worlds.admin");
     const organization = await resolveOrg(c, c.req.param("organizationId"));
     if (!isAdmin(c) && organization.state !== "ACTIVE") {

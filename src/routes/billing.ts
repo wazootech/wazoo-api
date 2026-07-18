@@ -26,7 +26,7 @@ export const billing = new Hono<AppEnv>()
     await resolveOrg(c, c.req.param("organizationId"));
     return c.json({ invoices: [] });
   })
-  .post("/organizations/:organizationId/billing\\:openPortal", async (c) => {
+  .post("/organizations/:organizationId/billing/openPortal", async (c) => {
     requireScope(c, "billing.read");
     await resolveOrg(c, c.req.param("organizationId"));
     return c.json(

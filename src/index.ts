@@ -1,12 +1,12 @@
 import { Hono } from "hono";
 import type { AppEnv } from "./env";
-import { betaApplicationsAdmin, betaApplicationsPublic } from "./routes/beta-applications";
 import { billing, stripeWebhook } from "./routes/billing";
 import { health } from "./routes/health";
 import { openapi } from "./routes/openapi";
 import { organizations } from "./routes/organizations";
 import { tokens } from "./routes/tokens";
 import { usage } from "./routes/usage";
+import { users } from "./routes/users";
 import { worlds } from "./routes/worlds";
 import { errorHandler, requireAuth } from "./lib/http";
 
@@ -20,14 +20,13 @@ app.route("/", openapi);
 app.route("/", stripeWebhook);
 
 const v1 = new Hono<AppEnv>();
-v1.route("/", betaApplicationsPublic);
 v1.use("*", requireAuth);
-v1.route("/", betaApplicationsAdmin);
 v1.route("/", organizations);
 v1.route("/", worlds);
 v1.route("/", tokens);
 v1.route("/", usage);
 v1.route("/", billing);
+v1.route("/", users);
 
 app.route("/v1", v1);
 

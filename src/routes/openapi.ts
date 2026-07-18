@@ -4,10 +4,7 @@ import type { AppEnv } from "../env";
 const routes = [
   "GET /health",
   "GET /openapi.json",
-  "POST /v1/betaApplications",
-  "GET /v1/betaApplications",
-  "POST /v1/betaApplications/:applicationUid:approve",
-  "POST /v1/betaApplications/:applicationUid:reject",
+  "GET /v1/users/me",
   "GET /v1/organizations",
   "POST /v1/organizations",
   "GET /v1/organizations/:organizationId",
@@ -18,8 +15,8 @@ const routes = [
   "GET /v1/organizations/:organizationId/worlds/:worldId",
   "PATCH /v1/organizations/:organizationId/worlds/:worldId",
   "DELETE /v1/organizations/:organizationId/worlds/:worldId",
-  "POST /v1/organizations/:organizationId/worlds/:worldId:undelete",
-  "POST /v1/organizations/:organizationId/worlds/:worldId:sync",
+  "POST /v1/organizations/:organizationId/worlds/:worldId/undelete",
+  "POST /v1/organizations/:organizationId/worlds/:worldId/sync",
   "GET /v1/organizations/:organizationId/worlds/:worldId/auth/tokens",
   "POST /v1/organizations/:organizationId/worlds/:worldId/auth/tokens",
   "POST /v1/organizations/:organizationId/worlds/:worldId/auth/rotate",
@@ -37,7 +34,7 @@ const routes = [
   "POST /v1/organizations/:organizationId/usage",
   "GET /v1/organizations/:organizationId/billing",
   "GET /v1/organizations/:organizationId/billing/invoices",
-  "POST /v1/organizations/:organizationId/billing:openPortal",
+  "POST /v1/organizations/:organizationId/billing/openPortal",
   "POST /v1/stripe/webhook"
 ];
 

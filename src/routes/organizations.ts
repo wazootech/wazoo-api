@@ -2,10 +2,10 @@ import { Hono, type Context } from "hono";
 import type { AppEnv } from "../env";
 import { recordAdminAudit } from "../lib/audit";
 import { all, db, first, id, now } from "../lib/db";
-import { isAdmin, jsonBody, requireResourceId, requireScope, requireString, resolveOrg } from "../lib/http";
+import { isAdmin, jsonBody, optionalString, requireResourceId, requireScope, requireString, resolveOrg } from "../lib/http";
 import { quotaStatus } from "../lib/quota";
 
-type OrganizationRow = { uid: string; organization_id: string; display_name: string; state: string; billing_provider?: string; billing_state?: string; stripe_customer_id?: string | null; create_time?: string; update_time?: string; delete_time?: string | null; expire_time?: string | null };
+type OrganizationRow = { uid: string; organization_id: string; display_name: string; state: string; owner_user_uid?: string | null; billing_provider?: string; billing_state?: string; stripe_customer_id?: string | null; create_time?: string; update_time?: string; delete_time?: string | null; expire_time?: string | null };
 
 async function organizationResource(c: Context<AppEnv>, row: OrganizationRow) {
   return {
@@ -32,9 +32,24 @@ export const organizations = new Hono<AppEnv>()
     requireScope(c, "organizations.read");
     const auth = c.get("auth");
     const database = db(c.env);
-    const rows = auth.organizationUid
-      ? await all(database.prepare("SELECT * FROM organizations WHERE uid = ? AND state != 'DELETED' ORDER BY create_time DESC").bind(auth.organizationUid))
-      : await all(database.prepare("SELECT * FROM organizations WHERE state != 'DELETED' ORDER BY create_time DESC"));
+    let rows: Array<Record<string, unknown>>;
+    if (isAdmin(c)) {
+      const email = c.req.query("email")?.toLowerCase();
+      if (email) {
+        const user = await first<{ uid: string }>(database.prepare("SELECT uid FROM users WHERE email = ?").bind(email));
+        if (user) {
+          rows = await all(database.prepare("SELECT * FROM organizations WHERE owner_user_uid = ? AND state != 'DELETED' ORDER BY create_time DESC").bind(user.uid));
+        } else {
+          rows = [];
+        }
+      } else {
+        rows = await all(database.prepare("SELECT * FROM organizations WHERE state != 'DELETED' ORDER BY create_time DESC"));
+      }
+    } else if (auth.organizationUid) {
+      rows = await all(database.prepare("SELECT * FROM organizations WHERE uid = ? AND state != 'DELETED' ORDER BY create_time DESC").bind(auth.organizationUid));
+    } else {
+      rows = [];
+    }
     return c.json({ organizations: await Promise.all(rows.map((row) => organizationResource(c, row as OrganizationRow))) });
   })
   .post("/organizations", async (c) => {
@@ -45,10 +60,16 @@ export const organizations = new Hono<AppEnv>()
       return c.json({ error: { code: "INVALID_ARGUMENT", message: "organization is required" } }, 400);
     }
     const organization = { uid: `org_${id()}`, organizationId: requireResourceId(body, "organizationId"), displayName: requireString(organizationBody as Record<string, unknown>, "displayName"), now: now() };
-    await db(c.env).prepare("INSERT INTO organizations (uid, organization_id, display_name, create_time, update_time) VALUES (?, ?, ?, ?, ?)")
-      .bind(organization.uid, organization.organizationId, organization.displayName, organization.now, organization.now)
+    const ownerEmail = optionalString(body, "ownerEmail")?.toLowerCase();
+    let ownerUserUid: string | null = null;
+    if (ownerEmail) {
+      const user = await first<{ uid: string }>(db(c.env).prepare("SELECT uid FROM users WHERE email = ?").bind(ownerEmail));
+      if (user) ownerUserUid = user.uid;
+    }
+    await db(c.env).prepare("INSERT INTO organizations (uid, organization_id, display_name, owner_user_uid, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(organization.uid, organization.organizationId, organization.displayName, ownerUserUid, organization.now, organization.now)
       .run();
-    return c.json({ organization: await organizationResource(c, { uid: organization.uid, organization_id: organization.organizationId, display_name: organization.displayName, state: "ACTIVE", billing_provider: "STRIPE", billing_state: "BETA_FREE", create_time: organization.now, update_time: organization.now }) }, 201);
+    return c.json({ organization: await organizationResource(c, { uid: organization.uid, organization_id: organization.organizationId, display_name: organization.displayName, state: "ACTIVE", owner_user_uid: ownerUserUid, billing_provider: "STRIPE", billing_state: "BETA_FREE", create_time: organization.now, update_time: organization.now }) }, 201);
   })
   .get("/organizations/:organizationId", async (c) => {
     requireScope(c, "organizations.read");

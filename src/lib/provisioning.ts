@@ -30,10 +30,21 @@ function requireTursoConfig(env: Bindings) {
   };
 }
 
+function shortHash(input: string): string {
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    hash = ((hash << 5) - hash) + input.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
 export function worldDatabaseName(env: Bindings, worldUid: string): string {
   const environment = (env.WAZOO_ENV || "dev").toLowerCase().replace(/[^a-z0-9-]+/g, "-");
   const uid = worldUid.toLowerCase().replace(/_/g, "-");
-  return `wz-${environment}-world-${uid}`;
+  const suffix = `${environment}-${uid}`;
+  if (suffix.length <= 33) return `wz-${suffix}`;
+  return `wz-${environment}-${shortHash(uid)}`;
 }
 
 export async function provisionWorldDatabase(env: Bindings, worldUid: string, organizationUid: string, storedDatabaseName?: string | null): Promise<ProvisioningResult> {
