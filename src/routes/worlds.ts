@@ -13,17 +13,11 @@ import {
   resolveOrg,
 } from "../lib/http";
 import {
-  provisionWorldDatabase,
-  WORLD_SCHEMA_VERSION,
-  worldDatabaseName,
-} from "../lib/provisioning";
-import {
   activeWorldCount,
   privateBetaQuota,
   quotaError,
   quotaStatus,
 } from "../lib/quota";
-import { recordUsage } from "../lib/usage";
 
 type WorldRow = {
   uid: string;
@@ -32,13 +26,6 @@ type WorldRow = {
   display_name: string;
   region: string;
   state: string;
-  provisioning_state?: string;
-  provisioning_error?: string | null;
-  turso_database_name?: string | null;
-  turso_database_url?: string | null;
-  schema_version?: string | null;
-  durability_state?: string;
-  durability_error?: string | null;
   create_time?: string;
   update_time?: string;
   delete_time?: string | null;
@@ -56,24 +43,16 @@ function worldResource(organizationId: string, row: WorldRow) {
     region: row.region,
     state: row.state.toUpperCase(),
     restorable,
-    storage: {
-      backend: "TURSO",
-      schemaVersion: row.schema_version ?? undefined,
-    },
-    provisioning: {
-      state: (row.provisioning_state ?? "pending").toUpperCase(),
-      error: row.provisioning_error ?? undefined,
-    },
-    durability: {
-      backend: "R2",
-      state: (row.durability_state ?? "not_configured").toUpperCase(),
-      error: row.durability_error ?? undefined,
-    },
+    backend: "worlds-api",
     createTime: row.create_time,
     updateTime: row.update_time,
     deleteTime: row.delete_time ?? undefined,
     expireTime: row.expire_time ?? undefined,
   };
+}
+
+function worldsApiBase(env: AppEnv["Bindings"]) {
+  return env.WORLDS_API_URL.replace(/\/+$/, "");
 }
 
 export const worlds = new Hono<AppEnv>()
@@ -129,11 +108,10 @@ export const worlds = new Hono<AppEnv>()
         "auto",
       now: now(),
     };
-    const databaseName = worldDatabaseName(c.env, world.id);
     const database = db(c.env);
     await database
       .prepare(
-        "INSERT INTO worlds (uid, organization_uid, world_id, display_name, region, turso_database_name, provisioning_state, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO worlds (uid, organization_uid, world_id, display_name, region, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?, ?)",
       )
       .bind(
         world.id,
@@ -141,8 +119,6 @@ export const worlds = new Hono<AppEnv>()
         world.worldId,
         world.displayName,
         world.region,
-        databaseName,
-        "pending",
         world.now,
         world.now,
       )
@@ -153,65 +129,52 @@ export const worlds = new Hono<AppEnv>()
         targetResourceName: `organizations/${organization.organizationId}/worlds/${world.worldId}`,
       });
     }
-    try {
-      const provisioned = await provisionWorldDatabase(
-        c.env,
-        world.id,
-        organization.uid,
-        databaseName,
-      );
-      await database
-        .prepare(
-          "UPDATE worlds SET state = 'active', provisioning_state = 'active', provisioning_error = NULL, turso_database_name = ?, turso_database_url = ?, schema_version = ?, durability_state = 'configured', update_time = ? WHERE uid = ?",
-        )
-        .bind(
-          provisioned.databaseName,
-          provisioned.databaseUrl,
-          WORLD_SCHEMA_VERSION,
-          now(),
-          world.id,
-        )
-        .run();
-      await recordUsage(c.env, {
-        organizationUid: organization.uid,
-        worldUid: world.id,
-        metric: "world.create.count",
-      });
-      await recordUsage(c.env, {
-        organizationUid: organization.uid,
-        worldUid: world.id,
-        metric: "world.provision.count",
-      });
-      const row = await first<WorldRow>(
-        database.prepare("SELECT * FROM worlds WHERE uid = ?").bind(world.id),
-      );
-      return c.json(
-        {
-          world: row ? worldResource(organization.organizationId, row) : null,
-          syncReport: provisioned.syncReport,
+    const apiBase = worldsApiBase(c.env);
+    const res = await fetch(
+      `${apiBase}/namespaces/${organization.uid}/worlds`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
+          "Content-Type": "application/json",
         },
-        201,
-      );
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "World provisioning failed";
+        body: JSON.stringify({
+          worldId: world.worldId,
+          displayName: world.displayName,
+        }),
+      },
+    );
+    if (!res.ok) {
+      let message = `worlds-api returned ${res.status}`;
+      try {
+        const errBody = (await res.json()) as Record<string, unknown>;
+        if (typeof errBody.error === "string") message = errBody.error;
+        else if (typeof errBody.message === "string") message = errBody.message;
+      } catch {
+        // use default message
+      }
       await database
-        .prepare(
-          "UPDATE worlds SET state = 'failed', provisioning_state = 'failed', provisioning_error = ?, update_time = ? WHERE uid = ?",
-        )
-        .bind(message, now(), world.id)
+        .prepare("DELETE FROM worlds WHERE uid = ?")
+        .bind(world.id)
         .run();
-      const row = await first<WorldRow>(
-        database.prepare("SELECT * FROM worlds WHERE uid = ?").bind(world.id),
-      );
       return c.json(
         {
           error: { code: "WORLD_PROVISIONING_FAILED", message },
-          world: row ? worldResource(organization.organizationId, row) : null,
         },
         502,
       );
     }
+    const worldsApiResult = (await res.json()) as Record<string, unknown>;
+    const row = await first<WorldRow>(
+      database.prepare("SELECT * FROM worlds WHERE uid = ?").bind(world.id),
+    );
+    return c.json(
+      {
+        world: row ? worldResource(organization.organizationId, row) : null,
+        syncReport: worldsApiResult.syncReport,
+      },
+      201,
+    );
   })
   .get("/organizations/:organizationId/worlds/:worldId", async (c) => {
     requireScope(c, "worlds.read");
@@ -324,7 +287,7 @@ export const worlds = new Hono<AppEnv>()
     ).toISOString();
     await db(c.env)
       .prepare(
-        "UPDATE worlds SET state = 'deleted', provisioning_state = 'deleted', purge_status = 'pending', delete_time = ?, expire_time = ?, update_time = ? WHERE uid = ?",
+        "UPDATE worlds SET state = 'deleted', purge_status = 'pending', delete_time = ?, expire_time = ?, update_time = ? WHERE uid = ?",
       )
       .bind(deletedAt, expireAt, deletedAt, existing.uid)
       .run();
@@ -332,6 +295,20 @@ export const worlds = new Hono<AppEnv>()
       .prepare("DELETE FROM world_auth_tokens WHERE world_uid = ?")
       .bind(existing.uid)
       .run();
+    try {
+      const apiBase = worldsApiBase(c.env);
+      await fetch(
+        `${apiBase}/namespaces/${organization.uid}/worlds/${worldId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
+          },
+        },
+      );
+    } catch {
+      // best-effort
+    }
     const row = await first<WorldRow>(
       db(c.env)
         .prepare("SELECT * FROM worlds WHERE uid = ?")
@@ -395,13 +372,6 @@ export const worlds = new Hono<AppEnv>()
           usagePercent: 100,
         });
       }
-      const database = db(c.env);
-      const row = await first<WorldRow>(
-        database
-          .prepare("SELECT * FROM worlds WHERE uid = ?")
-          .bind(existing.uid),
-      );
-      if (!row) return c.notFound();
       if (
         isAdmin(c) &&
         (quota.state === "SUSPENDED" ||
@@ -412,30 +382,37 @@ export const worlds = new Hono<AppEnv>()
           targetResourceName: `organizations/${organization.organizationId}/worlds/${worldId}`,
         });
       }
+      const database = db(c.env);
       try {
-        const provisioned = await provisionWorldDatabase(
-          c.env,
-          row.uid,
-          organization.uid,
-          row.turso_database_name,
+        const apiBase = worldsApiBase(c.env);
+        const res = await fetch(
+          `${apiBase}/namespaces/${organization.uid}/worlds/${worldId}/undelete`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
+            },
+          },
         );
+        if (!res.ok) {
+          let message = `worlds-api returned ${res.status}`;
+          try {
+            const errBody = (await res.json()) as Record<string, unknown>;
+            if (typeof errBody.error === "string") message = errBody.error;
+            else if (typeof errBody.message === "string")
+              message = errBody.message;
+          } catch {
+            // use default message
+          }
+          throw new Error(message);
+        }
+        const worldsApiResult = (await res.json()) as Record<string, unknown>;
         await database
           .prepare(
-            "UPDATE worlds SET state = 'active', provisioning_state = 'active', provisioning_error = NULL, turso_database_name = ?, turso_database_url = ?, schema_version = ?, durability_state = 'configured', delete_time = NULL, expire_time = NULL, update_time = ? WHERE uid = ?",
+            "UPDATE worlds SET state = 'active', delete_time = NULL, expire_time = NULL, update_time = ? WHERE uid = ?",
           )
-          .bind(
-            provisioned.databaseName,
-            provisioned.databaseUrl,
-            WORLD_SCHEMA_VERSION,
-            now(),
-            existing.uid,
-          )
+          .bind(now(), existing.uid)
           .run();
-        await recordUsage(c.env, {
-          organizationUid: organization.uid,
-          worldUid: existing.uid,
-          metric: "world.sync.count",
-        });
         const updated = await first<WorldRow>(
           database
             .prepare("SELECT * FROM worlds WHERE uid = ?")
@@ -445,17 +422,11 @@ export const worlds = new Hono<AppEnv>()
           world: updated
             ? worldResource(organization.organizationId, updated)
             : null,
-          syncReport: provisioned.syncReport,
+          syncReport: worldsApiResult.syncReport,
         });
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : "World sync failed";
-        await database
-          .prepare(
-            "UPDATE worlds SET provisioning_state = 'failed', provisioning_error = ?, update_time = ? WHERE uid = ?",
-          )
-          .bind(message, now(), existing.uid)
-          .run();
+          error instanceof Error ? error.message : "World undelete failed";
         const updated = await first<WorldRow>(
           database
             .prepare("SELECT * FROM worlds WHERE uid = ?")
@@ -493,7 +464,7 @@ export const worlds = new Hono<AppEnv>()
       );
     }
     const worldId = c.req.param("worldId");
-    const existing = await first<{ uid: string; state: string }>(
+    const existing = await first<WorldRow>(
       db(c.env)
         .prepare(
           "SELECT * FROM worlds WHERE organization_uid = ? AND world_id = ?",
@@ -516,40 +487,43 @@ export const worlds = new Hono<AppEnv>()
         400,
       );
     }
-    const database = db(c.env);
-    const rowBefore = await first<WorldRow>(
-      database.prepare("SELECT * FROM worlds WHERE uid = ?").bind(existing.uid),
-    );
     if (isAdmin(c) && organization.state !== "ACTIVE") {
       await recordAdminAudit(c, {
         action: "worlds.sync_state_bypass",
         targetResourceName: `organizations/${organization.organizationId}/worlds/${worldId}`,
       });
     }
+    const database = db(c.env);
     try {
-      const provisioned = await provisionWorldDatabase(
-        c.env,
-        existing.uid,
-        organization.uid,
-        rowBefore?.turso_database_name,
+      const apiBase = worldsApiBase(c.env);
+      const res = await fetch(
+        `${apiBase}/namespaces/${organization.uid}/worlds/${worldId}/sync`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
+          },
+        },
       );
+      if (!res.ok) {
+        let message = `worlds-api returned ${res.status}`;
+        try {
+          const errBody = (await res.json()) as Record<string, unknown>;
+          if (typeof errBody.error === "string") message = errBody.error;
+          else if (typeof errBody.message === "string")
+            message = errBody.message;
+        } catch {
+          // use default message
+        }
+        throw new Error(message);
+      }
+      const worldsApiResult = (await res.json()) as Record<string, unknown>;
       await database
         .prepare(
-          "UPDATE worlds SET state = CASE WHEN state IN ('failed', 'active') THEN 'active' ELSE state END, provisioning_state = 'active', provisioning_error = NULL, turso_database_name = ?, turso_database_url = ?, schema_version = ?, durability_state = 'configured', update_time = ? WHERE uid = ?",
+          "UPDATE worlds SET state = CASE WHEN state IN ('failed', 'active') THEN 'active' ELSE state END, update_time = ? WHERE uid = ?",
         )
-        .bind(
-          provisioned.databaseName,
-          provisioned.databaseUrl,
-          WORLD_SCHEMA_VERSION,
-          now(),
-          existing.uid,
-        )
+        .bind(now(), existing.uid)
         .run();
-      await recordUsage(c.env, {
-        organizationUid: organization.uid,
-        worldUid: existing.uid,
-        metric: "world.sync.count",
-      });
       const row = await first<WorldRow>(
         database
           .prepare("SELECT * FROM worlds WHERE uid = ?")
@@ -557,17 +531,11 @@ export const worlds = new Hono<AppEnv>()
       );
       return c.json({
         world: row ? worldResource(organization.organizationId, row) : null,
-        syncReport: provisioned.syncReport,
+        syncReport: worldsApiResult.syncReport,
       });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "World sync failed";
-      await database
-        .prepare(
-          "UPDATE worlds SET provisioning_state = 'failed', provisioning_error = ?, update_time = ? WHERE uid = ?",
-        )
-        .bind(message, now(), existing.uid)
-        .run();
       const row = await first<WorldRow>(
         database
           .prepare("SELECT * FROM worlds WHERE uid = ?")

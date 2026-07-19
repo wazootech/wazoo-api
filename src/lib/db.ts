@@ -1,4 +1,4 @@
-import { createClient, type InValue } from "@libsql/client/web";
+import { createClient, type InValue } from "@libsql/client";
 import type { Bindings } from "../env";
 
 export type Row = Record<string, unknown>;

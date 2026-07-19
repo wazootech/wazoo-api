@@ -34,18 +34,10 @@ CREATE TABLE worlds (
   display_name TEXT NOT NULL,
   region TEXT NOT NULL DEFAULT 'auto',
   state TEXT NOT NULL DEFAULT 'active',
-  provisioning_state TEXT NOT NULL DEFAULT 'pending',
-  provisioning_error TEXT,
-  turso_database_name TEXT UNIQUE,
-  turso_database_url TEXT,
-  schema_version TEXT,
-  durability_state TEXT NOT NULL DEFAULT 'not_configured',
-  durability_error TEXT,
+  worlds_api_uid TEXT,
   delete_time TEXT,
   expire_time TEXT,
-  purge_time TEXT,
   purge_status TEXT NOT NULL DEFAULT 'none',
-  purge_error TEXT,
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   update_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   UNIQUE (organization_uid, world_id)
@@ -63,16 +55,6 @@ CREATE TABLE platform_api_tokens (
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   CHECK (kind IN ('ORGANIZATION', 'ADMIN')),
   CHECK (kind != 'ADMIN' OR (organization_uid IS NULL AND instr(scope, 'admin') > 0))
-);
-
-CREATE TABLE world_auth_tokens (
-  uid TEXT PRIMARY KEY,
-  world_uid TEXT NOT NULL REFERENCES worlds(uid) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  token_hash TEXT NOT NULL UNIQUE,
-  last_used_at TEXT,
-  expires_at TEXT,
-  create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
 CREATE TABLE usage_events (
@@ -114,6 +96,5 @@ CREATE TABLE admin_audit_events (
 );
 
 CREATE INDEX idx_worlds_org ON worlds(organization_uid);
-CREATE INDEX idx_world_tokens_world ON world_auth_tokens(world_uid);
 CREATE INDEX idx_usage_org_time ON usage_events(organization_uid, create_time);
 CREATE INDEX idx_users_email ON users(email);

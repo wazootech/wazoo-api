@@ -18,7 +18,7 @@ jobs:
       - run: npm run format:check
       - run: npm run typecheck
 
-  deploy:
+  deploy-workers:
     needs: check
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -32,3 +32,21 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 395cea49f44bdda4c37840cd5ea6742a
+
+  docker:
+    needs: check
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          push: true
+          tags: |
+            ghcr.io/wazootech/wazoo-api:${{ github.ref_name }}
+            ghcr.io/wazootech/wazoo-api:latest

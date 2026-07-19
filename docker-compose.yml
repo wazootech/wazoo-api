@@ -1,0 +1,28 @@
+services:
+  wazoo-api:
+    build: .
+    ports: ["8080:8080"]
+    environment:
+      - TURSO_DATABASE_URL=file:/data/control-plane.db
+      - TURSO_AUTH_TOKEN=
+      - WORLDS_API_URL=http://worlds-api:8080
+      - WORLDS_API_ADMIN_KEY=wzp_dev_admin_key
+      - WAZOO_ENV=dev
+    volumes:
+      - wazoo-data:/data
+    depends_on:
+      - worlds-api
+
+  worlds-api:
+    image: ghcr.io/wazootech/worlds-api:latest
+    ports: ["8081:8080"]
+    environment:
+      - LIBSQL_URL=file:/data/worlds.db
+      - LIBSQL_AUTH_TOKEN=
+      - WORLDS_ADMIN_KEY=wzp_dev_admin_key
+    volumes:
+      - worlds-data:/data
+
+volumes:
+  wazoo-data: {}
+  worlds-data: {}
