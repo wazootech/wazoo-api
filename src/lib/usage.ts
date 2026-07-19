@@ -4,7 +4,7 @@ import { db, id } from "./db";
 export async function recordUsage(
   env: Bindings,
   input: {
-    organizationUid: string;
+    userUid: string;
     worldUid?: string | null;
     metric: string;
     quantity?: number;
@@ -14,11 +14,11 @@ export async function recordUsage(
 ) {
   await db(env)
     .prepare(
-      "INSERT INTO usage_events (uid, organization_uid, world_uid, metric, quantity, unit, billing_source) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO usage_events (uid, user_uid, world_uid, metric, quantity, unit, billing_source) VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(
       id(),
-      input.organizationUid,
+      input.userUid,
       input.worldUid ?? null,
       input.metric,
       input.quantity ?? 1,

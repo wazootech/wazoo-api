@@ -4,7 +4,7 @@ import { db } from "../lib/db";
 import { requireScope } from "../lib/http";
 
 export const users = new Hono<AppEnv>().get("/users/me", async (c) => {
-  requireScope(c, "organizations.read");
+  requireScope(c, "users.read");
   const email = c.req.query("email");
   if (!email) {
     return c.json(
@@ -35,6 +35,7 @@ export const users = new Hono<AppEnv>().get("/users/me", async (c) => {
         uid: existing.uid,
         email: existing.email,
         displayName: existing.display_name,
+        state: "ACTIVE",
         createTime: existing.create_time,
       },
     });
@@ -61,6 +62,7 @@ export const users = new Hono<AppEnv>().get("/users/me", async (c) => {
         uid: row!.uid,
         email: row!.email,
         displayName: row!.display_name,
+        state: "ACTIVE",
         createTime: row!.create_time,
       },
     },

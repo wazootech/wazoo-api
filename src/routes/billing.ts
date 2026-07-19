@@ -1,49 +1,45 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
+import { HTTPException } from "hono/http-exception";
 import type { AppEnv } from "../env";
 import { db, first } from "../lib/db";
-import { requireScope, resolveOrg } from "../lib/http";
+import { requireScope, resolveUser } from "../lib/http";
 
 export const billing = new Hono<AppEnv>()
-  .get("/organizations/:organizationId/billing", async (c) => {
+  .get("/worlds/:worldId/billing", async (c) => {
     requireScope(c, "billing.read");
-    const organization = await resolveOrg(c, c.req.param("organizationId"));
-    const row = await first<{
-      billing_provider: string;
-      stripe_customer_id: string | null;
-      stripe_subscription_id: string | null;
-      billing_state: string;
-    }>(
-      db(c.env)
-        .prepare(
-          "SELECT billing_provider, stripe_customer_id, stripe_subscription_id, billing_state FROM organizations WHERE uid = ?",
-        )
-        .bind(organization.uid),
+    const user = await resolveUser(c, c.req.query("email") ?? undefined);
+    const world = await resolveWorldBilling(
+      c,
+      user.uid,
+      c.req.param("worldId"),
     );
     return c.json({
       billing: {
-        organization: `organizations/${organization.organizationId}`,
-        state: row?.billing_state ?? "BETA_FREE",
-        provider: row?.billing_provider ?? "STRIPE",
-        customerConfigured: Boolean(row?.stripe_customer_id),
-        subscriptionConfigured: Boolean(row?.stripe_subscription_id),
+        world: `worlds/${world.world_id}`,
+        state: world.billing_state ?? "BETA_FREE",
+        provider: world.billing_provider ?? "STRIPE",
+        customerConfigured: Boolean(world.stripe_customer_id),
+        subscriptionConfigured: Boolean(world.stripe_subscription_id),
         paymentRequired: false,
       },
     });
   })
-  .get("/organizations/:organizationId/billing/invoices", async (c) => {
+  .get("/worlds/:worldId/billing/invoices", async (c) => {
     requireScope(c, "billing.read");
-    await resolveOrg(c, c.req.param("organizationId"));
+    const user = await resolveUser(c, c.req.query("email") ?? undefined);
+    await resolveWorldBilling(c, user.uid, c.req.param("worldId"));
     return c.json({ invoices: [] });
   })
-  .post("/organizations/:organizationId/billing/openPortal", async (c) => {
+  .post("/worlds/:worldId/billing/openPortal", async (c) => {
     requireScope(c, "billing.read");
-    await resolveOrg(c, c.req.param("organizationId"));
+    const user = await resolveUser(c, c.req.query("email") ?? undefined);
+    await resolveWorldBilling(c, user.uid, c.req.param("worldId"));
     return c.json(
       {
         error: {
           code: "FAILED_PRECONDITION",
-          message:
-            "Billing portal is not available for beta-free organizations",
+          message: "Billing portal is not available for beta-free worlds",
         },
       },
       400,
@@ -78,6 +74,34 @@ export const stripeWebhook = new Hono<AppEnv>().post(
     return c.json({ received: true });
   },
 );
+
+async function resolveWorldBilling(
+  c: Context<AppEnv>,
+  userUid: string,
+  worldId: string,
+): Promise<{
+  world_id: string;
+  billing_provider: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  billing_state: string;
+}> {
+  const row = await first<{
+    world_id: string;
+    billing_provider: string;
+    stripe_customer_id: string | null;
+    stripe_subscription_id: string | null;
+    billing_state: string;
+  }>(
+    db(c.env)
+      .prepare(
+        "SELECT world_id, billing_provider, stripe_customer_id, stripe_subscription_id, billing_state FROM worlds WHERE user_uid = ? AND world_id = ?",
+      )
+      .bind(userUid, worldId),
+  );
+  if (!row) throw new HTTPException(404, { message: "World not found" });
+  return row;
+}
 
 async function verifyStripeSignature(
   body: string,

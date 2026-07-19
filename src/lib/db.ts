@@ -83,13 +83,11 @@ export async function first<T extends Row>(
   return statement.first<T>();
 }
 
-export type OrganizationRef = {
+export type UserRef = {
   uid: string;
-  organizationId: string;
-  displayName: string;
+  email: string;
+  displayName?: string | null;
   state: string;
-  deleteTime?: string | null;
-  expireTime?: string | null;
 };
 
 export function resourceId(name: string, collection: string): string {
@@ -98,15 +96,15 @@ export function resourceId(name: string, collection: string): string {
     : name;
 }
 
-export async function organizationByIdentifier(
+export async function userByIdentifier(
   db: Database,
   identifier: string,
-): Promise<OrganizationRef | null> {
-  return first<OrganizationRef>(
+): Promise<UserRef | null> {
+  return first<UserRef>(
     db
       .prepare(
-        "SELECT uid, organization_id AS organizationId, display_name AS displayName, state, delete_time AS deleteTime, expire_time AS expireTime FROM organizations WHERE organization_id = ?",
+        "SELECT uid, email, display_name AS displayName, state FROM users WHERE uid = ? OR email = ?",
       )
-      .bind(resourceId(identifier, "organizations")),
+      .bind(resourceId(identifier, "users"), identifier.toLowerCase()),
   );
 }

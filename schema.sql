@@ -7,14 +7,14 @@ CREATE TABLE users (
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
-CREATE TABLE organizations (
+CREATE TABLE worlds (
   uid TEXT PRIMARY KEY,
-  organization_id TEXT NOT NULL UNIQUE,
+  user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+  world_id TEXT NOT NULL,
   display_name TEXT NOT NULL,
-  state TEXT NOT NULL DEFAULT 'ACTIVE',
-  owner_user_uid TEXT REFERENCES users(uid),
-  quota_policy TEXT NOT NULL DEFAULT 'PRIVATE_BETA_DEFAULT',
-  quota_reason TEXT,
+  region TEXT NOT NULL DEFAULT 'auto',
+  state TEXT NOT NULL DEFAULT 'active',
+  worlds_api_uid TEXT,
   billing_provider TEXT NOT NULL DEFAULT 'STRIPE',
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT,
@@ -22,44 +22,28 @@ CREATE TABLE organizations (
   delete_time TEXT,
   expire_time TEXT,
   purge_status TEXT NOT NULL DEFAULT 'none',
-  purge_error TEXT,
-  create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  update_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-);
-
-CREATE TABLE worlds (
-  uid TEXT PRIMARY KEY,
-  organization_uid TEXT NOT NULL REFERENCES organizations(uid) ON DELETE CASCADE,
-  world_id TEXT NOT NULL,
-  display_name TEXT NOT NULL,
-  region TEXT NOT NULL DEFAULT 'auto',
-  state TEXT NOT NULL DEFAULT 'active',
-  worlds_api_uid TEXT,
-  delete_time TEXT,
-  expire_time TEXT,
-  purge_status TEXT NOT NULL DEFAULT 'none',
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   update_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  UNIQUE (organization_uid, world_id)
+  UNIQUE (user_uid, world_id)
 );
 
 CREATE TABLE platform_api_tokens (
   uid TEXT PRIMARY KEY,
-  organization_uid TEXT REFERENCES organizations(uid) ON DELETE CASCADE,
+  user_uid TEXT REFERENCES users(uid) ON DELETE CASCADE,
   name TEXT NOT NULL,
   token_hash TEXT NOT NULL UNIQUE,
-  kind TEXT NOT NULL DEFAULT 'ORGANIZATION',
-  scope TEXT NOT NULL DEFAULT 'organizations.read worlds.read usage.read billing.read',
+  kind TEXT NOT NULL DEFAULT 'USER',
+  scope TEXT NOT NULL DEFAULT 'users.read worlds.read usage.read billing.read',
   last_used_at TEXT,
   expires_at TEXT,
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  CHECK (kind IN ('ORGANIZATION', 'ADMIN')),
-  CHECK (kind != 'ADMIN' OR (organization_uid IS NULL AND instr(scope, 'admin') > 0))
+  CHECK (kind IN ('USER', 'ADMIN')),
+  CHECK (kind != 'ADMIN' OR (user_uid IS NULL AND instr(scope, 'admin') > 0))
 );
 
 CREATE TABLE usage_events (
   uid TEXT PRIMARY KEY,
-  organization_uid TEXT NOT NULL REFERENCES organizations(uid) ON DELETE CASCADE,
+  user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
   world_uid TEXT REFERENCES worlds(uid) ON DELETE SET NULL,
   metric TEXT NOT NULL,
   quantity INTEGER NOT NULL,
@@ -71,13 +55,13 @@ CREATE TABLE usage_events (
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
-CREATE TABLE organization_limits (
-  organization_uid TEXT NOT NULL REFERENCES organizations(uid) ON DELETE CASCADE,
+CREATE TABLE world_limits (
+  world_uid TEXT NOT NULL REFERENCES worlds(uid) ON DELETE CASCADE,
   metric TEXT NOT NULL,
   limit_quantity INTEGER NOT NULL,
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   update_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  PRIMARY KEY (organization_uid, metric)
+  PRIMARY KEY (world_uid, metric)
 );
 
 CREATE TABLE beta_allowlist (
@@ -95,6 +79,6 @@ CREATE TABLE admin_audit_events (
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
-CREATE INDEX idx_worlds_org ON worlds(organization_uid);
-CREATE INDEX idx_usage_org_time ON usage_events(organization_uid, create_time);
+CREATE INDEX idx_worlds_user ON worlds(user_uid);
+CREATE INDEX idx_usage_world_time ON usage_events(world_uid, create_time);
 CREATE INDEX idx_users_email ON users(email);

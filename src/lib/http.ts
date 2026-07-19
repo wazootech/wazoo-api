@@ -2,7 +2,7 @@ import type { Context, Next } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { AppEnv } from "../env";
-import { db, organizationByIdentifier } from "./db";
+import { db, userByIdentifier } from "./db";
 
 export type JsonObject = Record<string, unknown>;
 
@@ -109,14 +109,14 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
   const database = db(c.env);
   const row = await database
     .prepare(
-      "SELECT uid, organization_uid, scope, kind, expires_at FROM platform_api_tokens WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > ?)",
+      "SELECT uid, user_uid, scope, kind, expires_at FROM platform_api_tokens WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > ?)",
     )
     .bind(hash, new Date().toISOString())
     .first<{
       uid: string;
-      organization_uid: string | null;
+      user_uid: string | null;
       scope: string;
-      kind: "ORGANIZATION" | "ADMIN" | null;
+      kind: "USER" | "ADMIN" | null;
       expires_at: string | null;
     }>();
 
@@ -126,9 +126,9 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
 
   c.set("auth", {
     tokenId: row.uid,
-    organizationUid: row.organization_uid,
+    userUid: row.user_uid,
     scope: row.scope,
-    kind: row.kind ?? "ORGANIZATION",
+    kind: row.kind ?? "USER",
     expiresAt: row.expires_at,
   });
   c.executionCtx.waitUntil(
@@ -140,15 +140,15 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
   await next();
 }
 
-export function requireOrgAccess(c: Context<AppEnv>, organizationUid: string) {
+export function requireUserAccess(c: Context<AppEnv>, userUid: string) {
   const auth = c.get("auth");
   if (isAdmin(c)) return;
   if (auth.kind === "ADMIN") {
     throw new HTTPException(403, { message: "Invalid admin token shape" });
   }
-  if (auth.organizationUid && auth.organizationUid !== organizationUid) {
+  if (auth.userUid !== userUid) {
     throw new HTTPException(403, {
-      message: "Token cannot access this organization",
+      message: "Token cannot access this user",
     });
   }
 }
@@ -158,7 +158,7 @@ export function isAdmin(c: Context<AppEnv>): boolean {
   return (
     auth.kind === "ADMIN" &&
     auth.scope.split(/\s+/).includes("admin") &&
-    auth.organizationUid === null
+    auth.userUid === null
   );
 }
 
@@ -178,11 +178,16 @@ export function requireScope(c: Context<AppEnv>, scope: string) {
   }
 }
 
-export async function resolveOrg(c: Context<AppEnv>, identifier: string) {
-  const organization = await organizationByIdentifier(db(c.env), identifier);
-  if (!organization) {
-    throw new HTTPException(404, { message: "Organization not found" });
+export async function resolveUser(c: Context<AppEnv>, identifier?: string) {
+  const auth = c.get("auth");
+  const user = auth.userUid
+    ? await userByIdentifier(db(c.env), auth.userUid)
+    : identifier
+      ? await userByIdentifier(db(c.env), identifier)
+      : null;
+  if (!user) {
+    throw new HTTPException(404, { message: "User not found" });
   }
-  requireOrgAccess(c, organization.uid);
-  return organization;
+  requireUserAccess(c, user.uid);
+  return user;
 }

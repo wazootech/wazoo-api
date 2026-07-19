@@ -1,16 +1,16 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
+import { HTTPException } from "hono/http-exception";
 import type { AppEnv } from "../env";
 import { recordAdminAudit } from "../lib/audit";
-import { all, db, first, id, now } from "../lib/db";
+import { all, db, first, id, now, type UserRef } from "../lib/db";
 import {
   isAdmin,
   jsonBody,
   optionalString,
-  requireOrgAccess,
   requireResourceId,
   requireScope,
   requireString,
-  resolveOrg,
+  resolveUser,
 } from "../lib/http";
 import {
   activeWorldCount,
@@ -21,7 +21,7 @@ import {
 
 type WorldRow = {
   uid: string;
-  organization_uid?: string;
+  user_uid: string;
   world_id: string;
   display_name: string;
   region: string;
@@ -32,13 +32,14 @@ type WorldRow = {
   expire_time?: string | null;
 };
 
-function worldResource(organizationId: string, row: WorldRow) {
+function worldResource(row: WorldRow) {
   const restorable =
     row.state === "deleted" &&
     (!row.expire_time || new Date(row.expire_time).getTime() > Date.now());
   return {
-    name: `organizations/${organizationId}/worlds/${row.world_id}`,
+    name: `worlds/${row.world_id}`,
     uid: row.uid,
+    worldId: row.world_id,
     displayName: row.display_name,
     region: row.region,
     state: row.state.toUpperCase(),
@@ -55,36 +56,72 @@ function worldsApiBase(env: AppEnv["Bindings"]) {
   return env.WORLDS_API_URL.replace(/\/+$/, "");
 }
 
+async function currentUser(
+  c: Context<AppEnv>,
+  body?: Record<string, unknown>,
+): Promise<UserRef> {
+  return resolveUser(
+    c,
+    optionalString(body ?? {}, "ownerEmail") ??
+      optionalString(body ?? {}, "email") ??
+      c.req.query("email") ??
+      c.req.query("user") ??
+      undefined,
+  );
+}
+
+async function worldForUser(
+  c: Context<AppEnv>,
+  userUid: string,
+  worldId: string,
+) {
+  return first<WorldRow>(
+    db(c.env)
+      .prepare("SELECT * FROM worlds WHERE user_uid = ? AND world_id = ?")
+      .bind(userUid, worldId),
+  );
+}
+
+async function worldsApiError(res: Response) {
+  let message = `worlds-api returned ${res.status}`;
+  try {
+    const body = (await res.json()) as Record<string, unknown>;
+    const error = body.error as Record<string, unknown> | undefined;
+    if (typeof error?.message === "string") message = error.message;
+    else if (typeof body.message === "string") message = body.message;
+    else if (typeof body.error === "string") message = body.error;
+  } catch {
+    // use default message
+  }
+  return message;
+}
+
 export const worlds = new Hono<AppEnv>()
-  .get("/organizations/:organizationId/worlds", async (c) => {
+  .get("/worlds", async (c) => {
     requireScope(c, "worlds.read");
-    const organization = await resolveOrg(c, c.req.param("organizationId"));
+    const user = await currentUser(c);
     const rows = await all<WorldRow>(
       db(c.env)
         .prepare(
-          "SELECT * FROM worlds WHERE organization_uid = ? AND state != 'deleted' ORDER BY create_time DESC",
+          "SELECT * FROM worlds WHERE user_uid = ? AND state != 'deleted' ORDER BY create_time DESC",
         )
-        .bind(organization.uid),
+        .bind(user.uid),
     );
-    return c.json({
-      worlds: rows.map((row) =>
-        worldResource(organization.organizationId, row),
-      ),
-    });
+    return c.json({ worlds: rows.map(worldResource) });
   })
-  .post("/organizations/:organizationId/worlds", async (c) => {
+  .post("/worlds", async (c) => {
     requireScope(c, "worlds.write");
-    const organization = await resolveOrg(c, c.req.param("organizationId"));
-    const quota = await quotaStatus(c, organization.uid, organization.state);
-    if (!isAdmin(c) && quota.state === "SUSPENDED")
-      return quotaError(c, "Organization is suspended", quota);
-    if (!isAdmin(c) && quota.state === "THROTTLED")
+    const body = await jsonBody(c);
+    const user = await currentUser(c, body);
+    const quota = await quotaStatus(c, user.uid);
+    if (!isAdmin(c) && quota.state === "THROTTLED") {
       return quotaError(
         c,
-        "Organization has reached its private beta World limit",
+        "User has reached the private beta World limit",
         quota,
       );
-    const body = await jsonBody(c);
+    }
+
     const worldBody = body.world;
     if (
       !worldBody ||
@@ -96,6 +133,7 @@ export const worlds = new Hono<AppEnv>()
         400,
       );
     }
+
     const world = {
       id: `w_${id()}`,
       worldId: requireResourceId(body, "worldId"),
@@ -111,11 +149,11 @@ export const worlds = new Hono<AppEnv>()
     const database = db(c.env);
     await database
       .prepare(
-        "INSERT INTO worlds (uid, organization_uid, world_id, display_name, region, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO worlds (uid, user_uid, world_id, display_name, region, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?, ?)",
       )
       .bind(
         world.id,
-        organization.uid,
+        user.uid,
         world.worldId,
         world.displayName,
         world.region,
@@ -123,86 +161,56 @@ export const worlds = new Hono<AppEnv>()
         world.now,
       )
       .run();
+
     if (isAdmin(c) && quota.state !== "OK" && quota.state !== "WARN") {
       await recordAdminAudit(c, {
         action: "worlds.create_quota_bypass",
-        targetResourceName: `organizations/${organization.organizationId}/worlds/${world.worldId}`,
+        targetResourceName: `users/${user.uid}/worlds/${world.worldId}`,
       });
     }
-    const apiBase = worldsApiBase(c.env);
-    const res = await fetch(
-      `${apiBase}/namespaces/${organization.uid}/worlds`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          worldId: world.worldId,
-          displayName: world.displayName,
-        }),
+
+    const res = await fetch(`${worldsApiBase(c.env)}/worlds`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        namespace: user.uid,
+        worldId: world.worldId,
+        displayName: world.displayName,
+      }),
+    });
     if (!res.ok) {
-      let message = `worlds-api returned ${res.status}`;
-      try {
-        const errBody = (await res.json()) as Record<string, unknown>;
-        if (typeof errBody.error === "string") message = errBody.error;
-        else if (typeof errBody.message === "string") message = errBody.message;
-      } catch {
-        // use default message
-      }
+      const message = await worldsApiError(res);
       await database
         .prepare("DELETE FROM worlds WHERE uid = ?")
         .bind(world.id)
         .run();
       return c.json(
-        {
-          error: { code: "WORLD_PROVISIONING_FAILED", message },
-        },
+        { error: { code: "WORLD_PROVISIONING_FAILED", message } },
         502,
       );
     }
-    const worldsApiResult = (await res.json()) as Record<string, unknown>;
+
     const row = await first<WorldRow>(
       database.prepare("SELECT * FROM worlds WHERE uid = ?").bind(world.id),
     );
-    return c.json(
-      {
-        world: row ? worldResource(organization.organizationId, row) : null,
-        syncReport: worldsApiResult.syncReport,
-      },
-      201,
-    );
+    return c.json({ world: row ? worldResource(row) : null }, 201);
   })
-  .get("/organizations/:organizationId/worlds/:worldId", async (c) => {
+  .get("/worlds/:worldId", async (c) => {
     requireScope(c, "worlds.read");
-    const organization = await resolveOrg(c, c.req.param("organizationId"));
-    const worldId = c.req.param("worldId");
-    const world = await first<WorldRow>(
-      db(c.env)
-        .prepare(
-          "SELECT * FROM worlds WHERE organization_uid = ? AND world_id = ?",
-        )
-        .bind(organization.uid, worldId),
-    );
+    const user = await currentUser(c);
+    const world = await worldForUser(c, user.uid, c.req.param("worldId"));
     if (!world) return c.notFound();
-    return c.json({ world: worldResource(organization.organizationId, world) });
+    return c.json({ world: worldResource(world) });
   })
-  .patch("/organizations/:organizationId/worlds/:worldId", async (c) => {
+  .patch("/worlds/:worldId", async (c) => {
     requireScope(c, "worlds.write");
-    const organization = await resolveOrg(c, c.req.param("organizationId"));
-    const worldId = c.req.param("worldId");
-    const existing = await first<{ uid: string; organization_uid: string }>(
-      db(c.env)
-        .prepare(
-          "SELECT * FROM worlds WHERE organization_uid = ? AND world_id = ?",
-        )
-        .bind(organization.uid, worldId),
-    );
+    const user = await currentUser(c);
+    const existing = await worldForUser(c, user.uid, c.req.param("worldId"));
     if (!existing) return c.notFound();
-    requireOrgAccess(c, existing.organization_uid);
+
     const body = await jsonBody(c);
     const updateMask = requireString(body, "updateMask")
       .split(",")
@@ -246,6 +254,7 @@ export const worlds = new Hono<AppEnv>()
         400,
       );
     }
+
     await db(c.env)
       .prepare(
         "UPDATE worlds SET display_name = COALESCE(?, display_name), region = COALESCE(?, region), state = COALESCE(?, state), update_time = ? WHERE uid = ?",
@@ -260,26 +269,33 @@ export const worlds = new Hono<AppEnv>()
         existing.uid,
       )
       .run();
+
+    if (updateMask.includes("displayName")) {
+      await fetch(`${worldsApiBase(c.env)}/worlds/${existing.world_id}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          namespace: user.uid,
+          displayName: requireString(patch, "displayName"),
+        }),
+      }).catch(() => undefined);
+    }
+
     const row = await first<WorldRow>(
       db(c.env)
         .prepare("SELECT * FROM worlds WHERE uid = ?")
         .bind(existing.uid),
     );
-    return c.json({
-      world: row ? worldResource(organization.organizationId, row) : null,
-    });
+    return c.json({ world: row ? worldResource(row) : null });
   })
-  .delete("/organizations/:organizationId/worlds/:worldId", async (c) => {
+  .delete("/worlds/:worldId", async (c) => {
     requireScope(c, "worlds.write");
-    const organization = await resolveOrg(c, c.req.param("organizationId"));
+    const user = await currentUser(c);
     const worldId = c.req.param("worldId");
-    const existing = await first<{ uid: string }>(
-      db(c.env)
-        .prepare(
-          "SELECT * FROM worlds WHERE organization_uid = ? AND world_id = ?",
-        )
-        .bind(organization.uid, worldId),
-    );
+    const existing = await worldForUser(c, user.uid, worldId);
     if (!existing) return c.notFound();
     const deletedAt = now();
     const expireAt = new Date(
@@ -291,281 +307,146 @@ export const worlds = new Hono<AppEnv>()
       )
       .bind(deletedAt, expireAt, deletedAt, existing.uid)
       .run();
-    await db(c.env)
-      .prepare("DELETE FROM world_auth_tokens WHERE world_uid = ?")
-      .bind(existing.uid)
-      .run();
-    try {
-      const apiBase = worldsApiBase(c.env);
-      await fetch(
-        `${apiBase}/namespaces/${organization.uid}/worlds/${worldId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
-          },
-        },
-      );
-    } catch {
-      // best-effort
-    }
+    await fetch(
+      `${worldsApiBase(c.env)}/worlds/${worldId}?namespace=${encodeURIComponent(user.uid)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}` },
+      },
+    ).catch(() => undefined);
     const row = await first<WorldRow>(
       db(c.env)
         .prepare("SELECT * FROM worlds WHERE uid = ?")
         .bind(existing.uid),
     );
-    return c.json({
-      world: row ? worldResource(organization.organizationId, row) : null,
-    });
+    return c.json({ world: row ? worldResource(row) : null });
   })
-  .post(
-    "/organizations/:organizationId/worlds/:worldId/undelete",
-    async (c) => {
-      requireScope(c, "worlds.write");
-      const organization = await resolveOrg(c, c.req.param("organizationId"));
-      const worldId = c.req.param("worldId");
-      const existing = await first<{
-        uid: string;
-        state: string;
-        expire_time: string | null;
-      }>(
-        db(c.env)
-          .prepare(
-            "SELECT * FROM worlds WHERE organization_uid = ? AND world_id = ?",
-          )
-          .bind(organization.uid, worldId),
-      );
-      if (!existing) return c.notFound();
-      if (existing.state !== "deleted") {
-        return c.json(
-          {
-            error: {
-              code: "FAILED_PRECONDITION",
-              message: "World is not deleted",
-            },
-          },
-          400,
-        );
-      }
-      if (
-        existing.expire_time &&
-        new Date(existing.expire_time).getTime() <= Date.now()
-      ) {
-        return c.json(
-          {
-            error: {
-              code: "WORLD_RESTORE_EXPIRED",
-              message: "World undelete window has expired",
-            },
-          },
-          400,
-        );
-      }
-      const quota = await quotaStatus(c, organization.uid, organization.state);
-      if (!isAdmin(c) && quota.state === "SUSPENDED")
-        return quotaError(c, "Organization is suspended", quota);
-      const activeCount = await activeWorldCount(c, organization.uid);
-      if (!isAdmin(c) && activeCount >= privateBetaQuota.maxWorlds) {
-        return quotaError(c, "Maximum active Worlds exceeded", {
-          state: "THROTTLED",
-          reason: "MAX_WORLDS_EXCEEDED",
-          usagePercent: 100,
-        });
-      }
-      if (
-        isAdmin(c) &&
-        (quota.state === "SUSPENDED" ||
-          activeCount >= privateBetaQuota.maxWorlds)
-      ) {
-        await recordAdminAudit(c, {
-          action: "worlds.undelete_quota_bypass",
-          targetResourceName: `organizations/${organization.organizationId}/worlds/${worldId}`,
-        });
-      }
-      const database = db(c.env);
-      try {
-        const apiBase = worldsApiBase(c.env);
-        const res = await fetch(
-          `${apiBase}/namespaces/${organization.uid}/worlds/${worldId}/undelete`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
-            },
-          },
-        );
-        if (!res.ok) {
-          let message = `worlds-api returned ${res.status}`;
-          try {
-            const errBody = (await res.json()) as Record<string, unknown>;
-            if (typeof errBody.error === "string") message = errBody.error;
-            else if (typeof errBody.message === "string")
-              message = errBody.message;
-          } catch {
-            // use default message
-          }
-          throw new Error(message);
-        }
-        const worldsApiResult = (await res.json()) as Record<string, unknown>;
-        await database
-          .prepare(
-            "UPDATE worlds SET state = 'active', delete_time = NULL, expire_time = NULL, update_time = ? WHERE uid = ?",
-          )
-          .bind(now(), existing.uid)
-          .run();
-        const updated = await first<WorldRow>(
-          database
-            .prepare("SELECT * FROM worlds WHERE uid = ?")
-            .bind(existing.uid),
-        );
-        return c.json({
-          world: updated
-            ? worldResource(organization.organizationId, updated)
-            : null,
-          syncReport: worldsApiResult.syncReport,
-        });
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "World undelete failed";
-        const updated = await first<WorldRow>(
-          database
-            .prepare("SELECT * FROM worlds WHERE uid = ?")
-            .bind(existing.uid),
-        );
-        return c.json(
-          {
-            error: { code: "WORLD_RESTORE_BLOCKED", message },
-            world: updated
-              ? worldResource(organization.organizationId, updated)
-              : null,
-            syncReport: failedSyncReport(message),
-          },
-          409,
-        );
-      }
-    },
-  )
-  .post("/organizations/:organizationId/worlds/:worldId/sync", async (c) => {
-    requireScope(c, "worlds.admin");
-    const organization = await resolveOrg(c, c.req.param("organizationId"));
-    if (!isAdmin(c) && organization.state !== "ACTIVE") {
-      return c.json(
-        {
-          error: {
-            code: "PERMISSION_DENIED",
-            message: "Organization is not active",
-          },
-          syncReport: blockedSyncReport(
-            "ORGANIZATION_NOT_ACTIVE",
-            "Organization is not active",
-          ),
-        },
-        403,
-      );
-    }
+  .post("/worlds/:worldId/undelete", async (c) => {
+    requireScope(c, "worlds.write");
+    const user = await currentUser(c);
     const worldId = c.req.param("worldId");
-    const existing = await first<WorldRow>(
-      db(c.env)
-        .prepare(
-          "SELECT * FROM worlds WHERE organization_uid = ? AND world_id = ?",
-        )
-        .bind(organization.uid, worldId),
-    );
+    const existing = await worldForUser(c, user.uid, worldId);
     if (!existing) return c.notFound();
-    if (existing.state === "deleted") {
+    if (existing.state !== "deleted")
       return c.json(
         {
           error: {
             code: "FAILED_PRECONDITION",
-            message: "Deleted Worlds cannot be synced",
+            message: "World is not deleted",
           },
-          syncReport: blockedSyncReport(
-            "WORLD_DELETED",
-            "Deleted Worlds cannot be synced",
-          ),
+        },
+        400,
+      );
+    if (
+      existing.expire_time &&
+      new Date(existing.expire_time).getTime() <= Date.now()
+    ) {
+      return c.json(
+        {
+          error: {
+            code: "WORLD_RESTORE_EXPIRED",
+            message: "World undelete window has expired",
+          },
         },
         400,
       );
     }
-    if (isAdmin(c) && organization.state !== "ACTIVE") {
-      await recordAdminAudit(c, {
-        action: "worlds.sync_state_bypass",
-        targetResourceName: `organizations/${organization.organizationId}/worlds/${worldId}`,
+    const activeCount = await activeWorldCount(c, user.uid);
+    if (!isAdmin(c) && activeCount >= privateBetaQuota.maxWorlds) {
+      return quotaError(c, "Maximum active Worlds exceeded", {
+        state: "THROTTLED",
+        reason: "MAX_WORLDS_EXCEEDED",
+        usagePercent: 100,
       });
     }
-    const database = db(c.env);
-    try {
-      const apiBase = worldsApiBase(c.env);
-      const res = await fetch(
-        `${apiBase}/namespaces/${organization.uid}/worlds/${worldId}/sync`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
-          },
-        },
-      );
-      if (!res.ok) {
-        let message = `worlds-api returned ${res.status}`;
-        try {
-          const errBody = (await res.json()) as Record<string, unknown>;
-          if (typeof errBody.error === "string") message = errBody.error;
-          else if (typeof errBody.message === "string")
-            message = errBody.message;
-        } catch {
-          // use default message
-        }
-        throw new Error(message);
-      }
-      const worldsApiResult = (await res.json()) as Record<string, unknown>;
-      await database
-        .prepare(
-          "UPDATE worlds SET state = CASE WHEN state IN ('failed', 'active') THEN 'active' ELSE state END, update_time = ? WHERE uid = ?",
-        )
-        .bind(now(), existing.uid)
-        .run();
-      const row = await first<WorldRow>(
-        database
-          .prepare("SELECT * FROM worlds WHERE uid = ?")
-          .bind(existing.uid),
-      );
-      return c.json({
-        world: row ? worldResource(organization.organizationId, row) : null,
-        syncReport: worldsApiResult.syncReport,
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "World sync failed";
-      const row = await first<WorldRow>(
-        database
-          .prepare("SELECT * FROM worlds WHERE uid = ?")
-          .bind(existing.uid),
-      );
-      return c.json(
-        {
-          error: { code: "WORLD_SYNC_BLOCKED", message },
-          world: row ? worldResource(organization.organizationId, row) : null,
-          syncReport: failedSyncReport(message),
-        },
-        409,
-      );
-    }
+    await db(c.env)
+      .prepare(
+        "UPDATE worlds SET state = 'active', delete_time = NULL, expire_time = NULL, update_time = ? WHERE uid = ?",
+      )
+      .bind(now(), existing.uid)
+      .run();
+    await fetch(`${worldsApiBase(c.env)}/worlds/${worldId}/undelete`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ namespace: user.uid }),
+    }).catch(() => undefined);
+    const row = await first<WorldRow>(
+      db(c.env)
+        .prepare("SELECT * FROM worlds WHERE uid = ?")
+        .bind(existing.uid),
+    );
+    return c.json({ world: row ? worldResource(row) : null });
+  })
+  .post("/worlds/:worldId/sync", async (c) => {
+    requireScope(c, "worlds.admin");
+    const user = await currentUser(c);
+    const existing = await worldForUser(c, user.uid, c.req.param("worldId"));
+    if (!existing) return c.notFound();
+    return c.json({
+      world: worldResource(existing),
+      syncReport: { status: "OK", actions: [], warnings: [], errors: [] },
+    });
+  })
+  .get("/worlds/:worldId/auth/tokens", async (c) => {
+    requireScope(c, "worlds.read");
+    const user = await currentUser(c);
+    const existing = await worldForUser(c, user.uid, c.req.param("worldId"));
+    if (!existing) return c.notFound();
+    const res = await fetch(
+      `${worldsApiBase(c.env)}/api-keys?namespace=${encodeURIComponent(user.uid)}`,
+      {
+        headers: { Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}` },
+      },
+    );
+    if (!res.ok)
+      throw new HTTPException(502, { message: await worldsApiError(res) });
+    const body = (await res.json()) as {
+      keys?: Array<Record<string, unknown>>;
+    };
+    return c.json({
+      tokens: (body.keys ?? []).filter(
+        (key) => key.worldId === existing.world_id,
+      ),
+    });
+  })
+  .post("/worlds/:worldId/auth/tokens", async (c) => {
+    requireScope(c, "worlds.write");
+    const user = await currentUser(c);
+    const existing = await worldForUser(c, user.uid, c.req.param("worldId"));
+    if (!existing) return c.notFound();
+    const body = await jsonBody(c).catch(() => ({}));
+    const res = await fetch(`${worldsApiBase(c.env)}/api-keys`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        namespace: user.uid,
+        worldId: existing.world_id,
+        name: optionalString(body, "name") ?? "",
+      }),
+    });
+    if (!res.ok)
+      throw new HTTPException(502, { message: await worldsApiError(res) });
+    return c.json({ token: await res.json() }, 201);
+  })
+  .delete("/worlds/:worldId/auth/tokens/:tokenUid", async (c) => {
+    requireScope(c, "worlds.write");
+    const user = await currentUser(c);
+    const existing = await worldForUser(c, user.uid, c.req.param("worldId"));
+    if (!existing) return c.notFound();
+    const res = await fetch(
+      `${worldsApiBase(c.env)}/api-keys/${c.req.param("tokenUid")}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}` },
+      },
+    );
+    if (!res.ok && res.status !== 404)
+      throw new HTTPException(502, { message: await worldsApiError(res) });
+    return c.body(null, 204);
   });
-
-function blockedSyncReport(code: string, message: string) {
-  return {
-    status: "BLOCKED",
-    actions: [],
-    warnings: [],
-    errors: [{ code, message }],
-  };
-}
-
-function failedSyncReport(message: string) {
-  return {
-    status: "FAILED",
-    actions: [],
-    warnings: [],
-    errors: [{ code: "SYNC_FAILED", message }],
-  };
-}

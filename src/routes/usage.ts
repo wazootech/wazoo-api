@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { AppEnv } from "../env";
 import { recordAdminAudit } from "../lib/audit";
@@ -8,93 +9,61 @@ import {
   optionalString,
   requireScope,
   requireString,
-  resolveOrg,
+  resolveUser,
 } from "../lib/http";
 
 export const usage = new Hono<AppEnv>()
-  .get("/organizations/:organizationId/usage", async (c) => {
+  .get("/worlds/:worldId/usage", async (c) => {
     requireScope(c, "usage.read");
-    const organization = await resolveOrg(c, c.req.param("organizationId"));
-    const database = db(c.env);
+    const user = await resolveUser(c, c.req.query("email") ?? undefined);
+    const world = await resolveWorld(c, user.uid, c.req.param("worldId"));
     const range = usageRange(c);
+    const database = db(c.env);
     const rows = await all(
       database
         .prepare(
-          `SELECT metric, SUM(quantity) AS quantity FROM usage_events WHERE organization_uid = ?${range.where} GROUP BY metric ORDER BY metric`,
+          `SELECT metric, SUM(quantity) AS quantity FROM usage_events WHERE world_uid = ?${range.where} GROUP BY metric ORDER BY metric`,
         )
-        .bind(organization.uid, ...range.args),
+        .bind(world.uid, ...range.args),
     );
     const eventRows = await all<UsageEventRow>(
       database
         .prepare(
-          `SELECT u.uid, w.world_id AS worldResourceId, u.metric, u.quantity, u.unit, u.provider_cost_microcents AS providerCostMicrocents, u.wazoo_markup_microcents AS wazooMarkupMicrocents, u.estimated_cost_microcents AS estimatedCostMicrocents, u.billing_source AS billingSource, u.create_time AS createTime FROM usage_events u LEFT JOIN worlds w ON w.uid = u.world_uid WHERE u.organization_uid = ?${range.where.replaceAll("create_time", "u.create_time")} ORDER BY u.create_time DESC LIMIT 100`,
+          `SELECT uid, metric, quantity, unit, provider_cost_microcents AS providerCostMicrocents, wazoo_markup_microcents AS wazooMarkupMicrocents, estimated_cost_microcents AS estimatedCostMicrocents, billing_source AS billingSource, create_time AS createTime FROM usage_events WHERE world_uid = ?${range.where} ORDER BY create_time DESC LIMIT 100`,
         )
-        .bind(organization.uid, ...range.args),
+        .bind(world.uid, ...range.args),
     );
     return c.json({
       usage: {
-        organization: `organizations/${organization.organizationId}`,
+        world: `worlds/${world.world_id}`,
         total: rows,
-        events: eventRows.map((row) =>
-          usageEventResource(organization.organizationId, row),
-        ),
+        events: eventRows.map(usageEventResource),
       },
     });
   })
-  .get("/organizations/:organizationId/limits", async (c) => {
+  .get("/worlds/:worldId/limits", async (c) => {
     requireScope(c, "usage.read");
-    const organization = await resolveOrg(c, c.req.param("organizationId"));
+    const user = await resolveUser(c, c.req.query("email") ?? undefined);
+    const world = await resolveWorld(c, user.uid, c.req.param("worldId"));
     const limits = await all(
       db(c.env)
         .prepare(
-          "SELECT metric, limit_quantity AS limitQuantity FROM organization_limits WHERE organization_uid = ? ORDER BY metric",
+          "SELECT metric, limit_quantity AS limitQuantity FROM world_limits WHERE world_uid = ? ORDER BY metric",
         )
-        .bind(organization.uid),
+        .bind(world.uid),
     );
     return c.json({ limits });
   })
-  .get("/organizations/:organizationId/worlds/:worldId/usage", async (c) => {
-    requireScope(c, "usage.read");
-    const organization = await resolveOrg(c, c.req.param("organizationId"));
-    const worldId = c.req.param("worldId");
-    const database = db(c.env);
-    const world = await first<{ uid: string; world_id: string }>(
-      database
-        .prepare(
-          "SELECT uid, world_id FROM worlds WHERE organization_uid = ? AND world_id = ?",
-        )
-        .bind(organization.uid, worldId),
-    );
-    if (!world) return c.notFound();
-    const range = usageRange(c);
-    const rows = await all(
-      database
-        .prepare(
-          `SELECT metric, SUM(quantity) AS quantity FROM usage_events WHERE organization_uid = ? AND world_uid = ?${range.where} GROUP BY metric ORDER BY metric`,
-        )
-        .bind(organization.uid, world.uid, ...range.args),
-    );
-    const eventRows = await all<UsageEventRow>(
-      database
-        .prepare(
-          `SELECT u.uid, w.world_id AS worldResourceId, u.metric, u.quantity, u.unit, u.provider_cost_microcents AS providerCostMicrocents, u.wazoo_markup_microcents AS wazooMarkupMicrocents, u.estimated_cost_microcents AS estimatedCostMicrocents, u.billing_source AS billingSource, u.create_time AS createTime FROM usage_events u LEFT JOIN worlds w ON w.uid = u.world_uid WHERE u.organization_uid = ? AND u.world_uid = ?${range.where.replaceAll("create_time", "u.create_time")} ORDER BY u.create_time DESC LIMIT 100`,
-        )
-        .bind(organization.uid, world.uid, ...range.args),
-    );
-    return c.json({
-      usage: {
-        world: `organizations/${organization.organizationId}/worlds/${world.world_id}`,
-        total: rows,
-        events: eventRows.map((row) =>
-          usageEventResource(organization.organizationId, row),
-        ),
-      },
-    });
-  })
-  .post("/organizations/:organizationId/usage", async (c) => {
+  .post("/worlds/:worldId/usage", async (c) => {
     requireScope(c, "admin");
-    const organization = await resolveOrg(c, c.req.param("organizationId"));
     const body = await jsonBody(c);
+    const user = await resolveUser(
+      c,
+      optionalString(body, "user") ??
+        optionalString(body, "email") ??
+        undefined,
+    );
+    const world = await resolveWorld(c, user.uid, c.req.param("worldId"));
     const quantity = body.quantity;
     if (
       typeof quantity !== "number" ||
@@ -124,34 +93,20 @@ export const usage = new Hono<AppEnv>()
       providerCostMicrocents;
     const billingSource = optionalString(body, "billingSource") ?? "BETA_FREE";
     const database = db(c.env);
-    const worldResourceId = optionalString(body, "world");
-    const resolvedWorldId = worldResourceId
-      ? worldIdFromResource(worldResourceId)
-      : null;
-    const world = worldResourceId
-      ? await first<{ uid: string }>(
-          database
-            .prepare(
-              "SELECT uid FROM worlds WHERE organization_uid = ? AND world_id = ?",
-            )
-            .bind(organization.uid, resolvedWorldId),
-        )
-      : null;
-    if (worldResourceId && !world) return c.notFound();
     const limit = await first<{ limit_quantity: number }>(
       database
         .prepare(
-          "SELECT limit_quantity FROM organization_limits WHERE organization_uid = ? AND metric = ?",
+          "SELECT limit_quantity FROM world_limits WHERE world_uid = ? AND metric = ?",
         )
-        .bind(organization.uid, metric),
+        .bind(world.uid, metric),
     );
     if (limit) {
       const current = await first<{ quantity: number }>(
         database
           .prepare(
-            "SELECT COALESCE(SUM(quantity), 0) AS quantity FROM usage_events WHERE organization_uid = ? AND metric = ?",
+            "SELECT COALESCE(SUM(quantity), 0) AS quantity FROM usage_events WHERE world_uid = ? AND metric = ?",
           )
-          .bind(organization.uid, metric),
+          .bind(world.uid, metric),
       );
       if ((current?.quantity ?? 0) + quantity > limit.limit_quantity) {
         return c.json(
@@ -171,12 +126,12 @@ export const usage = new Hono<AppEnv>()
     }
     await database
       .prepare(
-        "INSERT INTO usage_events (uid, organization_uid, world_uid, metric, quantity, unit, provider_cost_microcents, wazoo_markup_microcents, estimated_cost_microcents, billing_source, create_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO usage_events (uid, user_uid, world_uid, metric, quantity, unit, provider_cost_microcents, wazoo_markup_microcents, estimated_cost_microcents, billing_source, create_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .bind(
         id(),
-        organization.uid,
-        world?.uid ?? null,
+        user.uid,
+        world.uid,
         metric,
         quantity,
         unit,
@@ -189,10 +144,26 @@ export const usage = new Hono<AppEnv>()
       .run();
     await recordAdminAudit(c, {
       action: "usage.record",
-      targetResourceName: `organizations/${organization.organizationId}/usageEvents`,
+      targetResourceName: `worlds/${world.world_id}/usageEvents`,
     });
     return c.json({ accepted: true }, 201);
   });
+
+async function resolveWorld(
+  c: Context<AppEnv>,
+  userUid: string,
+  worldId: string,
+): Promise<{ uid: string; world_id: string }> {
+  const world = await first<{ uid: string; world_id: string }>(
+    db(c.env)
+      .prepare(
+        "SELECT uid, world_id FROM worlds WHERE user_uid = ? AND world_id = ?",
+      )
+      .bind(userUid, worldId),
+  );
+  if (!world) throw new HTTPException(404, { message: "World not found" });
+  return world;
+}
 
 function optionalInteger(
   body: Record<string, unknown>,
@@ -208,7 +179,6 @@ function optionalInteger(
 
 type UsageEventRow = {
   uid: string;
-  worldResourceId?: string | null;
   metric: string;
   quantity: number;
   unit: string;
@@ -219,13 +189,9 @@ type UsageEventRow = {
   createTime: string;
 };
 
-function usageEventResource(organizationId: string, row: UsageEventRow) {
+function usageEventResource(row: UsageEventRow) {
   return {
-    name: `organizations/${organizationId}/usageEvents/${row.uid}`,
-    organization: `organizations/${organizationId}`,
-    world: row.worldResourceId
-      ? `organizations/${organizationId}/worlds/${row.worldResourceId}`
-      : undefined,
+    name: `usageEvents/${row.uid}`,
     metric: row.metric,
     quantity: row.quantity,
     unit: row.unit,
@@ -251,10 +217,4 @@ function usageRange(c: { req: { query(name: string): string | undefined } }) {
     args.push(to);
   }
   return { where, args };
-}
-
-function worldIdFromResource(value: string): string {
-  const marker = "/worlds/";
-  const index = value.indexOf(marker);
-  return index >= 0 ? value.slice(index + marker.length) : value;
 }

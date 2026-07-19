@@ -1,85 +1,79 @@
 # Wazoo Platform API
 
-Production-oriented TypeScript API server for Cloudflare Workers, Hono, and Turso/libSQL. It models platform metadata separately from data-plane world authentication.
+Control-plane API for Wazoo. This repo owns the `api.wazoo.dev` Cloudflare Worker and the optional Docker image used by VPS compositions.
 
-## Resources
+## Responsibility
 
-- Organizations: `/v1/organizations`
-- Worlds: `/v1/organizations/:organizationId/worlds`
-- World auth tokens: `/v1/organizations/:organizationId/worlds/:worldId/auth/tokens`
-- Platform API tokens: `/v1/auth/api-tokens/:tokenName`
-- Usage: `/v1/organizations/:organizationId/usage`
-- Limits: `/v1/organizations/:organizationId/limits`
-- Billing stubs: `/v1/organizations/:organizationId/billing`, `/v1/organizations/:organizationId/billing:openPortal`, `/v1/stripe/webhook`
-- Beta applications: `POST /v1/betaApplications`, admin review at `/v1/betaApplications`
+- Users and platform API tokens.
+- World metadata and lifecycle control.
+- Per-world usage, limits, and billing records.
+- Proxying world data-plane API-key creation to `worlds-api`.
+- Deployment config for this one service: `wrangler.toml`, `Dockerfile`, `docker-compose.yml`, and CI.
+
+`worlds-api` owns data storage/query/import/export/search. This service passes `namespace = user.uid` when calling `worlds-api`; namespaces are an internal data-plane grouping, not a first-class platform resource.
+
+## Routes
+
+- Users: `GET /v1/users/me`
+- Worlds: `/v1/worlds`, `/v1/worlds/:worldId`
+- World API keys: `/v1/worlds/:worldId/auth/tokens`
+- Usage: `/v1/worlds/:worldId/usage`
+- Limits: `/v1/worlds/:worldId/limits`
+- Billing stubs: `/v1/worlds/:worldId/billing`, `/v1/worlds/:worldId/billing/openPortal`, `/v1/stripe/webhook`
+- Platform API tokens: `/v1/auth/api-tokens`
 - Health: `/health`
 - OpenAPI-ish route list: `/openapi.json`
 
-## Setup
+## Configuration
+
+Required runtime variables:
+
+- `TURSO_DATABASE_URL`: control-plane libSQL database URL.
+- `TURSO_AUTH_TOKEN`: control-plane database auth token.
+- `WORLDS_API_URL`: data-plane API base URL.
+- `WORLDS_API_ADMIN_KEY`: admin key accepted by `worlds-api`.
+- `API_BASE_URL`: public base URL for this service.
+- `WAZOO_ENV`: deployment environment label.
+
+Optional Stripe variables:
+
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_ID`
+
+## Development
 
 ```sh
 npm install
 cp .dev.vars.example .dev.vars
+npm run dev
+npm run typecheck
 ```
 
-Create a Turso/libSQL control database, put `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in `.dev.vars`, then apply the schema with the Turso CLI:
+Apply the clean beta schema to a new libSQL database:
 
 ```sh
 turso db shell <database-name> < schema.sql
 ```
 
-For production, set `TURSO_AUTH_TOKEN`, `TURSO_PLATFORM_API_TOKEN`, and `TURNSTILE_SECRET_KEY` with `wrangler secret put`, then configure `TURSO_DATABASE_URL`, `TURSO_ORGANIZATION_SLUG`, `TURSO_GROUP`, and `WAZOO_ENV` in `wrangler.toml` or your deployment environment.
+Platform tokens use the `wzp_` prefix. Global admin tokens must be manually seeded with `kind = 'ADMIN'`, `user_uid = NULL`, and a scope containing `admin`.
 
-`TURSO_PLATFORM_API_TOKEN` is used to create one Turso database per World and mint short-lived database auth tokens for schema initialization. The generated database tokens are not stored.
+Supported scopes include `users.read`, `users.write`, `worlds.read`, `worlds.write`, `worlds.admin`, `usage.read`, `billing.read`, and `admin`.
 
-## Development
+## Deployment
 
-```sh
-npm run dev
-npm run typecheck
-```
-
-Run the private-beta smoke test against a local or deployed API with a manually
-seeded global admin token:
+Cloudflare Worker:
 
 ```sh
-API_BASE_URL="http://localhost:8787" \
-WAZOO_ADMIN_TOKEN="wzp_..." \
-npm run smoke:beta
+npm run deploy:dry
+npm run deploy
 ```
 
-Optional smoke-test inputs:
+Docker component:
 
 ```sh
-WAZOO_SMOKE_ORG="beta-smoke"
-WAZOO_SMOKE_WORLD="smoke-manual"
+docker build -t ghcr.io/wazootech/wazoo-api:latest .
+docker compose up
 ```
 
-The smoke test creates or reuses the organization, provisions a new World, syncs
-it, creates/rotates/revokes a world token, reads usage/limits/billing,
-soft-deletes, undeletes, and soft-deletes the World again.
-
-Most routes require a platform token:
-
-```http
-Authorization: Bearer wzp_...
-```
-
-To bootstrap the first platform token, generate a random token, hash it with SHA-256, and insert the hash into `platform_api_tokens`. Token creation endpoints only return plaintext once.
-
-Global admin tokens must be manually seeded with `kind = 'ADMIN'`,
-`organization_uid = NULL`, and a scope containing `admin`.
-
-Supported platform scopes include `organizations.read`, `organizations.write`, `worlds.read`, `worlds.write`, `worlds.admin`, `usage.read`, `billing.read`, and `admin`.
-
-Public resource IDs must match `^[a-z][a-z0-9-]{2,62}$`. Internal UIDs use prefixes like `org_` and `w_` and are output-only.
-
-Create organizations with `organizationId` and `organization.displayName`; create worlds with `worldId` and `world.displayName`. Responses use AIP-style `name`, `uid`, and `displayName` fields.
-
-The control schema mirrors that language with `organization_id`, `world_id`, and `display_name` columns. Organization and World deletes are soft-retained with `delete_time` and `expire_time`; purge is an internal follow-up path.
-
-World auth tokens use a separate `wzw_` prefix and live in `world_auth_tokens`; they are intended for future data-plane access, not platform administration.
-
-## Billing
-
-Stripe variables are present for sandbox wiring. Billing responses are Stripe-shaped stubs and do not require live payment for beta-free organizations. Usage and limits use transparent resource accounting; usage ingestion returns `RESOURCE_EXHAUSTED` when a configured metric limit would be exceeded.
+GitHub Actions validates formatting, typechecking, Worker dry deploy, Docker build, publishes the GHCR image on `main`, and deploys `api.wazoo.dev` on `main`.
