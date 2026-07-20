@@ -36,6 +36,13 @@ export async function errorHandler(error: Error, c: Context<AppEnv>) {
     );
   }
 
+  if (error instanceof SyntaxError) {
+    return c.json(
+      { error: { code: "INVALID_ARGUMENT", message: "Invalid JSON body" } },
+      400,
+    );
+  }
+
   console.error(
     JSON.stringify({
       level: "error",
