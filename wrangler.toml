@@ -18,9 +18,6 @@ STRIPE_PRICE_ID = ""
 
 [env.qa]
 name = "wazoo-api-qa"
-routes = [
-  { pattern = "api-qa.wazoo.dev", custom_domain = true }
-]
 
 [env.qa.vars]
 API_BASE_URL = "https://api-qa.wazoo.dev"
