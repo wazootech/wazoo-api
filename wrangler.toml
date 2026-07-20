@@ -12,6 +12,8 @@ API_BASE_URL = "https://api.wazoo.dev"
 TURSO_DATABASE_URL = "libsql://wazoo-platform-prod-ethanthatonekid.aws-us-west-2.turso.io"
 WORLDS_API_URL = "https://worlds-api.wazoo.dev"
 WAZOO_ENV = "prod"
+TURSO_ORG = "ethanthatonekid"
+TURSO_GROUP = "fartlabs-cpu"
 STRIPE_PRICE_ID = ""
 
 [observability]

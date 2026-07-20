@@ -1,78 +1,250 @@
 #!/usr/bin/env node
 
-const baseUrl = normalizeBaseUrl(process.env.API_BASE_URL ?? "http://localhost:8787");
-const token = process.env.WAZOO_ADMIN_TOKEN ?? process.env.WAZOO_PLATFORM_TOKEN;
-const organizationId = process.env.WAZOO_SMOKE_ORG ?? "beta-smoke";
-const worldId = process.env.WAZOO_SMOKE_WORLD ?? `smoke-${Date.now().toString(36)}`;
+const apiBaseUrl = normalizeBaseUrl(
+  process.env.API_BASE_URL ?? "http://localhost:8787",
+);
+const worldsBaseUrl = normalizeBaseUrl(
+  process.env.WORLDS_API_URL ?? "https://worlds-api.wazoo.dev",
+);
+const adminToken =
+  process.env.WAZOO_ADMIN_TOKEN ?? process.env.WAZOO_PLATFORM_TOKEN;
+const runId = process.env.WAZOO_SMOKE_RUN_ID ?? Date.now().toString(36);
+const email = process.env.WAZOO_SMOKE_EMAIL ?? `smoke+${runId}@wazoo.dev`;
+const worldIds = [
+  process.env.WAZOO_SMOKE_WORLD ?? `smoke-${runId}`,
+  process.env.WAZOO_SMOKE_WORLD_2 ?? `smoke-${runId}-b`,
+];
 
-if (!token) {
-  fail("Set WAZOO_ADMIN_TOKEN to a global admin platform token before running the smoke test.");
+if (!adminToken) {
+  fail(
+    "Set WAZOO_ADMIN_TOKEN to a global admin platform token before running the smoke test.",
+  );
 }
 
-const state = { organizationId, worldId, worldTokenUid: null };
+const state = { userUid: null, worldTokenUid: null, worldToken: null };
 
 try {
-  await step("health", () => request("/health", { auth: false }));
-  await step("ensure organization", ensureOrganization);
-  await step("create world", createWorld);
-  await step("sync world", () => request(`/v1/organizations/${organizationId}/worlds/${worldId}/sync`, { method: "POST" }));
+  await step("platform health", () => apiRequest("/health", { auth: false }));
+  await step("worlds health", () => worldsRequest("/health", { auth: false }));
+  await step("ensure test user", ensureUser);
+  await step("create first world", () => createWorld(worldIds[0]));
+  await step("create second world", () => createWorld(worldIds[1]));
+  await step("list worlds", () =>
+    apiRequest(`/v1/worlds?email=${encodeURIComponent(email)}`),
+  );
+  await step("get world", () =>
+    apiRequest(`/v1/worlds/${worldIds[0]}?email=${encodeURIComponent(email)}`),
+  );
+  await step("sync world", () =>
+    apiRequest(
+      `/v1/worlds/${worldIds[0]}/sync?email=${encodeURIComponent(email)}`,
+      { method: "POST" },
+    ),
+  );
   await step("create world token", createWorldToken);
-  await step("rotate world token", rotateWorldToken);
-  await step("revoke replacement token", revokeWorldToken);
-  await step("read usage", () => request(`/v1/organizations/${organizationId}/worlds/${worldId}/usage`));
-  await step("read limits", () => request(`/v1/organizations/${organizationId}/limits`));
-  await step("read billing", () => request(`/v1/organizations/${organizationId}/billing`));
-  await step("soft-delete world", () => request(`/v1/organizations/${organizationId}/worlds/${worldId}`, { method: "DELETE" }));
-  await step("undelete world", () => request(`/v1/organizations/${organizationId}/worlds/${worldId}/undelete`, { method: "POST" }));
-  await step("final soft-delete world", () => request(`/v1/organizations/${organizationId}/worlds/${worldId}`, { method: "DELETE" }));
-  console.log(`\nPrivate beta smoke test passed for organizations/${organizationId}/worlds/${worldId}`);
+  await step("import chunks", importChunks);
+  await step("import quads", importQuads);
+  await step("search world", searchWorld);
+  await step("export chunks", exportChunks);
+  await step("export quads", exportQuads);
+  await step("sparql select", sparqlSelect);
+  await step("sparql ask", sparqlAsk);
+  await step("record usage", () =>
+    apiRequest(`/v1/worlds/${worldIds[0]}/usage`, {
+      method: "POST",
+      body: {
+        email,
+        metric: "smoke.requests",
+        quantity: 1,
+        unit: "request",
+      },
+    }),
+  );
+  await step("read usage", () =>
+    apiRequest(
+      `/v1/worlds/${worldIds[0]}/usage?email=${encodeURIComponent(email)}`,
+    ),
+  );
+  await step("read limits", () =>
+    apiRequest(
+      `/v1/worlds/${worldIds[0]}/limits?email=${encodeURIComponent(email)}`,
+    ),
+  );
+  await step("read billing", () =>
+    apiRequest(
+      `/v1/worlds/${worldIds[0]}/billing?email=${encodeURIComponent(email)}`,
+    ),
+  );
+  await step("revoke world token", revokeWorldToken);
+  await step("soft-delete first world", () => deleteWorld(worldIds[0]));
+  await step("undelete first world", () => undeleteWorld(worldIds[0]));
+  await step("final soft-delete first world", () => deleteWorld(worldIds[0]));
+  await step("final soft-delete second world", () => deleteWorld(worldIds[1]));
+
+  console.log(
+    `\nPrivate beta smoke test passed for user ${email} and worlds ${worldIds.join(", ")}`,
+  );
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
 }
 
-async function ensureOrganization() {
-  const existing = await request(`/v1/organizations/${organizationId}`, { allowStatus: [200, 404] });
-  if (existing.status === 200) return existing.body;
-  return request("/v1/organizations", {
-    method: "POST",
-    body: {
-      organizationId,
-      organization: { displayName: "Beta Smoke" },
-    },
-  });
-}
-
-async function createWorld() {
-  return request(`/v1/organizations/${organizationId}/worlds`, {
-    method: "POST",
-    body: {
-      worldId,
-      world: { displayName: "Private Beta Smoke World" },
-    },
-  });
-}
-
-async function createWorldToken() {
-  const response = await request(`/v1/organizations/${organizationId}/worlds/${worldId}/auth/tokens`, {
-    method: "POST",
-    body: { name: "smoke" },
-  });
-  state.worldTokenUid = response.body.uid;
+async function ensureUser() {
+  const response = await apiRequest(
+    `/v1/users/me?email=${encodeURIComponent(email)}`,
+    { allowStatus: [200, 201] },
+  );
+  state.userUid = response.body.user.uid;
+  assert(response.body.user.email === email, "Test user email mismatch");
   return response;
 }
 
-async function rotateWorldToken() {
-  const response = await request(`/v1/organizations/${organizationId}/worlds/${worldId}/auth/rotate`, {
+async function createWorld(worldId) {
+  const response = await apiRequest("/v1/worlds", {
     method: "POST",
-    body: { name: "smoke-rotated" },
+    body: {
+      ownerEmail: email,
+      worldId,
+      world: { displayName: `Smoke World ${worldId}` },
+    },
   });
-  state.worldTokenUid = response.body.uid;
+  assert(
+    response.body.world.worldId === worldId,
+    `World ${worldId} was not created`,
+  );
+  return response;
+}
+
+async function createWorldToken() {
+  const response = await apiRequest(
+    `/v1/worlds/${worldIds[0]}/auth/tokens?email=${encodeURIComponent(email)}`,
+    {
+      method: "POST",
+      body: { name: `smoke-${runId}` },
+    },
+  );
+  state.worldTokenUid = response.body.token.uid;
+  state.worldToken = response.body.token.token;
+  assert(state.worldToken?.startsWith("wzw_"), "World token was not returned");
+  return response;
+}
+
+async function importChunks() {
+  const response = await worldsRequest(`/worlds/${worldIds[0]}/import`, {
+    method: "POST",
+    body: {
+      contentType: "text/plain",
+      data: `smoke:alpha\tWazoo smoke alpha ${runId}\nsmoke:beta\tWazoo smoke beta ${runId}`,
+    },
+  });
+  assert(response.body.imported.chunks === 2, "Chunk import count mismatch");
+  return response;
+}
+
+async function importQuads() {
+  const response = await worldsRequest(`/worlds/${worldIds[0]}/import`, {
+    method: "POST",
+    body: {
+      contentType: "application/json",
+      data: JSON.stringify([
+        {
+          subject: `urn:wazoo:smoke:${runId}:alpha`,
+          predicate: "http://schema.org/name",
+          object: `Alpha ${runId}`,
+        },
+        {
+          subject: `urn:wazoo:smoke:${runId}:alpha`,
+          predicate: "http://schema.org/knows",
+          object: `urn:wazoo:smoke:${runId}:beta`,
+        },
+      ]),
+    },
+  });
+  assert(response.body.imported.quads === 2, "Quad import count mismatch");
+  return response;
+}
+
+async function searchWorld() {
+  const response = await worldsRequest(`/worlds/${worldIds[0]}/search`, {
+    method: "POST",
+    body: { query: `alpha ${runId}`, limit: 5 },
+  });
+  assert(response.body.results.length > 0, "Search returned no results");
+  return response;
+}
+
+async function exportChunks() {
+  const response = await worldsRequest(
+    `/worlds/${worldIds[0]}/export?format=text/plain`,
+  );
+  assert(
+    String(response.body).includes(`Wazoo smoke alpha ${runId}`),
+    "Chunk export missing alpha text",
+  );
+  return response;
+}
+
+async function exportQuads() {
+  const response = await worldsRequest(
+    `/worlds/${worldIds[0]}/export?format=application/json`,
+  );
+  assert(
+    response.body.quads.some(
+      (quad) => quad.subject === `urn:wazoo:smoke:${runId}:alpha`,
+    ),
+    "Quad export missing alpha subject",
+  );
+  return response;
+}
+
+async function sparqlSelect() {
+  const response = await worldsRequest(`/worlds/${worldIds[0]}/sparql`, {
+    method: "POST",
+    body: {
+      query: `SELECT ?name WHERE { <urn:wazoo:smoke:${runId}:alpha> <http://schema.org/name> ?name } LIMIT 5`,
+    },
+  });
+  assert(
+    response.body.results.bindings.some(
+      (binding) => binding.name?.value === `Alpha ${runId}`,
+    ),
+    "SPARQL SELECT missing expected binding",
+  );
+  return response;
+}
+
+async function sparqlAsk() {
+  const response = await worldsRequest(`/worlds/${worldIds[0]}/sparql`, {
+    method: "POST",
+    body: {
+      query: `ASK WHERE { <urn:wazoo:smoke:${runId}:alpha> <http://schema.org/knows> <urn:wazoo:smoke:${runId}:beta> }`,
+    },
+  });
+  assert(response.body.boolean === true, "SPARQL ASK was not true");
   return response;
 }
 
 async function revokeWorldToken() {
-  if (!state.worldTokenUid) throw new Error("Missing rotated world token uid");
-  return request(`/v1/organizations/${organizationId}/worlds/${worldId}/auth/tokens/${state.worldTokenUid}`, { method: "DELETE" });
+  if (!state.worldTokenUid) throw new Error("Missing world token uid");
+  return apiRequest(
+    `/v1/worlds/${worldIds[0]}/auth/tokens/${state.worldTokenUid}?email=${encodeURIComponent(email)}`,
+    { method: "DELETE" },
+  );
+}
+
+async function deleteWorld(worldId) {
+  return apiRequest(
+    `/v1/worlds/${worldId}?email=${encodeURIComponent(email)}`,
+    {
+      method: "DELETE",
+    },
+  );
+}
+
+async function undeleteWorld(worldId) {
+  return apiRequest(
+    `/v1/worlds/${worldId}/undelete?email=${encodeURIComponent(email)}`,
+    { method: "POST" },
+  );
 }
 
 async function step(name, action) {
@@ -82,10 +254,28 @@ async function step(name, action) {
   return response;
 }
 
-async function request(path, options = {}) {
+async function apiRequest(path, options = {}) {
+  return request(apiBaseUrl, path, {
+    token: adminToken,
+    ...options,
+  });
+}
+
+async function worldsRequest(path, options = {}) {
+  return request(worldsBaseUrl, path, {
+    token: state.worldToken,
+    ...options,
+  });
+}
+
+async function request(baseUrl, path, options = {}) {
   const headers = new Headers(options.headers);
-  if (options.auth !== false) headers.set("authorization", `Bearer ${token}`);
-  if (options.body !== undefined) headers.set("content-type", "application/json");
+  if (options.auth !== false) {
+    if (!options.token) throw new Error(`Missing token for ${path}`);
+    headers.set("authorization", `Bearer ${options.token}`);
+  }
+  if (options.body !== undefined)
+    headers.set("content-type", "application/json");
 
   const response = await fetch(new URL(path.replace(/^\//, ""), baseUrl), {
     method: options.method ?? "GET",
@@ -93,12 +283,27 @@ async function request(path, options = {}) {
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
   const text = await response.text();
-  const body = text ? JSON.parse(text) : null;
+  const body = parseBody(text);
   const allowed = new Set(options.allowStatus ?? [200, 201, 204]);
   if (!allowed.has(response.status)) {
-    throw new Error(`${options.method ?? "GET"} ${path} failed with ${response.status}: ${text}`);
+    throw new Error(
+      `${options.method ?? "GET"} ${path} failed with ${response.status}: ${text}`,
+    );
   }
   return { status: response.status, body };
+}
+
+function parseBody(text) {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
 }
 
 function normalizeBaseUrl(value) {

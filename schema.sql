@@ -4,6 +4,7 @@ CREATE TABLE users (
   uid TEXT PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
   display_name TEXT,
+  state TEXT NOT NULL DEFAULT 'active',
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
@@ -15,6 +16,8 @@ CREATE TABLE worlds (
   region TEXT NOT NULL DEFAULT 'auto',
   state TEXT NOT NULL DEFAULT 'active',
   worlds_api_uid TEXT,
+  turso_database_name TEXT,
+  turso_database_url TEXT,
   billing_provider TEXT NOT NULL DEFAULT 'STRIPE',
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT,
