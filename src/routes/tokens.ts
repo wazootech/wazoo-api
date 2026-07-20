@@ -1,22 +1,133 @@
-import { Hono } from "hono";
+import { createRoute, z } from "@hono/zod-openapi";
+import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import type { AppEnv } from "../env";
 import { createToken, sha256Hex } from "../lib/crypto";
 import { all, db, id } from "../lib/db";
+import { isAdmin, requireScope, resolveUser, respond } from "../lib/http";
 import {
-  isAdmin,
-  jsonBody,
-  optionalString,
-  requireScope,
-  requireString,
-  resolveUser,
-} from "../lib/http";
+  PlatformTokenSchema,
+  PlatformTokenCreateRequestSchema,
+  PlatformTokenCreateResponseSchema,
+  PlatformTokenDeleteResponseSchema,
+  PlatformTokenValidateResponseSchema,
+  tokenNameParam,
+} from "../lib/schemas";
 
 const defaultPlatformScopes =
   "users.read worlds.read worlds.write usage.read billing.read";
 
-export const tokens = new Hono<AppEnv>()
-  .get("/auth/api-tokens", async (c) => {
+const listRoute = createRoute({
+  method: "get",
+  path: "/v1/auth/api-tokens",
+  tags: ["PlatformTokens"],
+  operationId: "listPlatformTokens",
+  security: [{ bearerPlatformToken: [] }],
+  responses: {
+    200: {
+      description: "Platform tokens",
+      content: {
+        "application/json": {
+          schema: z.object({ tokens: z.array(PlatformTokenSchema) }),
+        },
+      },
+    },
+  },
+});
+
+const createRouteDef = createRoute({
+  method: "post",
+  path: "/v1/auth/api-tokens",
+  tags: ["PlatformTokens"],
+  operationId: "createPlatformToken",
+  security: [{ bearerPlatformToken: [] }],
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: PlatformTokenCreateRequestSchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Created platform token",
+      content: {
+        "application/json": { schema: PlatformTokenCreateResponseSchema },
+      },
+    },
+    403: {
+      description: "Permission denied",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const createNamedRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/api-tokens/{tokenName}",
+  tags: ["PlatformTokens"],
+  operationId: "createNamedPlatformToken",
+  security: [{ bearerPlatformToken: [] }],
+  request: {
+    params: tokenNameParam,
+    body: {
+      content: {
+        "application/json": { schema: PlatformTokenCreateRequestSchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Created platform token",
+      content: {
+        "application/json": { schema: PlatformTokenCreateResponseSchema },
+      },
+    },
+  },
+});
+
+const deleteRoute = createRoute({
+  method: "delete",
+  path: "/v1/auth/api-tokens/{tokenName}",
+  tags: ["PlatformTokens"],
+  operationId: "deletePlatformToken",
+  security: [{ bearerPlatformToken: [] }],
+  request: { params: tokenNameParam },
+  responses: {
+    200: {
+      description: "Deleted platform token",
+      content: {
+        "application/json": { schema: PlatformTokenDeleteResponseSchema },
+      },
+    },
+  },
+});
+
+const validateRoute = createRoute({
+  method: "get",
+  path: "/v1/auth/api-tokens/validate",
+  tags: ["PlatformTokens"],
+  operationId: "validatePlatformToken",
+  security: [{ bearerPlatformToken: [] }],
+  responses: {
+    200: {
+      description: "Token validity",
+      content: {
+        "application/json": { schema: PlatformTokenValidateResponseSchema },
+      },
+    },
+  },
+});
+
+export function registerTokensRoutes(app: OpenAPIHono<AppEnv>) {
+  app.openapi(listRoute, async (c) => {
     requireScope(c, "users.read");
     const auth = c.get("auth");
     const database = db(c.env);
@@ -33,36 +144,29 @@ export const tokens = new Hono<AppEnv>()
             "SELECT uid, name, scope, last_used_at, expires_at, create_time AS createTime FROM platform_api_tokens WHERE kind != 'ADMIN' ORDER BY create_time DESC",
           ),
         );
-    return c.json({ tokens: rows });
-  })
-  .post("/auth/api-tokens", async (c) => {
+    return respond(c, { tokens: rows });
+  });
+
+  app.openapi(createRouteDef, async (c) => {
     requireScope(c, "users.write");
-    const body = await jsonBody(c);
-    const user = await resolveUser(
-      c,
-      optionalString(body, "user") ??
-        optionalString(body, "email") ??
-        undefined,
-    );
+    const body = c.req.valid("json");
+    const user = await resolveUser(c, body.user ?? body.email ?? undefined);
     return createPlatformToken(
       c,
       user.uid,
-      optionalString(body, "name") ?? requireString(body, "tokenName"),
+      body.tokenName ?? body.name ?? "",
       body,
     );
-  })
-  .post("/auth/api-tokens/:tokenName", async (c) => {
+  });
+
+  app.openapi(createNamedRoute, async (c) => {
     requireScope(c, "users.write");
-    const body = await jsonBody(c).catch(() => ({}));
-    const user = await resolveUser(
-      c,
-      optionalString(body, "user") ??
-        optionalString(body, "email") ??
-        undefined,
-    );
+    const body = c.req.valid("json");
+    const user = await resolveUser(c, body.user ?? body.email ?? undefined);
     return createPlatformToken(c, user.uid, c.req.param("tokenName"), body);
-  })
-  .delete("/auth/api-tokens/:tokenName", async (c) => {
+  });
+
+  app.openapi(deleteRoute, async (c) => {
     requireScope(c, "users.write");
     const auth = c.get("auth");
     if (auth.userUid) {
@@ -80,26 +184,29 @@ export const tokens = new Hono<AppEnv>()
         .bind(c.req.param("tokenName"))
         .run();
     }
-    return c.json({ token: c.req.param("tokenName") });
-  })
-  .get("/auth/api-tokens/validate", (c) => {
+    return respond(c, { token: c.req.param("tokenName") });
+  });
+
+  app.openapi(validateRoute, (c) => {
     const auth = c.get("auth");
-    return c.json({
+    return respond(c, {
       exp: auth.expiresAt
         ? Math.floor(new Date(auth.expiresAt).getTime() / 1000)
         : 0,
     });
   });
+}
 
 async function createPlatformToken(
   c: Context<AppEnv>,
   userUid: string,
   name: string,
-  body: Record<string, unknown>,
-): Promise<Response> {
-  const scope = optionalString(body, "scope") ?? defaultPlatformScopes;
+  body: { scope?: string; expiresAt?: string },
+) {
+  const scope = body.scope ?? defaultPlatformScopes;
   if (scope.split(/\s+/).includes("admin")) {
-    return c.json(
+    return respond(
+      c,
       {
         error: {
           code: "PERMISSION_DENIED",
@@ -121,8 +228,8 @@ async function createPlatformToken(
       name,
       await sha256Hex(token),
       scope,
-      optionalString(body, "expiresAt"),
+      body.expiresAt ?? null,
     )
     .run();
-  return c.json({ uid: tokenId, name, token }, 201);
+  return respond(c, { uid: tokenId, name, token }, 201);
 }

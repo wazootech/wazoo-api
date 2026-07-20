@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import type { AppEnv } from "../env";
 import { db, first } from "./db";
+import { respond } from "./http";
 
 export const privateBetaQuota = {
   name: "PRIVATE_BETA_DEFAULT",
@@ -58,5 +59,9 @@ export function quotaError(
   message: string,
   quota: QuotaStatus,
 ) {
-  return c.json({ error: { code: "RESOURCE_EXHAUSTED", message }, quota }, 429);
+  return respond(
+    c,
+    { error: { code: "RESOURCE_EXHAUSTED", message }, quota },
+    429,
+  );
 }

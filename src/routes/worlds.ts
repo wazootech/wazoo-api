@@ -1,23 +1,30 @@
-import { Hono, type Context } from "hono";
+import { createRoute, z } from "@hono/zod-openapi";
+import type { OpenAPIHono } from "@hono/zod-openapi";
+import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { AppEnv } from "../env";
 import { recordAdminAudit } from "../lib/audit";
 import { all, db, first, id, now, type UserRef } from "../lib/db";
-import {
-  isAdmin,
-  jsonBody,
-  optionalString,
-  requireResourceId,
-  requireScope,
-  requireString,
-  resolveUser,
-} from "../lib/http";
+import { isAdmin, requireScope, resolveUser, respond } from "../lib/http";
 import {
   activeWorldCount,
   privateBetaQuota,
   quotaError,
   quotaStatus,
 } from "../lib/quota";
+import {
+  CreateWorldBodySchema,
+  UpdateWorldBodySchema,
+  WorldListSchema,
+  WorldSingleSchema,
+  SyncWorldResponseSchema,
+  WorldTokenListSchema,
+  WorldTokenCreateRequestSchema,
+  WorldTokenSingleResponseSchema,
+  worldIdParam,
+  emailQuery,
+} from "../lib/schemas";
+import { provisionWorldDatabase } from "../lib/turso";
 
 type WorldRow = {
   uid: string;
@@ -58,16 +65,10 @@ function worldsApiBase(env: AppEnv["Bindings"]) {
 
 async function currentUser(
   c: Context<AppEnv>,
-  body?: Record<string, unknown>,
+  ownerEmail?: string,
+  email?: string,
 ): Promise<UserRef> {
-  return resolveUser(
-    c,
-    optionalString(body ?? {}, "ownerEmail") ??
-      optionalString(body ?? {}, "email") ??
-      c.req.query("email") ??
-      c.req.query("user") ??
-      undefined,
-  );
+  return resolveUser(c, ownerEmail ?? email ?? undefined);
 }
 
 async function worldForUser(
@@ -96,10 +97,260 @@ async function worldsApiError(res: Response) {
   return message;
 }
 
-export const worlds = new Hono<AppEnv>()
-  .get("/worlds", async (c) => {
+function notFound(c: Context<AppEnv>) {
+  return respond(
+    c,
+    { error: { code: "NOT_FOUND", message: "Not found" } },
+    404,
+  );
+}
+
+const listRoute = createRoute({
+  method: "get",
+  path: "/v1/worlds",
+  tags: ["Worlds"],
+  operationId: "listWorlds",
+  security: [{ bearerPlatformToken: [] }],
+  request: { query: emailQuery },
+  responses: {
+    200: {
+      description: "World list",
+      content: { "application/json": { schema: WorldListSchema } },
+    },
+  },
+});
+
+const createRouteDef = createRoute({
+  method: "post",
+  path: "/v1/worlds",
+  tags: ["Worlds"],
+  operationId: "createWorld",
+  security: [{ bearerPlatformToken: [] }],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: CreateWorldBodySchema } },
+    },
+  },
+  responses: {
+    201: {
+      description: "Created World",
+      content: { "application/json": { schema: WorldSingleSchema } },
+    },
+    400: {
+      description: "Bad request",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+    429: {
+      description: "Quota exceeded",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.object({ code: z.string(), message: z.string() }),
+            quota: z.object({
+              state: z.string(),
+              reason: z.string().optional(),
+              usagePercent: z.number().optional(),
+            }),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const getRoute = createRoute({
+  method: "get",
+  path: "/v1/worlds/{worldId}",
+  tags: ["Worlds"],
+  operationId: "getWorld",
+  security: [{ bearerPlatformToken: [] }],
+  request: { params: worldIdParam, query: emailQuery },
+  responses: {
+    200: {
+      description: "World",
+      content: { "application/json": { schema: WorldSingleSchema } },
+    },
+    404: {
+      description: "Not found",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const updateRoute = createRoute({
+  method: "patch",
+  path: "/v1/worlds/{worldId}",
+  tags: ["Worlds"],
+  operationId: "updateWorld",
+  security: [{ bearerPlatformToken: [] }],
+  request: {
+    params: worldIdParam,
+    query: emailQuery,
+    body: {
+      required: true,
+      content: { "application/json": { schema: UpdateWorldBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Updated World",
+      content: { "application/json": { schema: WorldSingleSchema } },
+    },
+    400: {
+      description: "Bad request",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const deleteRoute = createRoute({
+  method: "delete",
+  path: "/v1/worlds/{worldId}",
+  tags: ["Worlds"],
+  operationId: "deleteWorld",
+  security: [{ bearerPlatformToken: [] }],
+  request: { params: worldIdParam, query: emailQuery },
+  responses: {
+    200: {
+      description: "Deleted World",
+      content: { "application/json": { schema: WorldSingleSchema } },
+    },
+    404: {
+      description: "Not found",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const undeleteRoute = createRoute({
+  method: "post",
+  path: "/v1/worlds/{worldId}/undelete",
+  tags: ["Worlds"],
+  operationId: "undeleteWorld",
+  security: [{ bearerPlatformToken: [] }],
+  request: { params: worldIdParam, query: emailQuery },
+  responses: {
+    200: {
+      description: "Restored World",
+      content: { "application/json": { schema: WorldSingleSchema } },
+    },
+    400: {
+      description: "Bad request",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const syncRoute = createRoute({
+  method: "post",
+  path: "/v1/worlds/{worldId}/sync",
+  tags: ["Worlds"],
+  operationId: "syncWorld",
+  security: [{ bearerPlatformToken: [] }],
+  request: { params: worldIdParam, query: emailQuery },
+  responses: {
+    200: {
+      description: "Sync report",
+      content: { "application/json": { schema: SyncWorldResponseSchema } },
+    },
+  },
+});
+
+const listTokensRoute = createRoute({
+  method: "get",
+  path: "/v1/worlds/{worldId}/auth/tokens",
+  tags: ["WorldTokens"],
+  operationId: "listWorldTokens",
+  security: [{ bearerPlatformToken: [] }],
+  request: { params: worldIdParam, query: emailQuery },
+  responses: {
+    200: {
+      description: "World tokens",
+      content: { "application/json": { schema: WorldTokenListSchema } },
+    },
+  },
+});
+
+const createTokenRoute = createRoute({
+  method: "post",
+  path: "/v1/worlds/{worldId}/auth/tokens",
+  tags: ["WorldTokens"],
+  operationId: "createWorldToken",
+  security: [{ bearerPlatformToken: [] }],
+  request: {
+    params: worldIdParam,
+    query: emailQuery,
+    body: {
+      content: {
+        "application/json": { schema: WorldTokenCreateRequestSchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Created World token",
+      content: {
+        "application/json": { schema: WorldTokenSingleResponseSchema },
+      },
+    },
+  },
+});
+
+const deleteTokenRoute = createRoute({
+  method: "delete",
+  path: "/v1/worlds/{worldId}/auth/tokens/{tokenUid}",
+  tags: ["WorldTokens"],
+  operationId: "deleteWorldToken",
+  security: [{ bearerPlatformToken: [] }],
+  request: {
+    params: worldIdParam.merge(
+      z.object({
+        tokenUid: z.string().openapi({
+          param: { name: "tokenUid", in: "path", required: true },
+        }),
+      }),
+    ),
+    query: emailQuery,
+  },
+  responses: { 204: { description: "Revoked" } },
+});
+
+export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
+  app.openapi(listRoute, async (c) => {
     requireScope(c, "worlds.read");
-    const user = await currentUser(c);
+    const query = c.req.valid("query");
+    const user = await currentUser(c, query.email, query.email);
     const rows = await all<WorldRow>(
       db(c.env)
         .prepare(
@@ -107,12 +358,13 @@ export const worlds = new Hono<AppEnv>()
         )
         .bind(user.uid),
     );
-    return c.json({ worlds: rows.map(worldResource) });
-  })
-  .post("/worlds", async (c) => {
+    return respond(c, { worlds: rows.map(worldResource) });
+  });
+
+  app.openapi(createRouteDef, async (c) => {
     requireScope(c, "worlds.write");
-    const body = await jsonBody(c);
-    const user = await currentUser(c, body);
+    const body = c.req.valid("json");
+    const user = await currentUser(c, body.ownerEmail, body.email);
     const quota = await quotaStatus(c, user.uid);
     if (!isAdmin(c) && quota.state === "THROTTLED") {
       return quotaError(
@@ -122,34 +374,19 @@ export const worlds = new Hono<AppEnv>()
       );
     }
 
-    const worldBody = body.world;
-    if (
-      !worldBody ||
-      typeof worldBody !== "object" ||
-      Array.isArray(worldBody)
-    ) {
-      return c.json(
-        { error: { code: "INVALID_ARGUMENT", message: "world is required" } },
-        400,
-      );
-    }
-
     const world = {
       id: `w_${id()}`,
-      worldId: requireResourceId(body, "worldId"),
-      displayName: requireString(
-        worldBody as Record<string, unknown>,
-        "displayName",
-      ),
-      region:
-        optionalString(worldBody as Record<string, unknown>, "region") ??
-        "auto",
+      worldId: body.worldId,
+      displayName: body.world.displayName,
+      region: body.world.region,
       now: now(),
     };
     const database = db(c.env);
+    const worldDatabase = await provisionWorldDatabase(c.env, world.id);
+
     await database
       .prepare(
-        "INSERT INTO worlds (uid, user_uid, world_id, display_name, region, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO worlds (uid, user_uid, world_id, display_name, region, turso_database_name, turso_database_url, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .bind(
         world.id,
@@ -157,6 +394,8 @@ export const worlds = new Hono<AppEnv>()
         world.worldId,
         world.displayName,
         world.region,
+        worldDatabase.name,
+        worldDatabase.url,
         world.now,
         world.now,
       )
@@ -179,6 +418,8 @@ export const worlds = new Hono<AppEnv>()
         namespace: user.uid,
         worldId: world.worldId,
         displayName: world.displayName,
+        databaseUrl: worldDatabase.url,
+        databaseAuthToken: worldDatabase.authToken,
       }),
     });
     if (!res.ok) {
@@ -187,7 +428,8 @@ export const worlds = new Hono<AppEnv>()
         .prepare("DELETE FROM worlds WHERE uid = ?")
         .bind(world.id)
         .run();
-      return c.json(
+      return respond(
+        c,
         { error: { code: "WORLD_PROVISIONING_FAILED", message } },
         502,
       );
@@ -196,29 +438,34 @@ export const worlds = new Hono<AppEnv>()
     const row = await first<WorldRow>(
       database.prepare("SELECT * FROM worlds WHERE uid = ?").bind(world.id),
     );
-    return c.json({ world: row ? worldResource(row) : null }, 201);
-  })
-  .get("/worlds/:worldId", async (c) => {
-    requireScope(c, "worlds.read");
-    const user = await currentUser(c);
-    const world = await worldForUser(c, user.uid, c.req.param("worldId"));
-    if (!world) return c.notFound();
-    return c.json({ world: worldResource(world) });
-  })
-  .patch("/worlds/:worldId", async (c) => {
-    requireScope(c, "worlds.write");
-    const user = await currentUser(c);
-    const existing = await worldForUser(c, user.uid, c.req.param("worldId"));
-    if (!existing) return c.notFound();
+    return respond(c, { world: row ? worldResource(row) : null }, 201);
+  });
 
-    const body = await jsonBody(c);
-    const updateMask = requireString(body, "updateMask")
+  app.openapi(getRoute, async (c) => {
+    requireScope(c, "worlds.read");
+    const query = c.req.valid("query");
+    const user = await currentUser(c, query.email, query.email);
+    const world = await worldForUser(c, user.uid, c.req.param("worldId"));
+    if (!world) return notFound(c);
+    return respond(c, { world: worldResource(world) });
+  });
+
+  app.openapi(updateRoute, async (c) => {
+    requireScope(c, "worlds.write");
+    const query = c.req.valid("query");
+    const user = await currentUser(c, query.email, query.email);
+    const existing = await worldForUser(c, user.uid, c.req.param("worldId"));
+    if (!existing) return notFound(c);
+
+    const body = c.req.valid("json");
+    const updateMask = body.updateMask
       .split(",")
       .map((field) => field.trim())
       .filter(Boolean);
     const allowed = new Set(["displayName", "region", "state"]);
     if (updateMask.some((field) => !allowed.has(field))) {
-      return c.json(
+      return respond(
+        c,
         {
           error: {
             code: "INVALID_ARGUMENT",
@@ -228,23 +475,13 @@ export const worlds = new Hono<AppEnv>()
         400,
       );
     }
-    const worldBody = body.world;
-    if (
-      !worldBody ||
-      typeof worldBody !== "object" ||
-      Array.isArray(worldBody)
-    ) {
-      return c.json(
-        { error: { code: "INVALID_ARGUMENT", message: "world is required" } },
-        400,
-      );
-    }
-    const patch = worldBody as Record<string, unknown>;
+    const patch = body.world;
     const nextState = updateMask.includes("state")
-      ? requireString(patch, "state").toUpperCase()
+      ? (patch.state?.toUpperCase() ?? null)
       : null;
     if (nextState && nextState !== "ACTIVE" && nextState !== "SUSPENDED") {
-      return c.json(
+      return respond(
+        c,
         {
           error: {
             code: "INVALID_ARGUMENT",
@@ -260,17 +497,15 @@ export const worlds = new Hono<AppEnv>()
         "UPDATE worlds SET display_name = COALESCE(?, display_name), region = COALESCE(?, region), state = COALESCE(?, state), update_time = ? WHERE uid = ?",
       )
       .bind(
-        updateMask.includes("displayName")
-          ? requireString(patch, "displayName")
-          : null,
-        updateMask.includes("region") ? requireString(patch, "region") : null,
+        updateMask.includes("displayName") ? (patch.displayName ?? null) : null,
+        updateMask.includes("region") ? (patch.region ?? null) : null,
         nextState?.toLowerCase() ?? null,
         now(),
         existing.uid,
       )
       .run();
 
-    if (updateMask.includes("displayName")) {
+    if (updateMask.includes("displayName") && patch.displayName) {
       await fetch(`${worldsApiBase(c.env)}/worlds/${existing.world_id}`, {
         method: "PATCH",
         headers: {
@@ -279,7 +514,7 @@ export const worlds = new Hono<AppEnv>()
         },
         body: JSON.stringify({
           namespace: user.uid,
-          displayName: requireString(patch, "displayName"),
+          displayName: patch.displayName,
         }),
       }).catch(() => undefined);
     }
@@ -289,14 +524,16 @@ export const worlds = new Hono<AppEnv>()
         .prepare("SELECT * FROM worlds WHERE uid = ?")
         .bind(existing.uid),
     );
-    return c.json({ world: row ? worldResource(row) : null });
-  })
-  .delete("/worlds/:worldId", async (c) => {
+    return respond(c, { world: row ? worldResource(row) : null });
+  });
+
+  app.openapi(deleteRoute, async (c) => {
     requireScope(c, "worlds.write");
-    const user = await currentUser(c);
+    const query = c.req.valid("query");
+    const user = await currentUser(c, query.email, query.email);
     const worldId = c.req.param("worldId");
     const existing = await worldForUser(c, user.uid, worldId);
-    if (!existing) return c.notFound();
+    if (!existing) return notFound(c);
     const deletedAt = now();
     const expireAt = new Date(
       Date.now() + 30 * 24 * 60 * 60 * 1000,
@@ -319,16 +556,19 @@ export const worlds = new Hono<AppEnv>()
         .prepare("SELECT * FROM worlds WHERE uid = ?")
         .bind(existing.uid),
     );
-    return c.json({ world: row ? worldResource(row) : null });
-  })
-  .post("/worlds/:worldId/undelete", async (c) => {
+    return respond(c, { world: row ? worldResource(row) : null });
+  });
+
+  app.openapi(undeleteRoute, async (c) => {
     requireScope(c, "worlds.write");
-    const user = await currentUser(c);
+    const query = c.req.valid("query");
+    const user = await currentUser(c, query.email, query.email);
     const worldId = c.req.param("worldId");
     const existing = await worldForUser(c, user.uid, worldId);
-    if (!existing) return c.notFound();
+    if (!existing) return notFound(c);
     if (existing.state !== "deleted")
-      return c.json(
+      return respond(
+        c,
         {
           error: {
             code: "FAILED_PRECONDITION",
@@ -341,7 +581,8 @@ export const worlds = new Hono<AppEnv>()
       existing.expire_time &&
       new Date(existing.expire_time).getTime() <= Date.now()
     ) {
-      return c.json(
+      return respond(
+        c,
         {
           error: {
             code: "WORLD_RESTORE_EXPIRED",
@@ -378,23 +619,27 @@ export const worlds = new Hono<AppEnv>()
         .prepare("SELECT * FROM worlds WHERE uid = ?")
         .bind(existing.uid),
     );
-    return c.json({ world: row ? worldResource(row) : null });
-  })
-  .post("/worlds/:worldId/sync", async (c) => {
+    return respond(c, { world: row ? worldResource(row) : null });
+  });
+
+  app.openapi(syncRoute, async (c) => {
     requireScope(c, "worlds.admin");
-    const user = await currentUser(c);
+    const query = c.req.valid("query");
+    const user = await currentUser(c, query.email, query.email);
     const existing = await worldForUser(c, user.uid, c.req.param("worldId"));
-    if (!existing) return c.notFound();
-    return c.json({
+    if (!existing) return notFound(c);
+    return respond(c, {
       world: worldResource(existing),
       syncReport: { status: "OK", actions: [], warnings: [], errors: [] },
     });
-  })
-  .get("/worlds/:worldId/auth/tokens", async (c) => {
+  });
+
+  app.openapi(listTokensRoute, async (c) => {
     requireScope(c, "worlds.read");
-    const user = await currentUser(c);
+    const query = c.req.valid("query");
+    const user = await currentUser(c, query.email, query.email);
     const existing = await worldForUser(c, user.uid, c.req.param("worldId"));
-    if (!existing) return c.notFound();
+    if (!existing) return notFound(c);
     const res = await fetch(
       `${worldsApiBase(c.env)}/api-keys?namespace=${encodeURIComponent(user.uid)}`,
       {
@@ -406,18 +651,20 @@ export const worlds = new Hono<AppEnv>()
     const body = (await res.json()) as {
       keys?: Array<Record<string, unknown>>;
     };
-    return c.json({
+    return respond(c, {
       tokens: (body.keys ?? []).filter(
         (key) => key.worldId === existing.world_id,
       ),
     });
-  })
-  .post("/worlds/:worldId/auth/tokens", async (c) => {
+  });
+
+  app.openapi(createTokenRoute, async (c) => {
     requireScope(c, "worlds.write");
-    const user = await currentUser(c);
+    const query = c.req.valid("query");
+    const user = await currentUser(c, query.email, query.email);
     const existing = await worldForUser(c, user.uid, c.req.param("worldId"));
-    if (!existing) return c.notFound();
-    const body = await jsonBody(c).catch(() => ({}));
+    if (!existing) return notFound(c);
+    const body = c.req.valid("json");
     const res = await fetch(`${worldsApiBase(c.env)}/api-keys`, {
       method: "POST",
       headers: {
@@ -427,18 +674,20 @@ export const worlds = new Hono<AppEnv>()
       body: JSON.stringify({
         namespace: user.uid,
         worldId: existing.world_id,
-        name: optionalString(body, "name") ?? "",
+        name: body.name ?? "",
       }),
     });
     if (!res.ok)
       throw new HTTPException(502, { message: await worldsApiError(res) });
-    return c.json({ token: await res.json() }, 201);
-  })
-  .delete("/worlds/:worldId/auth/tokens/:tokenUid", async (c) => {
+    return respond(c, { token: await res.json() }, 201);
+  });
+
+  app.openapi(deleteTokenRoute, async (c) => {
     requireScope(c, "worlds.write");
-    const user = await currentUser(c);
+    const query = c.req.valid("query");
+    const user = await currentUser(c, query.email, query.email);
     const existing = await worldForUser(c, user.uid, c.req.param("worldId"));
-    if (!existing) return c.notFound();
+    if (!existing) return notFound(c);
     const res = await fetch(
       `${worldsApiBase(c.env)}/api-keys/${c.req.param("tokenUid")}`,
       {
@@ -448,5 +697,6 @@ export const worlds = new Hono<AppEnv>()
     );
     if (!res.ok && res.status !== 404)
       throw new HTTPException(502, { message: await worldsApiError(res) });
-    return c.body(null, 204);
+    return c.body(null, 204) as any;
   });
+}

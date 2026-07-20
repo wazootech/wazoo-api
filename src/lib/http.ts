@@ -4,62 +4,24 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { AppEnv } from "../env";
 import { db, userByIdentifier } from "./db";
 
-export type JsonObject = Record<string, unknown>;
+export function respond(
+  c: Context<AppEnv>,
+  data: unknown,
+  status?: ContentfulStatusCode,
+) {
+  return c.json(data, status as any) as any;
+}
 
 export function ok(
   c: Context<AppEnv>,
   data: unknown,
   status: ContentfulStatusCode = 200,
 ) {
-  return c.json({ data }, status);
+  return respond(c, { data }, status);
 }
 
 export function created(c: Context<AppEnv>, data: unknown) {
   return ok(c, data, 201);
-}
-
-export async function jsonBody<T extends JsonObject>(
-  c: Context<AppEnv>,
-): Promise<T> {
-  try {
-    const body = await c.req.json<T>();
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      throw new HTTPException(400, { message: "Expected a JSON object" });
-    }
-    return body;
-  } catch (error) {
-    if (error instanceof HTTPException) throw error;
-    throw new HTTPException(400, { message: "Invalid JSON body" });
-  }
-}
-
-export function requireString(body: JsonObject, key: string): string {
-  const value = body[key];
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new HTTPException(400, {
-      message: `Missing required string: ${key}`,
-    });
-  }
-  return value.trim();
-}
-
-export function requireResourceId(body: JsonObject, key: string): string {
-  const value = requireString(body, key);
-  if (!/^[a-z][a-z0-9-]{2,62}$/.test(value)) {
-    throw new HTTPException(400, {
-      message: `${key} must match ^[a-z][a-z0-9-]{2,62}$`,
-    });
-  }
-  return value;
-}
-
-export function optionalString(body: JsonObject, key: string): string | null {
-  const value = body[key];
-  if (value == null) return null;
-  if (typeof value !== "string") {
-    throw new HTTPException(400, { message: `Expected string: ${key}` });
-  }
-  return value.trim() || null;
 }
 
 export async function notFound() {

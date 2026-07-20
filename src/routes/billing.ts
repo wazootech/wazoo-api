@@ -1,50 +1,142 @@
 import { Hono } from "hono";
+import { createRoute, z } from "@hono/zod-openapi";
+import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { AppEnv } from "../env";
 import { db, first } from "../lib/db";
-import { requireScope, resolveUser } from "../lib/http";
+import { requireScope, resolveUser, respond } from "../lib/http";
+import {
+  worldIdParam,
+  BillingResponseSchema,
+  InvoicesListSchema,
+} from "../lib/schemas";
 
-export const billing = new Hono<AppEnv>()
-  .get("/worlds/:worldId/billing", async (c) => {
-    requireScope(c, "billing.read");
-    const user = await resolveUser(c, c.req.query("email") ?? undefined);
-    const world = await resolveWorldBilling(
-      c,
-      user.uid,
-      c.req.param("worldId"),
-    );
-    return c.json({
-      billing: {
-        world: `worlds/${world.world_id}`,
-        state: world.billing_state ?? "BETA_FREE",
-        provider: world.billing_provider ?? "STRIPE",
-        customerConfigured: Boolean(world.stripe_customer_id),
-        subscriptionConfigured: Boolean(world.stripe_subscription_id),
-        paymentRequired: false,
+export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/v1/worlds/{worldId}/billing",
+      tags: ["Billing"],
+      operationId: "getWorldBilling",
+      security: [{ bearerPlatformToken: [] }],
+      request: {
+        params: worldIdParam,
+        query: z.object({
+          email: z
+            .string()
+            .optional()
+            .openapi({ param: { name: "email", in: "query" } }),
+        }),
       },
-    });
-  })
-  .get("/worlds/:worldId/billing/invoices", async (c) => {
-    requireScope(c, "billing.read");
-    const user = await resolveUser(c, c.req.query("email") ?? undefined);
-    await resolveWorldBilling(c, user.uid, c.req.param("worldId"));
-    return c.json({ invoices: [] });
-  })
-  .post("/worlds/:worldId/billing/openPortal", async (c) => {
-    requireScope(c, "billing.read");
-    const user = await resolveUser(c, c.req.query("email") ?? undefined);
-    await resolveWorldBilling(c, user.uid, c.req.param("worldId"));
-    return c.json(
-      {
-        error: {
-          code: "FAILED_PRECONDITION",
-          message: "Billing portal is not available for beta-free worlds",
+      responses: {
+        200: {
+          description: "World billing state",
+          content: { "application/json": { schema: BillingResponseSchema } },
         },
       },
-      400,
-    );
-  });
+    }),
+    async (c) => {
+      requireScope(c, "billing.read");
+      const query = c.req.valid("query");
+      const user = await resolveUser(c, query.email ?? undefined);
+      const world = await resolveWorldBilling(
+        c,
+        user.uid,
+        c.req.param("worldId"),
+      );
+      return respond(c, {
+        billing: {
+          world: `worlds/${world.world_id}`,
+          state: world.billing_state ?? "BETA_FREE",
+          provider: world.billing_provider ?? "STRIPE",
+          customerConfigured: Boolean(world.stripe_customer_id),
+          subscriptionConfigured: Boolean(world.stripe_subscription_id),
+          paymentRequired: false,
+        },
+      });
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/v1/worlds/{worldId}/billing/invoices",
+      tags: ["Billing"],
+      operationId: "listWorldInvoices",
+      security: [{ bearerPlatformToken: [] }],
+      request: {
+        params: worldIdParam,
+        query: z.object({
+          email: z
+            .string()
+            .optional()
+            .openapi({ param: { name: "email", in: "query" } }),
+        }),
+      },
+      responses: {
+        200: {
+          description: "World invoices",
+          content: { "application/json": { schema: InvoicesListSchema } },
+        },
+      },
+    }),
+    async (c) => {
+      requireScope(c, "billing.read");
+      const query = c.req.valid("query");
+      const user = await resolveUser(c, query.email ?? undefined);
+      await resolveWorldBilling(c, user.uid, c.req.param("worldId"));
+      return respond(c, { invoices: [] });
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/v1/worlds/{worldId}/billing/openPortal",
+      tags: ["Billing"],
+      operationId: "openWorldBillingPortal",
+      security: [{ bearerPlatformToken: [] }],
+      request: {
+        params: worldIdParam,
+        query: z.object({
+          email: z
+            .string()
+            .optional()
+            .openapi({ param: { name: "email", in: "query" } }),
+        }),
+      },
+      responses: {
+        400: {
+          description: "Not available",
+          content: {
+            "application/json": {
+              schema: z.object({
+                error: z.object({ code: z.string(), message: z.string() }),
+              }),
+            },
+          },
+        },
+      },
+    }),
+    async (c) => {
+      requireScope(c, "billing.read");
+      const query = c.req.valid("query");
+      const user = await resolveUser(c, query.email ?? undefined);
+      await resolveWorldBilling(c, user.uid, c.req.param("worldId"));
+      return respond(
+        c,
+        {
+          error: {
+            code: "FAILED_PRECONDITION",
+            message: "Billing portal is not available for beta-free worlds",
+          },
+        },
+        400,
+      );
+    },
+  );
+}
 
 export const stripeWebhook = new Hono<AppEnv>().post(
   "/v1/stripe/webhook",
