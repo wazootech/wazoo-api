@@ -3,7 +3,7 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { AppEnv } from "../env";
 import { db } from "../lib/db";
 import { requireScope, respond } from "../lib/http";
-import { emailQuery, UserSchema } from "../lib/schemas";
+import { UserSchema } from "../lib/schemas";
 
 const route = createRoute({
   method: "get",
@@ -11,22 +11,15 @@ const route = createRoute({
   tags: ["Users"],
   operationId: "getUserMe",
   security: [{ bearerPlatformToken: [] }],
-  request: { query: emailQuery },
   responses: {
     200: {
-      description: "Existing user",
+      description: "Authenticated user",
       content: {
         "application/json": { schema: z.object({ user: UserSchema }) },
       },
     },
-    201: {
-      description: "Created user",
-      content: {
-        "application/json": { schema: z.object({ user: UserSchema }) },
-      },
-    },
-    400: {
-      description: "Bad request",
+    404: {
+      description: "User not found",
       content: {
         "application/json": {
           schema: z.object({
@@ -41,31 +34,33 @@ const route = createRoute({
 export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
   app.openapi(route, async (c) => {
     requireScope(c, "users.read");
-    const query = c.req.valid("query");
-    if (!query.email) {
+    const userUid = c.var.auth.userUid;
+    if (!userUid) {
       return respond(
         c,
         {
           error: {
-            code: "INVALID_ARGUMENT",
-            message: "email query parameter is required",
+            code: "UNAUTHENTICATED",
+            message: "No user associated with token",
           },
         },
-        400,
+        401,
       );
     }
+
     const database = db(c.env);
     const existing = await database
       .prepare(
-        "SELECT uid, email, display_name, create_time FROM users WHERE email = ?",
+        "SELECT uid, email, display_name, create_time FROM users WHERE uid = ?",
       )
-      .bind(query.email.toLowerCase())
+      .bind(userUid)
       .first<{
         uid: string;
         email: string;
         display_name: string | null;
         create_time: string;
       }>();
+
     if (existing) {
       return respond(c, {
         user: {
@@ -77,34 +72,16 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
         },
       });
     }
-    const uid = crypto.randomUUID();
-    await database
-      .prepare("INSERT INTO users (uid, email) VALUES (?, ?)")
-      .bind(uid, query.email.toLowerCase())
-      .run();
-    const row = await database
-      .prepare(
-        "SELECT uid, email, display_name, create_time FROM users WHERE uid = ?",
-      )
-      .bind(uid)
-      .first<{
-        uid: string;
-        email: string;
-        display_name: string | null;
-        create_time: string;
-      }>();
+
     return respond(
       c,
       {
-        user: {
-          uid: row!.uid,
-          email: row!.email,
-          displayName: row!.display_name,
-          state: "ACTIVE",
-          createTime: row!.create_time,
+        error: {
+          code: "NOT_FOUND",
+          message: "User not found",
         },
       },
-      201,
+      404,
     );
   });
 }
