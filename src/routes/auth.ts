@@ -13,10 +13,14 @@ const defaultPlatformScopes =
 
 export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
   app.get("/v1/auth/debug/hash", async (c) => {
-    const testOtp = "123456";
-    const hash = await hashPassword(testOtp);
-    const valid = await verifyPassword(testOtp, hash);
-    return c.json({ hash: hash.slice(0, 20) + "...", valid });
+    try {
+      const { bcrypt } = await import("hash-wasm");
+      const salt = "abcdefghijklmnopqrstuv";
+      const result = await bcrypt({ password: "123456", salt, costFactor: 10 });
+      return c.json({ ok: true, hash: result.slice(0, 20) });
+    } catch (e: any) {
+      return c.json({ ok: false, error: e?.message ?? String(e) });
+    }
   });
 
   app.get("/v1/auth/debug/db", async (c) => {
