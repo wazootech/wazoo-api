@@ -62,13 +62,14 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
       typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const code = typeof body.code === "string" ? body.code.trim() : "";
 
-    if (!email || !code) {
+    if (!body.email || !body.code) {
+      const keys = Object.keys(body);
       return respond(
         c,
         {
           error: {
             code: "INVALID_ARGUMENT",
-            message: "email and code are required",
+            message: `email and code are required. got: ${JSON.stringify(keys)} raw: ${JSON.stringify(body)}`,
           },
         },
         400,
