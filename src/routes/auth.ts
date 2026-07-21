@@ -61,7 +61,11 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
 
     const debug = body.debug === true;
     if (debug) {
-      return c.json({ ok: true, id: magicAuthId || null, error: errorMsg || null });
+      return c.json({
+        ok: true,
+        id: magicAuthId || null,
+        error: errorMsg || null,
+      });
     }
 
     return c.json({ ok: true });
