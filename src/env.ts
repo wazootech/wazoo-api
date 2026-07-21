@@ -13,6 +13,8 @@ export type Bindings = {
   STRIPE_PRICE_ID?: string;
   RESEND_API_KEY?: string;
   OTP_FROM_ADDRESS?: string;
+  WORKOS_API_KEY?: string;
+  WORKOS_CLIENT_ID?: string;
   GOOGLE_SERVICE_ACCOUNT_KEY?: string;
   BETA_ALLOWLIST_SHEET_ID?: string;
 };
