@@ -85,3 +85,16 @@ CREATE TABLE admin_audit_events (
 CREATE INDEX idx_worlds_user ON worlds(user_uid);
 CREATE INDEX idx_usage_world_time ON usage_events(world_uid, create_time);
 CREATE INDEX idx_users_email ON users(email);
+
+CREATE TABLE email_otps (
+  uid TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  otp_hash TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  verified INTEGER NOT NULL DEFAULT 0,
+  create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX idx_email_otps_email ON email_otps(email);
+CREATE INDEX idx_email_otps_expires ON email_otps(expires_at);

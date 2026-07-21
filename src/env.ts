@@ -11,6 +11,10 @@ export type Bindings = {
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_ID?: string;
+  RESEND_API_KEY?: string;
+  OTP_FROM_ADDRESS?: string;
+  GOOGLE_SERVICE_ACCOUNT_KEY?: string;
+  BETA_ALLOWLIST_SHEET_ID?: string;
 };
 
 export type AuthContext = {

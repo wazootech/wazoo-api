@@ -1,5 +1,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { AppEnv } from "./env";
+import { registerAuthRoutes } from "./routes/auth";
 import { registerBillingRoutes, stripeWebhook } from "./routes/billing";
 import { registerHealthRoutes } from "./routes/health";
 import { registerTokensRoutes } from "./routes/tokens";
@@ -28,6 +29,7 @@ app.openAPIRegistry.registerComponent(
 
 registerHealthRoutes(app);
 app.route("/", stripeWebhook);
+registerAuthRoutes(app);
 
 app.use("/v1/*", requireAuth);
 registerUsersRoutes(app);
