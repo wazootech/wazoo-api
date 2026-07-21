@@ -12,6 +12,21 @@ const defaultPlatformScopes =
   "users.read worlds.read worlds.write usage.read billing.read";
 
 export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
+  app.get("/v1/auth/debug/hash", async (c) => {
+    const testOtp = "123456";
+    const hash = await hashPassword(testOtp);
+    const valid = await verifyPassword(testOtp, hash);
+    return c.json({ hash: hash.slice(0, 20) + "...", valid });
+  });
+
+  app.get("/v1/auth/debug/db", async (c) => {
+    const database = db(c.env);
+    const row = await database
+      .prepare("SELECT count(*) as cnt FROM email_otps")
+      .first<{ cnt: number }>();
+    return c.json({ count: row?.cnt ?? -1, url: c.env.TURSO_DATABASE_URL });
+  });
+
   app.post("/v1/auth/login", async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const email =
