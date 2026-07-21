@@ -1,4 +1,5 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { cors } from "hono/cors";
 import type { AppEnv } from "./env";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerBillingRoutes, stripeWebhook } from "./routes/billing";
@@ -10,6 +11,21 @@ import { registerWorldsRoutes } from "./routes/worlds";
 import { errorHandler, requireAuth } from "./lib/http";
 
 const app = new OpenAPIHono<AppEnv>();
+
+app.use(
+  "*",
+  cors({
+    origin: (origin) => {
+      if (!origin) return null;
+      if (origin.endsWith(".wazoo.dev")) return origin;
+      if (origin.startsWith("http://localhost:")) return origin;
+      return null;
+    },
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  }),
+);
 
 app.onError(errorHandler);
 app.notFound((c) =>
