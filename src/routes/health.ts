@@ -22,13 +22,4 @@ export function registerHealthRoutes(app: OpenAPIHono<AppEnv>) {
   app.openapi(route, (c) => {
     return c.json({ status: "ok" });
   });
-
-  app.post("/debug-echo", async (c) => {
-    const raw = await c.req.text();
-    let parsed = null;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {}
-    return c.json({ raw, parsed });
-  });
 }

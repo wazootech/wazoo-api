@@ -28,7 +28,7 @@ app.openAPIRegistry.registerComponent(
 );
 
 registerHealthRoutes(app);
-// app.route("/", stripeWebhook);
+app.route("/", stripeWebhook);
 registerAuthRoutes(app);
 
 app.use("/v1/*", requireAuth);
