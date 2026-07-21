@@ -48,13 +48,14 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
     const otp = generateOtp();
     const hash = await hashPassword(otp);
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    const now = new Date().toISOString();
 
     const database = db(c.env);
     await database
       .prepare(
-        "INSERT INTO email_otps (uid, email, otp_hash, expires_at) VALUES (?, ?, ?, ?)",
+        "INSERT INTO email_otps (uid, email, otp_hash, expires_at, create_time) VALUES (?, ?, ?, ?, ?)",
       )
-      .bind(id(), email, hash, expiresAt)
+      .bind(id(), email, hash, expiresAt, now)
       .run();
 
     c.executionCtx?.waitUntil(sendOtpEmail(email, otp, c.env));
