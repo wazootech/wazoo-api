@@ -47,10 +47,21 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
     }
 
     const workos = new WorkOS(apiKey);
+    let magicAuthId = "";
+    let errorMsg = "";
     try {
-      await workos.userManagement.createMagicAuth({ email });
-    } catch {
-      return c.json({ ok: true });
+      const result = await workos.userManagement.createMagicAuth({ email });
+      magicAuthId = result.id;
+    } catch (err: any) {
+      errorMsg = err?.message ?? String(err);
+      if (!errorMsg) {
+        return c.json({ ok: true });
+      }
+    }
+
+    const debug = body.debug === true;
+    if (debug) {
+      return c.json({ ok: true, id: magicAuthId || null, error: errorMsg || null });
     }
 
     return c.json({ ok: true });
