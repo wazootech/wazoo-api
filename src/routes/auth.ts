@@ -5,12 +5,82 @@ import { createToken, sha256Hex } from "../lib/crypto";
 import { db, id } from "../lib/db";
 import { rateLimit } from "../lib/ratelimit";
 import { getApprovedEmails } from "../lib/beta-allowlist";
-import { respond } from "../lib/http";
+import { requireAuth, requireScope, respond } from "../lib/http";
 
 const defaultPlatformScopes =
   "users.read worlds.read worlds.write usage.read billing.read";
 
 export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
+  app.post("/v1/auth/workos-session", async (c) => {
+    await requireAuth(c, async () => {});
+    requireScope(c, "admin");
+
+    const body = await c.req.json().catch(() => ({}));
+    const email =
+      typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const displayName =
+      typeof body.displayName === "string" && body.displayName.trim()
+        ? body.displayName.trim()
+        : null;
+
+    if (!email) {
+      return respond(
+        c,
+        {
+          error: {
+            code: "INVALID_ARGUMENT",
+            message: "email is required",
+          },
+        },
+        400,
+      );
+    }
+
+    const database = db(c.env);
+    const existing = await database
+      .prepare("SELECT uid FROM users WHERE email = ?")
+      .bind(email)
+      .first<{ uid: string }>();
+
+    let userUid: string;
+    if (existing) {
+      userUid = existing.uid;
+      if (displayName) {
+        await database
+          .prepare("UPDATE users SET display_name = ? WHERE uid = ?")
+          .bind(displayName, userUid)
+          .run();
+      }
+    } else {
+      userUid = id();
+      await database
+        .prepare(
+          "INSERT INTO users (uid, email, display_name) VALUES (?, ?, ?)",
+        )
+        .bind(userUid, email, displayName)
+        .run();
+    }
+
+    const token = createToken("wzp");
+    const tokenId = id();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    await database
+      .prepare(
+        "INSERT INTO platform_api_tokens (uid, user_uid, name, token_hash, scope, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .bind(
+        tokenId,
+        userUid,
+        `console-session-${Date.now()}`,
+        await sha256Hex(token),
+        defaultPlatformScopes,
+        expiresAt,
+      )
+      .run();
+
+    return respond(c, { token, expiresAt }, 201);
+  });
+
   app.post("/v1/auth/login", async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const email =
