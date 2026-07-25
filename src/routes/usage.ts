@@ -22,6 +22,7 @@ export function registerUsageRoutes(app: OpenAPIHono<AppEnv>) {
       path: "/v1/worlds/{worldId}/usage",
       tags: ["Usage"],
       operationId: "getWorldUsage",
+      summary: "Get world usage",
       security: [{ bearerPlatformToken: [] }],
       request: { params: worldIdParam, query: usageRangeQuery },
       responses: {
@@ -68,6 +69,7 @@ export function registerUsageRoutes(app: OpenAPIHono<AppEnv>) {
       path: "/v1/worlds/{worldId}/limits",
       tags: ["Usage"],
       operationId: "getWorldLimits",
+      summary: "Get world limits",
       security: [{ bearerPlatformToken: [] }],
       request: {
         params: worldIdParam,
@@ -107,6 +109,7 @@ export function registerUsageRoutes(app: OpenAPIHono<AppEnv>) {
       path: "/v1/worlds/{worldId}/usage",
       tags: ["Usage"],
       operationId: "recordWorldUsage",
+      summary: "Record world usage",
       security: [{ bearerPlatformToken: [] }],
       request: {
         params: worldIdParam,

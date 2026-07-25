@@ -19,6 +19,7 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
       path: "/v1/worlds/{worldId}/billing",
       tags: ["Billing"],
       operationId: "getWorldBilling",
+      summary: "Get world billing",
       security: [{ bearerPlatformToken: [] }],
       request: {
         params: worldIdParam,
@@ -64,6 +65,7 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
       path: "/v1/worlds/{worldId}/billing/invoices",
       tags: ["Billing"],
       operationId: "listWorldInvoices",
+      summary: "List world invoices",
       security: [{ bearerPlatformToken: [] }],
       request: {
         params: worldIdParam,
@@ -96,6 +98,7 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
       path: "/v1/worlds/{worldId}/billing/openPortal",
       tags: ["Billing"],
       operationId: "openWorldBillingPortal",
+      summary: "Open billing portal",
       security: [{ bearerPlatformToken: [] }],
       request: {
         params: worldIdParam,

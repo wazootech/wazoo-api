@@ -10,6 +10,7 @@ const route = createRoute({
   path: "/v1/users/me",
   tags: ["Users"],
   operationId: "getUserMe",
+  summary: "Get authenticated user",
   security: [{ bearerPlatformToken: [] }],
   responses: {
     200: {
