@@ -73,8 +73,7 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
     throw new HTTPException(401, { message: "Missing platform API token" });
   }
 
-  const envAdminToken =
-    c.env.WAZOO_PLATFORM_ADMIN_TOKEN || c.env.WAZOO_CONSOLE_ADMIN_TOKEN;
+  const envAdminToken = c.env.WAZOO_PLATFORM_ADMIN_TOKEN;
   if (envAdminToken && token === envAdminToken) {
     c.set("auth", {
       tokenId: "env_admin",
