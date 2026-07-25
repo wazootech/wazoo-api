@@ -73,6 +73,20 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
     throw new HTTPException(401, { message: "Missing platform API token" });
   }
 
+  const envAdminToken =
+    c.env.WAZOO_PLATFORM_ADMIN_TOKEN || c.env.WAZOO_CONSOLE_ADMIN_TOKEN;
+  if (envAdminToken && token === envAdminToken) {
+    c.set("auth", {
+      tokenId: "env_admin",
+      userUid: null,
+      scope:
+        "admin users.read users.write worlds.read worlds.write worlds.admin usage.read billing.read",
+      kind: "ADMIN",
+      expiresAt: null,
+    });
+    return await next();
+  }
+
   const { sha256Hex } = await import("./crypto");
   const hash = await sha256Hex(token);
   const database = db(c.env);
