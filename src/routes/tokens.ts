@@ -22,6 +22,7 @@ const listRoute = createRoute({
   path: "/v1/auth/api-tokens",
   tags: ["PlatformTokens"],
   operationId: "listPlatformTokens",
+  summary: "List platform tokens",
   security: [{ bearerPlatformToken: [] }],
   responses: {
     200: {
@@ -40,6 +41,7 @@ const createRouteDef = createRoute({
   path: "/v1/auth/api-tokens",
   tags: ["PlatformTokens"],
   operationId: "createPlatformToken",
+  summary: "Create platform token",
   security: [{ bearerPlatformToken: [] }],
   request: {
     body: {
@@ -74,6 +76,7 @@ const createNamedRoute = createRoute({
   path: "/v1/auth/api-tokens/{tokenName}",
   tags: ["PlatformTokens"],
   operationId: "createNamedPlatformToken",
+  summary: "Create named platform token",
   security: [{ bearerPlatformToken: [] }],
   request: {
     params: tokenNameParam,
@@ -98,6 +101,7 @@ const deleteRoute = createRoute({
   path: "/v1/auth/api-tokens/{tokenName}",
   tags: ["PlatformTokens"],
   operationId: "deletePlatformToken",
+  summary: "Revoke platform token",
   security: [{ bearerPlatformToken: [] }],
   request: { params: tokenNameParam },
   responses: {
@@ -115,6 +119,7 @@ const validateRoute = createRoute({
   path: "/v1/auth/api-tokens/validate",
   tags: ["PlatformTokens"],
   operationId: "validatePlatformToken",
+  summary: "Validate platform token",
   security: [{ bearerPlatformToken: [] }],
   responses: {
     200: {

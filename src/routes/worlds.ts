@@ -110,6 +110,7 @@ const listRoute = createRoute({
   path: "/v1/worlds",
   tags: ["Worlds"],
   operationId: "listWorlds",
+  summary: "List worlds",
   security: [{ bearerPlatformToken: [] }],
   request: { query: emailQuery },
   responses: {
@@ -125,6 +126,7 @@ const createRouteDef = createRoute({
   path: "/v1/worlds",
   tags: ["Worlds"],
   operationId: "createWorld",
+  summary: "Create world",
   security: [{ bearerPlatformToken: [] }],
   request: {
     body: {
@@ -170,6 +172,7 @@ const getRoute = createRoute({
   path: "/v1/worlds/{worldId}",
   tags: ["Worlds"],
   operationId: "getWorld",
+  summary: "Get world",
   security: [{ bearerPlatformToken: [] }],
   request: { params: worldIdParam, query: emailQuery },
   responses: {
@@ -195,6 +198,7 @@ const updateRoute = createRoute({
   path: "/v1/worlds/{worldId}",
   tags: ["Worlds"],
   operationId: "updateWorld",
+  summary: "Update world",
   security: [{ bearerPlatformToken: [] }],
   request: {
     params: worldIdParam,
@@ -227,6 +231,7 @@ const deleteRoute = createRoute({
   path: "/v1/worlds/{worldId}",
   tags: ["Worlds"],
   operationId: "deleteWorld",
+  summary: "Delete world",
   security: [{ bearerPlatformToken: [] }],
   request: { params: worldIdParam, query: emailQuery },
   responses: {
@@ -252,6 +257,7 @@ const undeleteRoute = createRoute({
   path: "/v1/worlds/{worldId}/undelete",
   tags: ["Worlds"],
   operationId: "undeleteWorld",
+  summary: "Undelete world",
   security: [{ bearerPlatformToken: [] }],
   request: { params: worldIdParam, query: emailQuery },
   responses: {
@@ -277,6 +283,7 @@ const syncRoute = createRoute({
   path: "/v1/worlds/{worldId}/sync",
   tags: ["Worlds"],
   operationId: "syncWorld",
+  summary: "Sync world",
   security: [{ bearerPlatformToken: [] }],
   request: { params: worldIdParam, query: emailQuery },
   responses: {
@@ -292,6 +299,7 @@ const listTokensRoute = createRoute({
   path: "/v1/worlds/{worldId}/auth/tokens",
   tags: ["WorldTokens"],
   operationId: "listWorldTokens",
+  summary: "List world tokens",
   security: [{ bearerPlatformToken: [] }],
   request: { params: worldIdParam, query: emailQuery },
   responses: {
@@ -307,6 +315,7 @@ const createTokenRoute = createRoute({
   path: "/v1/worlds/{worldId}/auth/tokens",
   tags: ["WorldTokens"],
   operationId: "createWorldToken",
+  summary: "Create world token",
   security: [{ bearerPlatformToken: [] }],
   request: {
     params: worldIdParam,
@@ -332,6 +341,7 @@ const deleteTokenRoute = createRoute({
   path: "/v1/worlds/{worldId}/auth/tokens/{tokenUid}",
   tags: ["WorldTokens"],
   operationId: "deleteWorldToken",
+  summary: "Revoke world token",
   security: [{ bearerPlatformToken: [] }],
   request: {
     params: worldIdParam.merge(
