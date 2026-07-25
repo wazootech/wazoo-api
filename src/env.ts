@@ -15,6 +15,7 @@ export type Bindings = {
   OTP_FROM_ADDRESS?: string;
   WORKOS_API_KEY?: string;
   WORKOS_CLIENT_ID?: string;
+  WAZOO_PLATFORM_ADMIN_TOKEN?: string;
   GOOGLE_SERVICE_ACCOUNT_KEY?: string;
   BETA_ALLOWLIST_SHEET_ID?: string;
 };

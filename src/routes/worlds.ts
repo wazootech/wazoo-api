@@ -26,7 +26,7 @@ import {
 } from "../lib/schemas";
 import { provisionWorldDatabase } from "../lib/turso";
 
-type WorldRow = {
+interface WorldRow extends Record<string, unknown> {
   uid: string;
   user_uid: string;
   world_id: string;
@@ -37,7 +37,7 @@ type WorldRow = {
   update_time?: string;
   delete_time?: string | null;
   expire_time?: string | null;
-};
+}
 
 function worldResource(row: WorldRow) {
   const restorable =
