@@ -35,6 +35,16 @@ Required runtime variables:
 - `API_BASE_URL`: public base URL for this service.
 - `WAZOO_ENV`: deployment environment label.
 
+Required for world database provisioning (Cloudflare Worker only):
+
+- `TURSO_ORG`: Turso organization slug.
+- `TURSO_GROUP`: Turso group name for new world databases.
+- `TURSO_PLATFORM_API_TOKEN`: Turso platform API token with permission to create
+  databases and issue auth tokens. This must be set as a Wrangler secret on the
+  deployed Worker. Without it, creating a new World returns "Turso provisioning
+  is not configured". See [CONTRIBUTING.md](CONTRIBUTING.md) for the full
+  end-to-end setup (Turso CLI install, token minting, and `wrangler secret put`).
+
 Optional Stripe variables:
 
 - `STRIPE_SECRET_KEY`

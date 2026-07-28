@@ -13,7 +13,7 @@ TURSO_DATABASE_URL = "libsql://wazoo-platform-prod-ethanthatonekid.aws-us-west-2
 WORLDS_API_URL = "https://worlds-api.wazoo.dev"
 WAZOO_ENV = "prod"
 TURSO_ORG = "ethanthatonekid"
-TURSO_GROUP = "fartlabs-cpu"
+TURSO_GROUP = "wazoo"
 STRIPE_PRICE_ID = ""
 
 [env.qa]
@@ -28,7 +28,7 @@ TURSO_DATABASE_URL = "libsql://wazoo-platform-qa-ethanthatonekid.aws-us-west-2.t
 WORLDS_API_URL = "https://worlds-api-qa.wazoo.dev"
 WAZOO_ENV = "qa"
 TURSO_ORG = "ethanthatonekid"
-TURSO_GROUP = "fartlabs-cpu"
+TURSO_GROUP = "wazoo"
 STRIPE_PRICE_ID = ""
 
 [observability]
