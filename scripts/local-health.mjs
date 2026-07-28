@@ -1,5 +1,5 @@
-// Local smoke test for wazoo-api
-// Usage: node scripts/local-smoke.mjs [baseUrl]
+// Local health test for wazoo-api
+// Usage: node scripts/local-health.mjs [baseUrl]
 //   Defaults to http://localhost:8787 for wrangler dev
 //   Set WAZOO_ADMIN_TOKEN env var for authenticated tests
 
@@ -59,7 +59,7 @@ function authHeaders() {
 
 // ── Start ──
 
-console.log(`\nWazoo API local smoke test`);
+console.log(`\nWazoo API local health test`);
 console.log(`  Base URL: ${BASE_URL}`);
 console.log(`  Admin token: ${ADMIN_TOKEN ? "set" : "NOT SET (auth tests skipped)"}\n`);
 
@@ -142,11 +142,11 @@ await test("POST /v1/users/me without email returns 400", async () => {
   await assertBadRequest(res);
 });
 
-// ── Authenticated smoke flow (requires admin token) ───
+// ── Authenticated health flow (requires admin token) ───
 
 if (ADMIN_TOKEN) {
-  const testEmail = `smoke-${Date.now()}@wazoo.dev`;
-  const testWorldId = `smoke-${Date.now()}`;
+  const testEmail = `health-${Date.now()}@wazoo.dev`;
+  const testWorldId = `health-${Date.now()}`;
 
   await test("GET /v1/users/me?email=... creates/returns user", async () => {
     const res = await fetch(
@@ -180,7 +180,7 @@ if (ADMIN_TOKEN) {
       body: JSON.stringify({
         ownerEmail: testEmail,
         worldId: testWorldId,
-        world: { displayName: "Smoke Test World" },
+        world: { displayName: "Health Test World" },
       }),
     });
     const body = await res.json();
@@ -227,7 +227,7 @@ if (ADMIN_TOKEN) {
         headers: authHeaders(),
         body: JSON.stringify({
           updateMask: "displayName",
-          world: { displayName: "Updated Smoke World" },
+          world: { displayName: "Updated Health World" },
         }),
       },
     );
@@ -240,7 +240,7 @@ if (ADMIN_TOKEN) {
       }
       throw new Error(`Unexpected status ${res.status}: ${JSON.stringify(body)}`);
     }
-    if (body.world?.displayName !== "Updated Smoke World")
+    if (body.world?.displayName !== "Updated Health World")
       throw new Error(`displayName not updated: ${body.world?.displayName}`);
   });
 
@@ -282,7 +282,7 @@ if (ADMIN_TOKEN) {
       throw new Error(`exp is not a number: ${typeof body.exp}`);
   });
 } else {
-  console.log("\n  (skipping authenticated smoke tests — set WAZOO_ADMIN_TOKEN)\n");
+  console.log("\n  (skipping authenticated health tests — set WAZOO_ADMIN_TOKEN)\n");
   passed += 9; // we skip 9 tests
 }
 
