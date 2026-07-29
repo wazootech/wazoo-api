@@ -34,6 +34,9 @@ Required runtime variables:
 - `WORLDS_API_ADMIN_KEY`: admin key accepted by `worlds-api`.
 - `API_BASE_URL`: public base URL for this service.
 - `WAZOO_ENV`: deployment environment label.
+- `WAZOO_PLATFORM_ADMIN_TOKEN`: global admin token used by health checks and
+  server-to-server admin calls. Must be seeded in the control-plane database.
+  See [CONTRIBUTING.md](CONTRIBUTING.md) for how to generate and seed it.
 
 Required for world database provisioning (Cloudflare Worker only):
 
@@ -50,6 +53,16 @@ Optional Stripe variables:
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PRICE_ID`
+
+## Health checks
+
+- Local: `npm run health:local`
+- QA: `npm run health:beta`
+
+Both require `WAZOO_PLATFORM_ADMIN_TOKEN` to be set. The scripts exercise the
+full private-beta flow: user provisioning, world CRUD, token lifecycle, chunk
+and quad import, search, SPARQL, usage/billing/limits, and soft delete. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions.
 
 ## Development
 
