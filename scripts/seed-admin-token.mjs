@@ -5,7 +5,7 @@ import { createClient } from "@libsql/client/web";
 
 const url = required("TURSO_DATABASE_URL");
 const authToken = required("TURSO_AUTH_TOKEN");
-const token = `wzp_${randomBytes(32).toString("base64url")}`;
+const token = process.env.WAZOO_PLATFORM_ADMIN_TOKEN ?? `wzp_${randomBytes(32).toString("base64url")}`;
 const hash = createHash("sha256").update(token).digest("hex");
 const scope = process.env.WAZOO_PLATFORM_ADMIN_TOKEN_SCOPE || "admin users.read users.write worlds.read worlds.write worlds.admin usage.read billing.read";
 const name = process.env.WAZOO_PLATFORM_ADMIN_TOKEN_NAME || "bootstrap-admin";
