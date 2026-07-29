@@ -8,16 +8,16 @@ const worldsBaseUrl = normalizeBaseUrl(
 );
 const adminToken =
   process.env.WAZOO_ADMIN_TOKEN ?? process.env.WAZOO_PLATFORM_TOKEN;
-const runId = process.env.WAZOO_SMOKE_RUN_ID ?? Date.now().toString(36);
-const email = process.env.WAZOO_SMOKE_EMAIL ?? `smoke+${runId}@wazoo.dev`;
+const runId = process.env.WAZOO_HEALTH_RUN_ID ?? Date.now().toString(36);
+const email = process.env.WAZOO_HEALTH_EMAIL ?? `health+${runId}@wazoo.dev`;
 const worldIds = [
-  process.env.WAZOO_SMOKE_WORLD ?? `smoke-${runId}`,
-  process.env.WAZOO_SMOKE_WORLD_2 ?? `smoke-${runId}-b`,
+  process.env.WAZOO_HEALTH_WORLD ?? `health-${runId}`,
+  process.env.WAZOO_HEALTH_WORLD_2 ?? `health-${runId}-b`,
 ];
 
 if (!adminToken) {
   fail(
-    "Set WAZOO_ADMIN_TOKEN to a global admin platform token before running the smoke test.",
+    "Set WAZOO_ADMIN_TOKEN to a global admin platform token before running the health test.",
   );
 }
 
@@ -54,7 +54,7 @@ try {
       method: "POST",
       body: {
         email,
-        metric: "smoke.requests",
+        metric: "health.requests",
         quantity: 1,
         unit: "request",
       },
@@ -82,7 +82,7 @@ try {
   await step("final soft-delete second world", () => deleteWorld(worldIds[1]));
 
   console.log(
-    `\nPrivate beta smoke test passed for user ${email} and worlds ${worldIds.join(", ")}`,
+    `\nPrivate beta health test passed for user ${email} and worlds ${worldIds.join(", ")}`,
   );
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
@@ -104,7 +104,7 @@ async function createWorld(worldId) {
     body: {
       ownerEmail: email,
       worldId,
-      world: { displayName: `Smoke World ${worldId}` },
+      world: { displayName: `Health World ${worldId}` },
     },
   });
   assert(
@@ -119,7 +119,7 @@ async function createWorldToken() {
     `/v1/worlds/${worldIds[0]}/auth/tokens?email=${encodeURIComponent(email)}`,
     {
       method: "POST",
-      body: { name: `smoke-${runId}` },
+      body: { name: `health-${runId}` },
     },
   );
   state.worldTokenUid = response.body.token.uid;
@@ -133,7 +133,7 @@ async function importChunks() {
     method: "POST",
     body: {
       contentType: "text/plain",
-      data: `smoke:alpha\tWazoo smoke alpha ${runId}\nsmoke:beta\tWazoo smoke beta ${runId}`,
+      data: `health:alpha\tWazoo health alpha ${runId}\nhealth:beta\tWazoo health beta ${runId}`,
     },
   });
   assert(response.body.imported.chunks === 2, "Chunk import count mismatch");
@@ -147,14 +147,14 @@ async function importQuads() {
       contentType: "application/json",
       data: JSON.stringify([
         {
-          subject: `urn:wazoo:smoke:${runId}:alpha`,
+          subject: `urn:wazoo:health:${runId}:alpha`,
           predicate: "http://schema.org/name",
           object: `Alpha ${runId}`,
         },
         {
-          subject: `urn:wazoo:smoke:${runId}:alpha`,
+          subject: `urn:wazoo:health:${runId}:alpha`,
           predicate: "http://schema.org/knows",
-          object: `urn:wazoo:smoke:${runId}:beta`,
+          object: `urn:wazoo:health:${runId}:beta`,
         },
       ]),
     },
@@ -177,7 +177,7 @@ async function exportChunks() {
     `/worlds/${worldIds[0]}/export?format=text/plain`,
   );
   assert(
-    String(response.body).includes(`Wazoo smoke alpha ${runId}`),
+    String(response.body).includes(`Wazoo health alpha ${runId}`),
     "Chunk export missing alpha text",
   );
   return response;
@@ -189,7 +189,7 @@ async function exportQuads() {
   );
   assert(
     response.body.quads.some(
-      (quad) => quad.subject === `urn:wazoo:smoke:${runId}:alpha`,
+      (quad) => quad.subject === `urn:wazoo:health:${runId}:alpha`,
     ),
     "Quad export missing alpha subject",
   );
@@ -200,7 +200,7 @@ async function sparqlSelect() {
   const response = await worldsRequest(`/worlds/${worldIds[0]}/sparql`, {
     method: "POST",
     body: {
-      query: `SELECT ?name WHERE { <urn:wazoo:smoke:${runId}:alpha> <http://schema.org/name> ?name } LIMIT 5`,
+      query: `SELECT ?name WHERE { <urn:wazoo:health:${runId}:alpha> <http://schema.org/name> ?name } LIMIT 5`,
     },
   });
   assert(
@@ -216,7 +216,7 @@ async function sparqlAsk() {
   const response = await worldsRequest(`/worlds/${worldIds[0]}/sparql`, {
     method: "POST",
     body: {
-      query: `ASK WHERE { <urn:wazoo:smoke:${runId}:alpha> <http://schema.org/knows> <urn:wazoo:smoke:${runId}:beta> }`,
+      query: `ASK WHERE { <urn:wazoo:health:${runId}:alpha> <http://schema.org/knows> <urn:wazoo:health:${runId}:beta> }`,
     },
   });
   assert(response.body.boolean === true, "SPARQL ASK was not true");
@@ -312,6 +312,6 @@ function normalizeBaseUrl(value) {
 }
 
 function fail(message) {
-  console.error(`\nPrivate beta smoke test failed: ${message}`);
+  console.error(`\nPrivate beta health test failed: ${message}`);
   process.exit(1);
 }
