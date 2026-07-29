@@ -63,7 +63,7 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
 
     const token = createToken("wzp");
     const tokenId = id();
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     await database
       .prepare(
         "INSERT INTO platform_api_tokens (uid, user_uid, name, token_hash, scope, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
