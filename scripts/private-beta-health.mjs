@@ -15,17 +15,21 @@ const worldIds = [
   process.env.WAZOO_HEALTH_WORLD_2 ?? `health-${runId}-b`,
 ];
 
-if (!adminToken) {
-  fail(
-    "Set WAZOO_ADMIN_TOKEN to a global admin platform token before running the health test.",
-  );
-}
-
 const state = { userUid: null, worldTokenUid: null, worldToken: null };
 
 try {
   await step("platform health", () => apiRequest("/health", { auth: false }));
   await step("worlds health", () => worldsRequest("/health", { auth: false }));
+
+  if (!adminToken) {
+    console.log(
+      "\nAdmin token not set; skipping authenticated health tests. " +
+        "Set WAZOO_ADMIN_TOKEN to run the full private-beta health test.",
+    );
+    console.log("\nPrivate beta health test passed (unauthenticated checks only).");
+    process.exit(0);
+  }
+
   await step("ensure test user", ensureUser);
   await step("create first world", () => createWorld(worldIds[0]));
   await step("create second world", () => createWorld(worldIds[1]));
