@@ -1,139 +1,59 @@
-# Contributing to Wazoo Platform API
+# Contributing to wazoo-api
 
-This guide covers how to set up the repo for development and how operators can
-provision the secrets required for remote environments (QA and production).
+## Local development setup
 
-## Development setup
+1. Install dependencies:
+   ```sh
+   npm install
+   ```
 
-```sh
-npm install
-cp .dev.vars.example .dev.vars
-# Edit .dev.vars with your local values
-npm run dev
-```
+2. Copy the local dev vars template:
+   ```sh
+   cp .dev.vars.example .dev.vars
+   ```
 
-Run checks before committing:
+3. Fill in `.dev.vars` with real values.
 
-```sh
-npm run format:check
-npm run typecheck
-npm test
-```
+4. Create a local control-plane database and seed a global admin token:
+   ```sh
+   npm run launch:create-control-db
+   npm run launch:apply-schema
+   WAZOO_PLATFORM_ADMIN_TOKEN_NAME="local-admin" \
+   WAZOO_PLATFORM_ADMIN_TOKEN_SCOPE="admin users.read users.write worlds.read worlds.write worlds.admin usage.read billing.read" \
+   npm run launch:seed-admin
+   ```
 
-## Secrets
+5. Save the printed `wzp_...` token into `.dev.vars` as `WAZOO_PLATFORM_ADMIN_TOKEN`.
 
-Some configuration values are intentionally **not** in `wrangler.toml` and must
-be managed as Wrangler secrets.
+6. Start the local dev server:
+   ```sh
+   npm run dev
+   ```
 
-### `TURSO_PLATFORM_API_TOKEN`
+7. Run checks:
+   ```sh
+   npm run typecheck
+   npm run test
+   npm run format:check
+   ```
 
-This token is required for the `/v1/worlds` create flow. Without it, the
-endpoint returns:
+## Health checks
 
-```text
-Turso provisioning is not configured
-```
+- Local: `npm run health:local`
+- QA: `npm run health:beta`
 
-The token must have permission to create databases and issue full-access auth
-tokens under the Turso organization configured in `wrangler.toml`.
+Both require `WAZOO_PLATFORM_ADMIN_TOKEN` to be set.
 
-#### Creating and uploading the token
+## Environment files
 
-On Windows, the Turso CLI does not ship a native binary. Install it inside WSL:
+- `.dev.vars` — local development secrets (gitignored).
+- `.env.qa` — QA reference values (gitignored).
+- `.env.production` — production reference values (gitignored).
+- `.dev.vars.example`, `.env.qa.example`, `.env.production.example` — committed templates.
 
-```bash
-curl -sSfL https://get.tur.so/install.sh | bash
-```
+## Pull request workflow
 
-Authenticate:
-
-```bash
-export PATH="$HOME/.turso:$PATH"
-turso auth login
-```
-
-This opens a browser to complete OAuth. After login succeeds, mint an
-organization-scoped token for the target environment:
-
-```bash
-export PATH="$HOME/.turso:$PATH"
-turso auth api-tokens mint wazoo-api-qa --org ethanthatonekid
-```
-
-The example uses `ethanthatonekid`; replace it with the actual Turso
-organization slug. New world databases are created in the Turso group
-configured in `wrangler.toml` (`wazoo` by default).
-
-Upload the emitted token to the QA Worker:
-
-```powershell
-# PowerShell: pipe the minted token directly into Wrangler
-wsl -e bash -c '
-  export PATH="$HOME/.turso:$PATH"
-  turso auth api-tokens mint wazoo-api-qa --org ethanthatonekid
-' | npx wrangler secret put --env qa TURSO_PLATFORM_API_TOKEN
-```
-
-For production, replace `--env qa` with the default environment and use a
-distinct token name such as `wazoo-api-prod`.
-
-#### Verifying the secret
-
-```sh
-npx wrangler secret list --env qa
-```
-
-`TURSO_PLATFORM_API_TOKEN` should appear in the output.
-
-### Other secrets
-
-The following secrets are also required for QA/production and are documented in
-`wrangler.toml` and the README:
-
-- `TURSO_AUTH_TOKEN`
-- `WORLDS_API_ADMIN_KEY`: must match the `WORLDS_ADMIN_KEY` secret in the
-  `worlds-api` QA/production Worker. This key is used when provisioning a new
-  world in the data plane. If it is missing or mismatched, world creation fails
-  with `WORLD_PROVISIONING_FAILED` / "Missing or invalid API key".
-- `WORKOS_API_KEY`
-- `WORKOS_CLIENT_ID`
-- `WAZOO_PLATFORM_ADMIN_TOKEN`
-- `STRIPE_SECRET_KEY` (billing flows)
-- `STRIPE_WEBHOOK_SECRET` (billing flows)
-- `GOOGLE_SERVICE_ACCOUNT_KEY` (private beta allowlist sync)
-
-## Deployment
-
-Pushes to `main` trigger CI (see `.github/workflows/ci.yml`). Operators can also
-deploy manually:
-
-```sh
-# QA
-npm run deploy -- --env qa
-
-# Production
-npm run deploy
-```
-
-## Control-plane schema
-
-Apply `schema.sql` to the control-plane libSQL database for the target
-environment:
-
-```sh
-turso db shell <control-database-name> < schema.sql
-```
-
-## Data-plane schema
-
-The `worlds-api` service owns its own libSQL database (`worlds-api-qa` /
-`worlds-api-prod`). Its `schema.sql` must be applied before any worlds can be
-provisioned. If it is missing, `wazoo-api` returns
-`WORLD_PROVISIONING_FAILED` / "no such table: worlds_metadata".
-
-Apply it from the `worlds-api` repository:
-
-```sh
-cd ../worlds-api
-turso db shell worlds-api-qa < schema.sql
-```
+1. Create a feature worktree from a clean `main` baseline.
+2. Make focused, atomic commits.
+3. Run `npm run format:check`, `npm run typecheck`, and `npm test` before pushing.
+4. Open a PR and wait for CI to pass.

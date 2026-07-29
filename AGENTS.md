@@ -11,6 +11,6 @@ This repository contains the Wazoo API service.
 - Load required environment variables before commands that contact remote
   services.
 - Run typecheck, tests, or the narrowest service health check for API behavior
-  changes.
+  changes. Health checks require `WAZOO_PLATFORM_ADMIN_TOKEN`.
 - Treat schema, auth, and launch-control changes as high impact; document the
   verification path before finishing.

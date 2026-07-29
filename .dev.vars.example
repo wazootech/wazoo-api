@@ -1,12 +1,35 @@
+# Local development variables for wazoo-api
+# Copy this file to `.dev.vars` and fill in real values.
+
+# Platform API base URL used by health scripts and local wrangler dev.
 API_BASE_URL="http://localhost:8787"
+
+# Control-plane libSQL database.
 TURSO_DATABASE_URL="libsql://replace-me.turso.io"
 TURSO_AUTH_TOKEN="replace_me"
+
+# Turso organization/group used by launch scripts to provision databases.
 TURSO_ORG="your-turso-org"
 TURSO_GROUP="your-turso-group"
+
+# Turso platform API token with permission to create databases and issue auth tokens.
 TURSO_PLATFORM_API_TOKEN="your-turso-platform-api-token"
+
+# Data-plane API used for world storage/query/import/export.
 WORLDS_API_URL="http://localhost:8081"
+
+# Admin key that worlds-api accepts for provisioning and API-key management.
+# Must match the WORLDS_ADMIN_KEY secret configured on the worlds-api Worker.
 WORLDS_API_ADMIN_KEY="replace_me"
+
+# Deployment environment label.
 WAZOO_ENV="dev"
+
+# Global platform admin token. Used by local health checks and seed scripts.
+# Generate with: npm run launch:seed-admin
+WAZOO_PLATFORM_ADMIN_TOKEN="replace_me"
+
+# Optional Stripe configuration.
 STRIPE_SECRET_KEY="sk_test_replace_me"
 STRIPE_WEBHOOK_SECRET="whsec_replace_me"
 STRIPE_PRICE_ID="price_replace_me"

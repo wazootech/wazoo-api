@@ -6,8 +6,7 @@ const apiBaseUrl = normalizeBaseUrl(
 const worldsBaseUrl = normalizeBaseUrl(
   process.env.WORLDS_API_URL ?? "https://worlds-api.wazoo.dev",
 );
-const adminToken =
-  process.env.WAZOO_ADMIN_TOKEN ?? process.env.WAZOO_PLATFORM_TOKEN;
+const adminToken = required("WAZOO_PLATFORM_ADMIN_TOKEN");
 const runId = process.env.WAZOO_HEALTH_RUN_ID ?? Date.now().toString(36);
 const email = process.env.WAZOO_HEALTH_EMAIL ?? `health+${runId}@wazoo.dev`;
 const worldIds = [
@@ -20,15 +19,6 @@ const state = { userUid: null, worldTokenUid: null, worldToken: null };
 try {
   await step("platform health", () => apiRequest("/health", { auth: false }));
   await step("worlds health", () => worldsRequest("/health", { auth: false }));
-
-  if (!adminToken) {
-    console.log(
-      "\nAdmin token not set; skipping authenticated health tests. " +
-        "Set WAZOO_ADMIN_TOKEN to run the full private-beta health test.",
-    );
-    console.log("\nPrivate beta health test passed (unauthenticated checks only).");
-    process.exit(0);
-  }
 
   await step("ensure test user", ensureUser);
   await step("create first world", () => createWorld(worldIds[0]));
@@ -318,4 +308,12 @@ function normalizeBaseUrl(value) {
 function fail(message) {
   console.error(`\nPrivate beta health test failed: ${message}`);
   process.exit(1);
+}
+
+function required(name) {
+  const value = process.env[name];
+  if (!value) {
+    fail(`Missing required environment variable: ${name}`);
+  }
+  return value;
 }

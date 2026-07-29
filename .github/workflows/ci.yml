@@ -71,7 +71,7 @@ jobs:
         env:
           API_BASE_URL: https://api-qa.wazoo.dev
           WORLDS_API_URL: https://worlds-api-qa.wazoo.dev
-          WAZOO_ADMIN_TOKEN: ${{ secrets.WAZOO_ADMIN_TOKEN }}
+          WAZOO_PLATFORM_ADMIN_TOKEN: ${{ secrets.WAZOO_PLATFORM_ADMIN_TOKEN }}
 
   deploy-prod:
     if: github.event_name == 'workflow_dispatch'

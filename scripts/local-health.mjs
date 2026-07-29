@@ -1,11 +1,19 @@
 // Local health test for wazoo-api
 // Usage: node scripts/local-health.mjs [baseUrl]
 //   Defaults to http://localhost:8787 for wrangler dev
-//   Set WAZOO_ADMIN_TOKEN env var for authenticated tests
+//   Set WAZOO_PLATFORM_ADMIN_TOKEN env var for authenticated tests
 
 const BASE_URL = process.argv[2] ?? "http://localhost:8787";
-const ADMIN_TOKEN = process.env.WAZOO_ADMIN_TOKEN ?? "";
+const ADMIN_TOKEN = required("WAZOO_PLATFORM_ADMIN_TOKEN");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function required(name) {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
 
 let passed = 0;
 let failed = 0;
@@ -52,9 +60,10 @@ async function assertNotFound(res) {
 }
 
 function authHeaders() {
-  return ADMIN_TOKEN
-    ? { Authorization: `Bearer ${ADMIN_TOKEN}`, "Content-Type": "application/json" }
-    : { "Content-Type": "application/json" };
+  return {
+    Authorization: `Bearer ${ADMIN_TOKEN}`,
+    "Content-Type": "application/json",
+  };
 }
 
 // ── Start ──
@@ -101,11 +110,6 @@ await test("GET /v1/worlds with invalid token returns 401", async () => {
 // ── Schema validation (no auth needed for these, auth middleware catches first) ───
 
 await test("POST /v1/worlds without body returns 400", async () => {
-  if (!ADMIN_TOKEN) {
-    console.log("        SKIP (no admin token)");
-    passed++;
-    return;
-  }
   const res = await fetch(`${BASE_URL}/v1/worlds`, {
     method: "POST",
     headers: authHeaders(),
@@ -114,11 +118,6 @@ await test("POST /v1/worlds without body returns 400", async () => {
 });
 
 await test("POST /v1/worlds with invalid worldId returns 400", async () => {
-  if (!ADMIN_TOKEN) {
-    console.log("        SKIP (no admin token)");
-    passed++;
-    return;
-  }
   const res = await fetch(`${BASE_URL}/v1/worlds`, {
     method: "POST",
     headers: authHeaders(),
@@ -131,11 +130,6 @@ await test("POST /v1/worlds with invalid worldId returns 400", async () => {
 });
 
 await test("POST /v1/users/me without email returns 400", async () => {
-  if (!ADMIN_TOKEN) {
-    console.log("        SKIP (no admin token)");
-    passed++;
-    return;
-  }
   const res = await fetch(`${BASE_URL}/v1/users/me`, {
     headers: authHeaders(),
   });
@@ -144,11 +138,10 @@ await test("POST /v1/users/me without email returns 400", async () => {
 
 // ── Authenticated health flow (requires admin token) ───
 
-if (ADMIN_TOKEN) {
-  const testEmail = `health-${Date.now()}@wazoo.dev`;
-  const testWorldId = `health-${Date.now()}`;
+const testEmail = `health-${Date.now()}@wazoo.dev`;
+const testWorldId = `health-${Date.now()}`;
 
-  await test("GET /v1/users/me?email=... creates/returns user", async () => {
+await test("GET /v1/users/me?email=... creates/returns user", async () => {
     const res = await fetch(
       `${BASE_URL}/v1/users/me?email=${encodeURIComponent(testEmail)}`,
       { headers: authHeaders() },
@@ -281,10 +274,6 @@ if (ADMIN_TOKEN) {
     if (typeof body.exp !== "number")
       throw new Error(`exp is not a number: ${typeof body.exp}`);
   });
-} else {
-  console.log("\n  (skipping authenticated health tests — set WAZOO_ADMIN_TOKEN)\n");
-  passed += 9; // we skip 9 tests
-}
 
 // ── Results ───
 

@@ -1,8 +1,8 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { AppEnv } from "../env";
-import { db } from "../lib/db";
-import { requireScope, respond } from "../lib/http";
+import { db, id, now } from "../lib/db";
+import { isAdmin, requireScope, respond } from "../lib/http";
 import { UserSchema } from "../lib/schemas";
 
 const route = createRoute({
@@ -35,8 +35,10 @@ const route = createRoute({
 export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
   app.openapi(route, async (c) => {
     requireScope(c, "users.read");
-    const userUid = c.var.auth.userUid;
-    if (!userUid) {
+    const email = c.req.query("email");
+    const auth = c.var.auth;
+
+    if (!auth.userUid && !(isAdmin(c) && email)) {
       return respond(
         c,
         {
@@ -50,11 +52,12 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
     }
 
     const database = db(c.env);
+    const identifier = auth.userUid ?? email;
     const existing = await database
       .prepare(
-        "SELECT uid, email, display_name, create_time FROM users WHERE uid = ?",
+        "SELECT uid, email, display_name, create_time FROM users WHERE uid = ? OR email = ?",
       )
-      .bind(userUid)
+      .bind(identifier, identifier?.toLowerCase())
       .first<{
         uid: string;
         email: string;
@@ -72,6 +75,31 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
           createTime: existing.create_time,
         },
       });
+    }
+
+    if (isAdmin(c) && email) {
+      const uid = id();
+      const createTime = now();
+      const displayName = email.split("@")[0];
+      await database
+        .prepare(
+          "INSERT INTO users (uid, email, display_name, state, create_time) VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(uid, email.toLowerCase(), displayName, "active", createTime)
+        .run();
+      return respond(
+        c,
+        {
+          user: {
+            uid,
+            email,
+            displayName,
+            state: "ACTIVE",
+            createTime,
+          },
+        },
+        201,
+      );
     }
 
     return respond(
