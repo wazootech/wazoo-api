@@ -28,6 +28,36 @@ export type AuthContext = {
   expiresAt: string | null;
 };
 
+export function bindingsFromProcessEnv(): Bindings {
+  const keys: (keyof Bindings)[] = [
+    "TURSO_DATABASE_URL",
+    "TURSO_AUTH_TOKEN",
+    "WAZOO_ENV",
+    "API_BASE_URL",
+    "WORLDS_API_URL",
+    "WORLDS_API_ADMIN_KEY",
+    "TURSO_ORG",
+    "TURSO_GROUP",
+    "TURSO_PLATFORM_API_TOKEN",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_PRICE_ID",
+    "RESEND_API_KEY",
+    "OTP_FROM_ADDRESS",
+    "WORKOS_API_KEY",
+    "WORKOS_CLIENT_ID",
+    "WAZOO_PLATFORM_ADMIN_TOKEN",
+    "GOOGLE_SERVICE_ACCOUNT_KEY",
+    "BETA_ALLOWLIST_SHEET_ID",
+  ];
+  const env: Record<string, string | undefined> = {};
+  for (const key of keys) {
+    const value = process.env[key];
+    if (value !== undefined) env[key] = value;
+  }
+  return env as Bindings;
+}
+
 export type AppEnv = {
   Bindings: Bindings;
   Variables: {
