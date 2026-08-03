@@ -199,4 +199,21 @@ describe("platform token scopes (wazoo-api#13 / wazoo-api#14)", () => {
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("PERMISSION_DENIED");
   });
+
+  it("returns 403 NOT_ALLOWLISTED for non-approved email on login", async () => {
+    const res = await api(
+      "/v1/auth/login",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "unapproved-user@example.com" }),
+      },
+      env,
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as {
+      error: { code: string; message: string };
+    };
+    expect(body.error.code).toBe("NOT_ALLOWLISTED");
+  });
 });
