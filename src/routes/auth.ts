@@ -108,7 +108,17 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
     }
 
     if (!approved.has(email)) {
-      return c.json({ ok: true });
+      return respond(
+        c,
+        {
+          error: {
+            code: "NOT_ALLOWLISTED",
+            message:
+              "Email is not approved for the Wazoo Private Beta. Please request access to join.",
+          },
+        },
+        403,
+      );
     }
 
     const apiKey = c.env.WORKOS_API_KEY;
