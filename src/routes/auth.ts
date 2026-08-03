@@ -6,9 +6,7 @@ import { db, id } from "../lib/db";
 import { rateLimit } from "../lib/ratelimit";
 import { getApprovedEmails } from "../lib/beta-allowlist";
 import { requireAuth, requireScope, respond } from "../lib/http";
-
-const defaultPlatformScopes =
-  "users.read worlds.read worlds.write usage.read billing.read";
+import { SESSION_DEFAULT_SCOPES } from "../lib/scopes";
 
 export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
   app.post("/v1/auth/workos-session", async (c) => {
@@ -75,7 +73,7 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
         userUid,
         `console-session-${Date.now()}`,
         await sha256Hex(token),
-        defaultPlatformScopes,
+        SESSION_DEFAULT_SCOPES,
         expiresAt,
       )
       .run();
@@ -246,7 +244,7 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
         userUid,
         `login-${Date.now()}`,
         await sha256Hex(token),
-        defaultPlatformScopes,
+        SESSION_DEFAULT_SCOPES,
         null,
       )
       .run();

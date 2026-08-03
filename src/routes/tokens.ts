@@ -5,6 +5,7 @@ import type { AppEnv } from "../env";
 import { createToken, sha256Hex } from "../lib/crypto";
 import { all, db, id } from "../lib/db";
 import { isAdmin, requireScope, resolveUser, respond } from "../lib/http";
+import { TOKEN_DEFAULT_SCOPES } from "../lib/scopes";
 import {
   PlatformTokenSchema,
   PlatformTokenCreateRequestSchema,
@@ -13,9 +14,6 @@ import {
   PlatformTokenValidateResponseSchema,
   tokenNameParam,
 } from "../lib/schemas";
-
-const defaultPlatformScopes =
-  "users.read worlds.read worlds.write usage.read billing.read";
 
 const listRoute = createRoute({
   method: "get",
@@ -208,7 +206,7 @@ async function createPlatformToken(
   name: string,
   body: { scope?: string; expiresAt?: string },
 ) {
-  const scope = body.scope ?? defaultPlatformScopes;
+  const scope = body.scope ?? TOKEN_DEFAULT_SCOPES;
   if (scope.split(/\s+/).includes("admin")) {
     return respond(
       c,
