@@ -11,6 +11,7 @@ const route = createRoute({
   tags: ["Users"],
   operationId: "getUserMe",
   summary: "Get authenticated user",
+  "x-mint": { metadata: { title: "Get authenticated user" } },
   security: [{ bearerPlatformToken: [] }],
   responses: {
     200: {

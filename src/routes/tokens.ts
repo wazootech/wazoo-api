@@ -21,6 +21,7 @@ const listRoute = createRoute({
   tags: ["PlatformTokens"],
   operationId: "listPlatformTokens",
   summary: "List platform tokens",
+  "x-mint": { metadata: { title: "List platform tokens" } },
   security: [{ bearerPlatformToken: [] }],
   responses: {
     200: {
@@ -40,6 +41,7 @@ const createRouteDef = createRoute({
   tags: ["PlatformTokens"],
   operationId: "createPlatformToken",
   summary: "Create platform token",
+  "x-mint": { metadata: { title: "Create platform token" } },
   security: [{ bearerPlatformToken: [] }],
   request: {
     body: {
@@ -75,6 +77,7 @@ const createNamedRoute = createRoute({
   tags: ["PlatformTokens"],
   operationId: "createNamedPlatformToken",
   summary: "Create named platform token",
+  "x-mint": { metadata: { title: "Create named platform token" } },
   security: [{ bearerPlatformToken: [] }],
   request: {
     params: tokenNameParam,
@@ -100,6 +103,7 @@ const deleteRoute = createRoute({
   tags: ["PlatformTokens"],
   operationId: "deletePlatformToken",
   summary: "Revoke platform token",
+  "x-mint": { metadata: { title: "Revoke platform token" } },
   security: [{ bearerPlatformToken: [] }],
   request: { params: tokenNameParam },
   responses: {
@@ -118,6 +122,7 @@ const validateRoute = createRoute({
   tags: ["PlatformTokens"],
   operationId: "validatePlatformToken",
   summary: "Validate platform token",
+  "x-mint": { metadata: { title: "Validate platform token" } },
   security: [{ bearerPlatformToken: [] }],
   responses: {
     200: {

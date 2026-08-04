@@ -9,6 +9,7 @@ const route = createRoute({
   tags: ["Health"],
   operationId: "getHealth",
   summary: "Get health",
+  "x-mint": { metadata: { title: "Get health" } },
   responses: {
     200: {
       description: "Service is healthy",

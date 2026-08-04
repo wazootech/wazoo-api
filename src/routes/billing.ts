@@ -20,6 +20,7 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
       tags: ["Billing"],
       operationId: "getWorldBilling",
       summary: "Get world billing",
+      "x-mint": { metadata: { title: "Get world billing" } },
       security: [{ bearerPlatformToken: [] }],
       request: {
         params: worldIdParam,
@@ -66,6 +67,7 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
       tags: ["Billing"],
       operationId: "listWorldInvoices",
       summary: "List world invoices",
+      "x-mint": { metadata: { title: "List world invoices" } },
       security: [{ bearerPlatformToken: [] }],
       request: {
         params: worldIdParam,
@@ -99,6 +101,7 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
       tags: ["Billing"],
       operationId: "openWorldBillingPortal",
       summary: "Open billing portal",
+      "x-mint": { metadata: { title: "Open billing portal" } },
       security: [{ bearerPlatformToken: [] }],
       request: {
         params: worldIdParam,

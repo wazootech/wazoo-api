@@ -111,6 +111,7 @@ const listRoute = createRoute({
   tags: ["Worlds"],
   operationId: "listWorlds",
   summary: "List worlds",
+  "x-mint": { metadata: { title: "List worlds" } },
   security: [{ bearerPlatformToken: [] }],
   request: { query: emailQuery },
   responses: {
@@ -127,6 +128,7 @@ const createRouteDef = createRoute({
   tags: ["Worlds"],
   operationId: "createWorld",
   summary: "Create world",
+  "x-mint": { metadata: { title: "Create world" } },
   security: [{ bearerPlatformToken: [] }],
   request: {
     body: {
@@ -173,6 +175,7 @@ const getRoute = createRoute({
   tags: ["Worlds"],
   operationId: "getWorld",
   summary: "Get world",
+  "x-mint": { metadata: { title: "Get world" } },
   security: [{ bearerPlatformToken: [] }],
   request: { params: worldIdParam, query: emailQuery },
   responses: {
@@ -199,6 +202,7 @@ const updateRoute = createRoute({
   tags: ["Worlds"],
   operationId: "updateWorld",
   summary: "Update world",
+  "x-mint": { metadata: { title: "Update world" } },
   security: [{ bearerPlatformToken: [] }],
   request: {
     params: worldIdParam,
@@ -232,6 +236,7 @@ const deleteRoute = createRoute({
   tags: ["Worlds"],
   operationId: "deleteWorld",
   summary: "Delete world",
+  "x-mint": { metadata: { title: "Delete world" } },
   security: [{ bearerPlatformToken: [] }],
   request: { params: worldIdParam, query: emailQuery },
   responses: {
@@ -258,6 +263,7 @@ const undeleteRoute = createRoute({
   tags: ["Worlds"],
   operationId: "undeleteWorld",
   summary: "Undelete world",
+  "x-mint": { metadata: { title: "Undelete world" } },
   security: [{ bearerPlatformToken: [] }],
   request: { params: worldIdParam, query: emailQuery },
   responses: {
@@ -284,6 +290,7 @@ const syncRoute = createRoute({
   tags: ["Worlds"],
   operationId: "syncWorld",
   summary: "Sync world",
+  "x-mint": { metadata: { title: "Sync world" } },
   security: [{ bearerPlatformToken: [] }],
   request: { params: worldIdParam, query: emailQuery },
   responses: {
@@ -300,6 +307,7 @@ const listTokensRoute = createRoute({
   tags: ["WorldTokens"],
   operationId: "listWorldTokens",
   summary: "List world tokens",
+  "x-mint": { metadata: { title: "List world tokens" } },
   security: [{ bearerPlatformToken: [] }],
   request: { params: worldIdParam, query: emailQuery },
   responses: {
@@ -316,6 +324,7 @@ const createTokenRoute = createRoute({
   tags: ["WorldTokens"],
   operationId: "createWorldToken",
   summary: "Create world token",
+  "x-mint": { metadata: { title: "Create world token" } },
   security: [{ bearerPlatformToken: [] }],
   request: {
     params: worldIdParam,
@@ -342,6 +351,7 @@ const deleteTokenRoute = createRoute({
   tags: ["WorldTokens"],
   operationId: "deleteWorldToken",
   summary: "Revoke world token",
+  "x-mint": { metadata: { title: "Revoke world token" } },
   security: [{ bearerPlatformToken: [] }],
   request: {
     params: worldIdParam.merge(
