@@ -76,20 +76,6 @@ export const UpdateWorldBodySchema = z
   })
   .openapi("UpdateWorldRequest");
 
-export const SyncReportSchema = z
-  .object({
-    status: z.enum(["OK"]),
-    actions: z.array(z.string()),
-    warnings: z.array(z.string()),
-    errors: z.array(z.string()),
-  })
-  .openapi("SyncReport");
-
-export const SyncWorldResponseSchema = z.object({
-  world: WorldSchema,
-  syncReport: SyncReportSchema,
-});
-
 export const PlatformTokenSchema = z
   .object({
     uid: z.string(),
