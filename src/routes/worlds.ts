@@ -17,7 +17,6 @@ import {
   UpdateWorldBodySchema,
   WorldListSchema,
   WorldSingleSchema,
-  SyncWorldResponseSchema,
   WorldTokenListSchema,
   WorldTokenCreateRequestSchema,
   WorldTokenSingleResponseSchema,
@@ -280,23 +279,6 @@ const undeleteRoute = createRoute({
           }),
         },
       },
-    },
-  },
-});
-
-const syncRoute = createRoute({
-  method: "post",
-  path: "/v1/worlds/{worldId}/sync",
-  tags: ["Worlds"],
-  operationId: "syncWorld",
-  summary: "Sync world",
-  "x-mint": { metadata: { title: "Sync world" } },
-  security: [{ bearerPlatformToken: [] }],
-  request: { params: worldIdParam, query: emailQuery },
-  responses: {
-    200: {
-      description: "Sync report",
-      content: { "application/json": { schema: SyncWorldResponseSchema } },
     },
   },
 });
@@ -640,18 +622,6 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
         .bind(existing.uid),
     );
     return respond(c, { world: row ? worldResource(row) : null });
-  });
-
-  app.openapi(syncRoute, async (c) => {
-    requireScope(c, "worlds.admin");
-    const query = c.req.valid("query");
-    const user = await currentUser(c, query.email, query.email);
-    const existing = await worldForUser(c, user.uid, c.req.param("worldId"));
-    if (!existing) return notFound(c);
-    return respond(c, {
-      world: worldResource(existing),
-      syncReport: { status: "OK", actions: [], warnings: [], errors: [] },
-    });
   });
 
   app.openapi(listTokensRoute, async (c) => {
