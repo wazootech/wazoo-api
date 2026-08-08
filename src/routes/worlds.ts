@@ -46,6 +46,7 @@ function worldResource(row: WorldRow) {
     name: `worlds/${row.world_id}`,
     uid: row.uid,
     worldId: row.world_id,
+    worldUid: row.worlds_api_uid ?? undefined,
     displayName: row.display_name,
     region: row.region,
     state: row.state.toUpperCase(),

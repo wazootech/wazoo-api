@@ -14,7 +14,7 @@ const worldIds = [
   process.env.WAZOO_HEALTH_WORLD_2 ?? `health-${runId}-b`,
 ];
 
-const state = { userUid: null, worldTokenUid: null, worldToken: null };
+const state = { userUid: null, worldUid: null, worldTokenUid: null, worldToken: null };
 
 try {
   await step("platform health", () => apiRequest("/health", { auth: false }));
@@ -28,12 +28,6 @@ try {
   );
   await step("get world", () =>
     apiRequest(`/v1/worlds/${worldIds[0]}?email=${encodeURIComponent(email)}`),
-  );
-  await step("sync world", () =>
-    apiRequest(
-      `/v1/worlds/${worldIds[0]}/sync?email=${encodeURIComponent(email)}`,
-      { method: "POST" },
-    ),
   );
   await step("create world token", createWorldToken);
   await step("import chunks", importChunks);
@@ -105,6 +99,7 @@ async function createWorld(worldId) {
     response.body.world.worldId === worldId,
     `World ${worldId} was not created`,
   );
+  if (response.body.world.worldUid) state.worldUid = response.body.world.worldUid;
   return response;
 }
 
@@ -123,7 +118,7 @@ async function createWorldToken() {
 }
 
 async function importChunks() {
-  const response = await worldsRequest(`/worlds/${worldIds[0]}/import`, {
+  const response = await worldsRequest(`/worlds/${state.worldUid}/import`, {
     method: "POST",
     body: {
       contentType: "text/plain",
@@ -135,7 +130,7 @@ async function importChunks() {
 }
 
 async function importQuads() {
-  const response = await worldsRequest(`/worlds/${worldIds[0]}/import`, {
+  const response = await worldsRequest(`/worlds/${state.worldUid}/import`, {
     method: "POST",
     body: {
       contentType: "application/json",
@@ -158,7 +153,7 @@ async function importQuads() {
 }
 
 async function searchWorld() {
-  const response = await worldsRequest(`/worlds/${worldIds[0]}/search`, {
+  const response = await worldsRequest(`/worlds/${state.worldUid}/search`, {
     method: "POST",
     body: { query: `alpha ${runId}`, limit: 5 },
   });
@@ -168,7 +163,7 @@ async function searchWorld() {
 
 async function exportChunks() {
   const response = await worldsRequest(
-    `/worlds/${worldIds[0]}/export?format=text/plain`,
+    `/worlds/${state.worldUid}/export?format=text/plain`,
   );
   assert(
     String(response.body).includes(`Wazoo health alpha ${runId}`),
@@ -179,7 +174,7 @@ async function exportChunks() {
 
 async function exportQuads() {
   const response = await worldsRequest(
-    `/worlds/${worldIds[0]}/export?format=application/json`,
+    `/worlds/${state.worldUid}/export?format=application/json`,
   );
   assert(
     response.body.quads.some(
@@ -191,7 +186,7 @@ async function exportQuads() {
 }
 
 async function sparqlSelect() {
-  const response = await worldsRequest(`/worlds/${worldIds[0]}/sparql`, {
+  const response = await worldsRequest(`/worlds/${state.worldUid}/sparql`, {
     method: "POST",
     body: {
       query: `SELECT ?name WHERE { <urn:wazoo:health:${runId}:alpha> <http://schema.org/name> ?name } LIMIT 5`,
@@ -207,7 +202,7 @@ async function sparqlSelect() {
 }
 
 async function sparqlAsk() {
-  const response = await worldsRequest(`/worlds/${worldIds[0]}/sparql`, {
+  const response = await worldsRequest(`/worlds/${state.worldUid}/sparql`, {
     method: "POST",
     body: {
       query: `ASK WHERE { <urn:wazoo:health:${runId}:alpha> <http://schema.org/knows> <urn:wazoo:health:${runId}:beta> }`,

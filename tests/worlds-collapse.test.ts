@@ -159,10 +159,11 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     );
     expect(res.status).toBe(201);
     const body = (await res.json()) as {
-      world: { uid: string; worldId: string };
+      world: { uid: string; worldId: string; worldUid: string };
     };
     expect(body.world.uid).toBeTruthy();
     expect(body.world.worldId).toBe("my-world");
+    expect(body.world.worldUid).toBe(CREATED_UID);
 
     const keyCall = worldsApiMock.mock.calls.find(
       (call) =>
