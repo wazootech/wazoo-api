@@ -99,7 +99,9 @@ async function createWorld(worldId) {
     response.body.world.worldId === worldId,
     `World ${worldId} was not created`,
   );
-  if (response.body.world.worldUid) state.worldUid = response.body.world.worldUid;
+  if (worldId === worldIds[0] && response.body.world.worldUid) {
+    state.worldUid = response.body.world.worldUid;
+  }
   return response;
 }
 
