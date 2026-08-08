@@ -23,7 +23,6 @@ import {
   worldIdParam,
   emailQuery,
 } from "../lib/schemas";
-import { provisionWorldDatabase } from "../lib/turso";
 
 interface WorldRow extends Record<string, unknown> {
   uid: string;
@@ -32,6 +31,7 @@ interface WorldRow extends Record<string, unknown> {
   display_name: string;
   region: string;
   state: string;
+  worlds_api_uid: string | null;
   create_time?: string;
   update_time?: string;
   delete_time?: string | null;
@@ -376,6 +376,35 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
       );
     }
 
+    const database = db(c.env);
+
+    // Mint a namespace-scoped worlds-api key so tenancy is derived from auth
+    // (the key's namespace), never from a request body field.
+    const keyRes = await fetch(`${worldsApiBase(c.env)}/api-keys`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        namespace: user.uid,
+        name: "wazoo-api world provisioning",
+      }),
+    });
+    if (!keyRes.ok) {
+      return respond(
+        c,
+        {
+          error: {
+            code: "WORLD_PROVISIONING_FAILED",
+            message: await worldsApiError(keyRes),
+          },
+        },
+        502,
+      );
+    }
+    const mintedKey = (await keyRes.json()) as { token: string };
+
     const world = {
       id: `w_${id()}`,
       worldId: body.worldId,
@@ -383,12 +412,34 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
       region: body.world.region,
       now: now(),
     };
-    const database = db(c.env);
-    const worldDatabase = await provisionWorldDatabase(c.env, world.id);
+
+    const res = await fetch(`${worldsApiBase(c.env)}/worlds`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${mintedKey.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        displayName: world.displayName,
+      }),
+    });
+    if (!res.ok) {
+      return respond(
+        c,
+        {
+          error: {
+            code: "WORLD_PROVISIONING_FAILED",
+            message: await worldsApiError(res),
+          },
+        },
+        502,
+      );
+    }
+    const createdWorld = (await res.json()) as { uid: string };
 
     await database
       .prepare(
-        "INSERT INTO worlds (uid, user_uid, world_id, display_name, region, turso_database_name, turso_database_url, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO worlds (uid, user_uid, world_id, display_name, region, worlds_api_uid, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .bind(
         world.id,
@@ -396,8 +447,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
         world.worldId,
         world.displayName,
         world.region,
-        worldDatabase.name,
-        worldDatabase.url,
+        createdWorld.uid,
         world.now,
         world.now,
       )
@@ -408,33 +458,6 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
         action: "worlds.create_quota_bypass",
         targetResourceName: `users/${user.uid}/worlds/${world.worldId}`,
       });
-    }
-
-    const res = await fetch(`${worldsApiBase(c.env)}/worlds`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        namespace: user.uid,
-        worldId: world.worldId,
-        displayName: world.displayName,
-        databaseUrl: worldDatabase.url,
-        databaseAuthToken: worldDatabase.authToken,
-      }),
-    });
-    if (!res.ok) {
-      const message = await worldsApiError(res);
-      await database
-        .prepare("DELETE FROM worlds WHERE uid = ?")
-        .bind(world.id)
-        .run();
-      return respond(
-        c,
-        { error: { code: "WORLD_PROVISIONING_FAILED", message } },
-        502,
-      );
     }
 
     const row = await first<WorldRow>(
@@ -508,17 +531,31 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
       .run();
 
     if (updateMask.includes("displayName") && patch.displayName) {
-      await fetch(`${worldsApiBase(c.env)}/worlds/${existing.world_id}`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          namespace: user.uid,
-          displayName: patch.displayName,
-        }),
-      }).catch(() => undefined);
+      if (existing.worlds_api_uid) {
+        const res = await fetch(
+          `${worldsApiBase(c.env)}/worlds/${existing.worlds_api_uid}`,
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ displayName: patch.displayName }),
+          },
+        );
+        if (!res.ok) {
+          return respond(
+            c,
+            {
+              error: {
+                code: "WORLD_UPDATE_FAILED",
+                message: await worldsApiError(res),
+              },
+            },
+            502,
+          );
+        }
+      }
     }
 
     const row = await first<WorldRow>(
@@ -536,6 +573,29 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     const worldId = c.req.param("worldId");
     const existing = await worldForUser(c, user.uid, worldId);
     if (!existing) return notFound(c);
+
+    if (existing.worlds_api_uid) {
+      const res = await fetch(
+        `${worldsApiBase(c.env)}/worlds/${existing.worlds_api_uid}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}` },
+        },
+      );
+      if (!res.ok && res.status !== 404) {
+        return respond(
+          c,
+          {
+            error: {
+              code: "WORLD_DELETE_FAILED",
+              message: await worldsApiError(res),
+            },
+          },
+          502,
+        );
+      }
+    }
+
     const deletedAt = now();
     const expireAt = new Date(
       Date.now() + 30 * 24 * 60 * 60 * 1000,
@@ -546,13 +606,6 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
       )
       .bind(deletedAt, expireAt, deletedAt, existing.uid)
       .run();
-    await fetch(
-      `${worldsApiBase(c.env)}/worlds/${worldId}?namespace=${encodeURIComponent(user.uid)}`,
-      {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}` },
-      },
-    ).catch(() => undefined);
     const row = await first<WorldRow>(
       db(c.env)
         .prepare("SELECT * FROM worlds WHERE uid = ?")
@@ -602,20 +655,37 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
         usagePercent: 100,
       });
     }
+    if (existing.worlds_api_uid) {
+      const res = await fetch(
+        `${worldsApiBase(c.env)}/worlds/${existing.worlds_api_uid}/undelete`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      if (!res.ok) {
+        return respond(
+          c,
+          {
+            error: {
+              code: "WORLD_UNDELETE_FAILED",
+              message: await worldsApiError(res),
+            },
+          },
+          502,
+        );
+      }
+    }
+
     await db(c.env)
       .prepare(
         "UPDATE worlds SET state = 'active', delete_time = NULL, expire_time = NULL, update_time = ? WHERE uid = ?",
       )
       .bind(now(), existing.uid)
       .run();
-    await fetch(`${worldsApiBase(c.env)}/worlds/${worldId}/undelete`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ namespace: user.uid }),
-    }).catch(() => undefined);
     const row = await first<WorldRow>(
       db(c.env)
         .prepare("SELECT * FROM worlds WHERE uid = ?")
@@ -643,7 +713,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     };
     return respond(c, {
       tokens: (body.keys ?? []).filter(
-        (key) => key.worldId === existing.world_id,
+        (key) => key.worldId === existing.worlds_api_uid,
       ),
     });
   });
@@ -663,7 +733,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
       },
       body: JSON.stringify({
         namespace: user.uid,
-        worldId: existing.world_id,
+        worldId: existing.worlds_api_uid,
         name: body.name ?? "",
       }),
     });

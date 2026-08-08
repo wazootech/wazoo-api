@@ -12,8 +12,6 @@ API_BASE_URL = "https://api.wazoo.dev"
 TURSO_DATABASE_URL = "libsql://wazoo-platform-prod-ethanthatonekid.aws-us-west-2.turso.io"
 WORLDS_API_URL = "https://worlds-api.wazoo.dev"
 WAZOO_ENV = "prod"
-TURSO_ORG = "ethanthatonekid"
-TURSO_GROUP = "wazoo"
 STRIPE_PRICE_ID = ""
 
 [env.qa]
@@ -27,8 +25,6 @@ API_BASE_URL = "https://api-qa.wazoo.dev"
 TURSO_DATABASE_URL = "libsql://wazoo-platform-qa-ethanthatonekid.aws-us-west-2.turso.io"
 WORLDS_API_URL = "https://worlds-api-qa.wazoo.dev"
 WAZOO_ENV = "qa"
-TURSO_ORG = "ethanthatonekid"
-TURSO_GROUP = "wazoo"
 STRIPE_PRICE_ID = ""
 
 [observability]
