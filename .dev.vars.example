@@ -8,13 +8,6 @@ API_BASE_URL="http://localhost:8787"
 TURSO_DATABASE_URL="libsql://replace-me.turso.io"
 TURSO_AUTH_TOKEN="replace_me"
 
-# Turso organization/group used by launch scripts to provision databases.
-TURSO_ORG="your-turso-org"
-TURSO_GROUP="your-turso-group"
-
-# Turso platform API token with permission to create databases and issue auth tokens.
-TURSO_PLATFORM_API_TOKEN="your-turso-platform-api-token"
-
 # Data-plane API used for world storage/query/import/export.
 WORLDS_API_URL="http://localhost:8081"
 
