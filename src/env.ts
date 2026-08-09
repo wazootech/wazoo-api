@@ -5,9 +5,6 @@ export type Bindings = {
   API_BASE_URL?: string;
   WORLDS_API_URL: string;
   WORLDS_API_ADMIN_KEY: string;
-  TURSO_ORG?: string;
-  TURSO_GROUP?: string;
-  TURSO_PLATFORM_API_TOKEN?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_ID?: string;
@@ -36,9 +33,6 @@ export function bindingsFromProcessEnv(): Bindings {
     "API_BASE_URL",
     "WORLDS_API_URL",
     "WORLDS_API_ADMIN_KEY",
-    "TURSO_ORG",
-    "TURSO_GROUP",
-    "TURSO_PLATFORM_API_TOKEN",
     "STRIPE_SECRET_KEY",
     "STRIPE_WEBHOOK_SECRET",
     "STRIPE_PRICE_ID",

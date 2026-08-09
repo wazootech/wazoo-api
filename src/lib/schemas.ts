@@ -33,6 +33,7 @@ export const WorldSchema = z
     name: z.string(),
     uid: z.string(),
     worldId: z.string(),
+    worldUid: z.string().optional(),
     displayName: z.string(),
     region: z.string(),
     state: z.enum(["ACTIVE", "SUSPENDED", "DELETED"]),
