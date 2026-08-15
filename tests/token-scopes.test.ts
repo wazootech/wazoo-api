@@ -64,7 +64,11 @@ describe("platform token scopes (wazoo-api#13 / wazoo-api#14)", () => {
           authorization: `Bearer ${ADMIN_TOKEN}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ email: TEST_EMAIL, displayName: "Beta User" }),
+        body: JSON.stringify({
+          email: TEST_EMAIL,
+          displayName: "Beta User",
+          ageConfirmed: true,
+        }),
       },
       env,
     );
