@@ -114,7 +114,11 @@ describe("world ownership collapse (wazoo-api#20)", () => {
           authorization: `Bearer ${ADMIN_TOKEN}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ email: TEST_EMAIL, displayName: "Worlds User" }),
+        body: JSON.stringify({
+          email: TEST_EMAIL,
+          displayName: "Worlds User",
+          ageConfirmed: true,
+        }),
       },
       env,
     );

@@ -5,6 +5,7 @@ CREATE TABLE users (
   email TEXT UNIQUE NOT NULL,
   display_name TEXT,
   state TEXT NOT NULL DEFAULT 'active',
+  age_confirmed_at TEXT,
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 

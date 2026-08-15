@@ -20,6 +20,8 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
       typeof body.displayName === "string" && body.displayName.trim()
         ? body.displayName.trim()
         : null;
+    const ageConfirmed =
+      typeof body.ageConfirmed === "boolean" ? body.ageConfirmed : false;
 
     if (!email) {
       return respond(
@@ -50,12 +52,25 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
           .run();
       }
     } else {
+      if (!ageConfirmed) {
+        return respond(
+          c,
+          {
+            error: {
+              code: "AGE_GATE_REQUIRED",
+              message:
+                "You must confirm that you are at least 13 years old to create a Wazoo account.",
+            },
+          },
+          400,
+        );
+      }
       userUid = id();
       await database
         .prepare(
-          "INSERT INTO users (uid, email, display_name) VALUES (?, ?, ?)",
+          "INSERT INTO users (uid, email, display_name, age_confirmed_at) VALUES (?, ?, ?, ?)",
         )
-        .bind(userUid, email, displayName)
+        .bind(userUid, email, displayName, new Date().toISOString())
         .run();
     }
 
@@ -141,6 +156,8 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
     const email =
       typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const code = typeof body.code === "string" ? body.code.trim() : "";
+    const ageConfirmed =
+      typeof body.ageConfirmed === "boolean" ? body.ageConfirmed : false;
 
     if (!email || !code) {
       return respond(
@@ -236,10 +253,25 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
     if (existing) {
       userUid = existing.uid;
     } else {
+      if (!ageConfirmed) {
+        return respond(
+          c,
+          {
+            error: {
+              code: "AGE_GATE_REQUIRED",
+              message:
+                "You must confirm that you are at least 13 years old to create a Wazoo account.",
+            },
+          },
+          400,
+        );
+      }
       userUid = id();
       await database
-        .prepare("INSERT INTO users (uid, email) VALUES (?, ?)")
-        .bind(userUid, email)
+        .prepare(
+          "INSERT INTO users (uid, email, age_confirmed_at) VALUES (?, ?, ?)",
+        )
+        .bind(userUid, email, new Date().toISOString())
         .run();
     }
 
