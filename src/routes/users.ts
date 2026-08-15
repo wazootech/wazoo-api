@@ -56,6 +56,9 @@ const initiateDeletionRoute = createRoute({
               uid: z.string(),
               expiresAt: z.string(),
             }),
+            // Held by the client for the confirm step; the server stores only
+            // a hash. Mirrors the email-confirmation pattern.
+            confirmationToken: z.string(),
             message: z.string(),
           }),
         },
@@ -330,6 +333,7 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
       c,
       {
         deletion: { uid: requestUid, expiresAt },
+        confirmationToken: token,
         message:
           "Account deletion requested. Confirm within 15 minutes to permanently delete the account and its data.",
       },
