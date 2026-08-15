@@ -7,7 +7,7 @@ export async function sha256Hex(value: string): Promise<string> {
     .join("");
 }
 
-export function createToken(prefix: "wzp" | "wzw"): string {
+export function createToken(prefix: "wzp" | "wzw" | "wzdel"): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   const body = btoa(String.fromCharCode(...bytes))

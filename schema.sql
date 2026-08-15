@@ -87,6 +87,20 @@ CREATE INDEX idx_worlds_user ON worlds(user_uid);
 CREATE INDEX idx_usage_world_time ON usage_events(world_uid, create_time);
 CREATE INDEX idx_users_email ON users(email);
 
+-- One row per pending account-deletion request. The confirmation token is
+-- stored hashed (never plaintext) and short-lived; DELETE /v1/users/me
+-- consumes it to complete the two-step erasure flow. User erasure is a hard
+-- delete: FK cascades remove the user's worlds mirror rows, platform tokens,
+-- and usage events, while worlds-api's namespace delete marks the underlying
+-- per-world databases for the purge sweep.
+CREATE TABLE deletion_requests (
+  uid TEXT PRIMARY KEY,
+  user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
 CREATE TABLE rate_limit_entries (
   key TEXT PRIMARY KEY,
   count INTEGER NOT NULL DEFAULT 1,
