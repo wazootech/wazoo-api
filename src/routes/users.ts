@@ -43,7 +43,8 @@ const initiateDeletionRoute = createRoute({
   path: "/v1/users/me/deletion",
   tags: ["Users"],
   operationId: "initiateAccountDeletion",
-  summary: "Initiate account deletion (returns a short-lived confirmation token)",
+  summary:
+    "Initiate account deletion (returns a short-lived confirmation token)",
   "x-mint": { metadata: { title: "Initiate account deletion" } },
   security: [{ bearerPlatformToken: [] }],
   responses: {
@@ -321,7 +322,9 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
     const requestUid = id();
     const token = createToken("wzdel");
     const tokenHash = await sha256Hex(token);
-    const expiresAt = new Date(Date.now() + DELETION_TOKEN_TTL_MS).toISOString();
+    const expiresAt = new Date(
+      Date.now() + DELETION_TOKEN_TTL_MS,
+    ).toISOString();
     await database
       .prepare(
         "INSERT INTO deletion_requests (uid, user_uid, token_hash, expires_at) VALUES (?, ?, ?, ?)",

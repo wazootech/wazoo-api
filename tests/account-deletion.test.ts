@@ -98,10 +98,10 @@ describe("account deletion and data export (wazoo-api#26)", () => {
 
     // Stub the worlds-api namespace-delete call.
     worldsApiFetch = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({ deletedWorlds: 1, revokedKeys: 0 }),
-        { status: 200, headers: { "content-type": "application/json" } },
-      ),
+      new Response(JSON.stringify({ deletedWorlds: 1, revokedKeys: 0 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
     );
     vi.stubGlobal("fetch", worldsApiFetch);
   });
