@@ -190,10 +190,18 @@ describe("account deletion and data export (wazoo-api#26)", () => {
     expect(del.status).toBe(204);
 
     // worlds-api was told to mark the user's namespace deleted.
-    expect(worldsApiFetch).toHaveBeenCalledWith(
-      `http://localhost:9999/admin/namespaces/${userUid}/delete`,
-      expect.objectContaining({ method: "POST" }),
-    );
+    const worldsCall = worldsApiFetch.mock.calls.find((call) => {
+      const req =
+        call[0] instanceof Request
+          ? call[0]
+          : new Request(String(call[0]), call[1]);
+      return (
+        req.url ===
+          `http://localhost:9999/admin/namespaces/${userUid}/delete` &&
+        req.method === "POST"
+      );
+    });
+    expect(worldsCall).toBeTruthy();
 
     // The user row is gone; world mirror + usage events cascaded away.
     const check = createClient({ url: `file:${env.TURSO_DATABASE_URL}` });
