@@ -6,6 +6,7 @@ import type { AppEnv } from "../env";
 import { recordAdminAudit } from "../lib/audit";
 import { all, db, first, id } from "../lib/db";
 import { requireScope, resolveUser, respond } from "../lib/http";
+import { worldUsageQuota } from "../lib/quota";
 import {
   worldIdParam,
   usageRangeQuery,
@@ -40,7 +41,7 @@ export function registerUsageRoutes(app: OpenAPIHono<AppEnv>) {
       const world = await resolveWorld(c, user.uid, c.req.param("worldId"));
       const range = usageRange(query);
       const database = db(c.env);
-      const rows = await all(
+      const rows = await all<{ metric: string; quantity: number }>(
         database
           .prepare(
             `SELECT metric, SUM(quantity) AS quantity FROM usage_events WHERE world_uid = ?${range.where} GROUP BY metric ORDER BY metric`,
@@ -54,12 +55,14 @@ export function registerUsageRoutes(app: OpenAPIHono<AppEnv>) {
           )
           .bind(world.uid, ...range.args),
       );
+      const quota = await worldUsageQuota(c, world.uid, rows);
       return respond(c, {
         usage: {
           world: `worlds/${world.world_id}`,
           total: rows,
           events: eventRows.map(usageEventResource),
         },
+        quota,
       });
     },
   );

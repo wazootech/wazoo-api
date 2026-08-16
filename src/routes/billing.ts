@@ -4,8 +4,9 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { AppEnv } from "../env";
-import { db, first } from "../lib/db";
+import { all, db, first } from "../lib/db";
 import { requireScope, resolveUser, respond } from "../lib/http";
+import { worldBillingQuota } from "../lib/quota";
 import {
   worldIdParam,
   BillingResponseSchema,
@@ -47,6 +48,14 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
         user.uid,
         c.req.param("worldId"),
       );
+      const totals = await all<{ metric: string; quantity: number }>(
+        db(c.env)
+          .prepare(
+            "SELECT metric, SUM(quantity) AS quantity FROM usage_events WHERE world_uid = ? GROUP BY metric",
+          )
+          .bind(world.uid),
+      );
+      const quota = await worldBillingQuota(c, user.uid, world.uid, totals);
       return respond(c, {
         billing: {
           world: `worlds/${world.world_id}`,
@@ -54,8 +63,13 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
           provider: world.billing_provider ?? "STRIPE",
           customerConfigured: Boolean(world.stripe_customer_id),
           subscriptionConfigured: Boolean(world.stripe_subscription_id),
-          paymentRequired: false,
+          // Payment is required when a billing state indicates an outstanding
+          // balance; derived from the database, never hardcoded.
+          paymentRequired:
+            world.billing_state === "PAST_DUE" ||
+            world.billing_state === "UNPAID",
         },
+        quota,
       });
     },
   );
@@ -214,7 +228,9 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
           provider: updated.billing_provider ?? "STRIPE",
           customerConfigured: Boolean(updated.stripe_customer_id),
           subscriptionConfigured: Boolean(updated.stripe_subscription_id),
-          paymentRequired: false,
+          paymentRequired:
+            updated.billing_state === "PAST_DUE" ||
+            updated.billing_state === "UNPAID",
         },
       });
     },
