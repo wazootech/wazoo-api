@@ -97,6 +97,24 @@ async function worldsApiError(res: Response) {
   return message;
 }
 
+async function worldsApiErrorDetail(res: Response): Promise<{
+  code: string;
+  message: string;
+}> {
+  let code = `WORLDS_API_${res.status}`;
+  let message = `worlds-api returned ${res.status}`;
+  try {
+    const body = (await res.json()) as Record<string, unknown>;
+    const error = body.error as Record<string, unknown> | undefined;
+    if (typeof error?.code === "string") code = error.code;
+    if (typeof error?.message === "string") message = error.message;
+    else if (typeof body.message === "string") message = body.message;
+  } catch {
+    // use defaults
+  }
+  return { code, message };
+}
+
 function notFound(c: Context<AppEnv>) {
   return respond(
     c,
@@ -425,12 +443,29 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
       }),
     });
     if (!res.ok) {
+      const detail = await worldsApiErrorDetail(res);
+      // Surface the org-wide database-plan cap as a quota-style error instead
+      // of burying it in a generic provisioning failure.
+      if (detail.code === "DATABASE_LIMIT_REACHED") {
+        return respond(
+          c,
+          {
+            error: { code: detail.code, message: detail.message },
+            quota: {
+              state: "THROTTLED",
+              reason: "DATABASE_LIMIT_REACHED",
+              usagePercent: 100,
+            },
+          },
+          429,
+        );
+      }
       return respond(
         c,
         {
           error: {
             code: "WORLD_PROVISIONING_FAILED",
-            message: await worldsApiError(res),
+            message: detail.message,
           },
         },
         502,
