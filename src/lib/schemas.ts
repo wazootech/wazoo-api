@@ -178,12 +178,30 @@ export const UsageTotalSchema = z.object({
   quantity: z.number(),
 });
 
+export const LimitSummarySchema = z
+  .object({
+    metric: z.string(),
+    quantity: z.number(),
+    limitQuantity: z.number(),
+    usagePercent: z.number(),
+  })
+  .openapi("LimitSummary");
+
+export const QuotaSummarySchema = z
+  .object({
+    state: z.enum(["OK", "WARN", "THROTTLED"]),
+    usagePercent: z.number(),
+    limits: z.array(LimitSummarySchema),
+  })
+  .openapi("QuotaSummary");
+
 export const UsageSummarySchema = z.object({
   usage: z.object({
     world: z.string(),
     total: z.array(UsageTotalSchema),
     events: z.array(UsageEventSchema),
   }),
+  quota: QuotaSummarySchema,
 });
 
 export const UsageAcceptedSchema = z.object({
@@ -212,6 +230,7 @@ export const BillingSchema = z
 
 export const BillingResponseSchema = z.object({
   billing: BillingSchema,
+  quota: QuotaSummarySchema,
 });
 
 export const InvoicesListSchema = z.object({
