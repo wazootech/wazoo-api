@@ -4,11 +4,11 @@ import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
 import type { AppEnv } from "../env";
 import { createToken, sha256Hex } from "../lib/crypto";
-import { db, id, now } from "../lib/db";
-import { isAdmin, requireScope, respond } from "../lib/http";
+import { db, id, now } from "@/lib/db";
+import { isAdmin, requireScope, respond } from "@/lib/http";
 import { UserSchema } from "../lib/schemas";
 import { deleteNamespaceWorlds } from "@worlds/client";
-import { worldsAdminClient } from "../lib/worlds-client";
+import { worldsAdminClient } from "@/lib/worlds-client";
 
 const DELETION_TOKEN_TTL_MS = 15 * 60 * 1000;
 
