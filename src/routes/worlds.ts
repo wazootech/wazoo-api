@@ -13,6 +13,20 @@ import {
   quotaStatus,
 } from "../lib/quota";
 import {
+  createApiKey,
+  createWorld,
+  deleteApiKey,
+  deleteWorld,
+  listApiKeys,
+  undeleteWorld,
+  updateWorld,
+} from "@worlds/client";
+import {
+  worldsAdminClient,
+  worldsApiError,
+  worldsApiErrorDetail,
+} from "../lib/worlds-client";
+import {
   CreateWorldBodySchema,
   UpdateWorldBodySchema,
   WorldListSchema,
@@ -59,10 +73,6 @@ function worldResource(row: WorldRow) {
   };
 }
 
-function worldsApiBase(env: AppEnv["Bindings"]) {
-  return env.WORLDS_API_URL.replace(/\/+$/, "");
-}
-
 async function currentUser(
   c: Context<AppEnv>,
   ownerEmail?: string,
@@ -81,38 +91,6 @@ async function worldForUser(
       .prepare("SELECT * FROM worlds WHERE user_uid = ? AND world_id = ?")
       .bind(userUid, worldId),
   );
-}
-
-async function worldsApiError(res: Response) {
-  let message = `worlds-api returned ${res.status}`;
-  try {
-    const body = (await res.json()) as Record<string, unknown>;
-    const error = body.error as Record<string, unknown> | undefined;
-    if (typeof error?.message === "string") message = error.message;
-    else if (typeof body.message === "string") message = body.message;
-    else if (typeof body.error === "string") message = body.error;
-  } catch {
-    // use default message
-  }
-  return message;
-}
-
-async function worldsApiErrorDetail(res: Response): Promise<{
-  code: string;
-  message: string;
-}> {
-  let code = `WORLDS_API_${res.status}`;
-  let message = `worlds-api returned ${res.status}`;
-  try {
-    const body = (await res.json()) as Record<string, unknown>;
-    const error = body.error as Record<string, unknown> | undefined;
-    if (typeof error?.code === "string") code = error.code;
-    if (typeof error?.message === "string") message = error.message;
-    else if (typeof body.message === "string") message = body.message;
-  } catch {
-    // use defaults
-  }
-  return { code, message };
 }
 
 function notFound(c: Context<AppEnv>) {
@@ -397,32 +375,30 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
 
     const database = db(c.env);
 
+    const client = worldsAdminClient(c.env);
+
     // Mint a namespace-scoped worlds-api key so tenancy is derived from auth
     // (the key's namespace), never from a request body field.
-    const keyRes = await fetch(`${worldsApiBase(c.env)}/api-keys`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const keyRes = await createApiKey({
+      client,
+      body: {
         namespace: user.uid,
         name: "wazoo-api world provisioning",
-      }),
+      },
     });
-    if (!keyRes.ok) {
+    if (keyRes.error) {
       return respond(
         c,
         {
           error: {
             code: "WORLD_PROVISIONING_FAILED",
-            message: await worldsApiError(keyRes),
+            message: worldsApiError(keyRes),
           },
         },
         502,
       );
     }
-    const mintedKey = (await keyRes.json()) as { token: string };
+    const mintedKey = keyRes.data;
 
     const world = {
       id: `w_${id()}`,
@@ -432,18 +408,15 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
       now: now(),
     };
 
-    const res = await fetch(`${worldsApiBase(c.env)}/worlds`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${mintedKey.token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const res = await createWorld({
+      client,
+      auth: mintedKey.token,
+      body: {
         displayName: world.displayName,
-      }),
+      },
     });
-    if (!res.ok) {
-      const detail = await worldsApiErrorDetail(res);
+    if (res.error) {
+      const detail = worldsApiErrorDetail(res);
       // Surface the org-wide database-plan cap as a quota-style error instead
       // of burying it in a generic provisioning failure.
       if (detail.code === "DATABASE_LIMIT_REACHED") {
@@ -471,7 +444,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
         502,
       );
     }
-    const createdWorld = (await res.json()) as { uid: string };
+    const createdWorld = res.data;
 
     await database
       .prepare(
@@ -568,24 +541,18 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
 
     if (updateMask.includes("displayName") && patch.displayName) {
       if (existing.worlds_api_uid) {
-        const res = await fetch(
-          `${worldsApiBase(c.env)}/worlds/${existing.worlds_api_uid}`,
-          {
-            method: "PATCH",
-            headers: {
-              Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ displayName: patch.displayName }),
-          },
-        );
-        if (!res.ok) {
+        const res = await updateWorld({
+          client: worldsAdminClient(c.env),
+          path: { id: existing.worlds_api_uid },
+          body: { displayName: patch.displayName },
+        });
+        if (res.error) {
           return respond(
             c,
             {
               error: {
                 code: "WORLD_UPDATE_FAILED",
-                message: await worldsApiError(res),
+                message: worldsApiError(res),
               },
             },
             502,
@@ -611,20 +578,17 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     if (!existing) return notFound(c);
 
     if (existing.worlds_api_uid) {
-      const res = await fetch(
-        `${worldsApiBase(c.env)}/worlds/${existing.worlds_api_uid}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}` },
-        },
-      );
-      if (!res.ok && res.status !== 404) {
+      const res = await deleteWorld({
+        client: worldsAdminClient(c.env),
+        path: { id: existing.worlds_api_uid },
+      });
+      if (res.error && res.response?.status !== 404) {
         return respond(
           c,
           {
             error: {
               code: "WORLD_DELETE_FAILED",
-              message: await worldsApiError(res),
+              message: worldsApiError(res),
             },
           },
           502,
@@ -692,23 +656,17 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
       });
     }
     if (existing.worlds_api_uid) {
-      const res = await fetch(
-        `${worldsApiBase(c.env)}/worlds/${existing.worlds_api_uid}/undelete`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
-            "Content-Type": "application/json",
-          },
-        },
-      );
-      if (!res.ok) {
+      const res = await undeleteWorld({
+        client: worldsAdminClient(c.env),
+        path: { id: existing.worlds_api_uid },
+      });
+      if (res.error) {
         return respond(
           c,
           {
             error: {
               code: "WORLD_UNDELETE_FAILED",
-              message: await worldsApiError(res),
+              message: worldsApiError(res),
             },
           },
           502,
@@ -736,19 +694,14 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     const user = await currentUser(c, query.email, query.email);
     const existing = await worldForUser(c, user.uid, c.req.param("worldId"));
     if (!existing) return notFound(c);
-    const res = await fetch(
-      `${worldsApiBase(c.env)}/api-keys?namespace=${encodeURIComponent(user.uid)}`,
-      {
-        headers: { Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}` },
-      },
-    );
-    if (!res.ok)
-      throw new HTTPException(502, { message: await worldsApiError(res) });
-    const body = (await res.json()) as {
-      keys?: Array<Record<string, unknown>>;
-    };
+    const res = await listApiKeys({
+      client: worldsAdminClient(c.env),
+      query: { namespace: user.uid },
+    });
+    if (res.error)
+      throw new HTTPException(502, { message: worldsApiError(res) });
     return respond(c, {
-      tokens: (body.keys ?? []).filter(
+      tokens: (res.data?.keys ?? []).filter(
         (key) => key.worldId === existing.worlds_api_uid,
       ),
     });
@@ -761,21 +714,17 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     const existing = await worldForUser(c, user.uid, c.req.param("worldId"));
     if (!existing) return notFound(c);
     const body = c.req.valid("json");
-    const res = await fetch(`${worldsApiBase(c.env)}/api-keys`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const res = await createApiKey({
+      client: worldsAdminClient(c.env),
+      body: {
         namespace: user.uid,
-        worldId: existing.worlds_api_uid,
+        worldId: existing.worlds_api_uid ?? undefined,
         name: body.name ?? "",
-      }),
+      },
     });
-    if (!res.ok)
-      throw new HTTPException(502, { message: await worldsApiError(res) });
-    return respond(c, { token: await res.json() }, 201);
+    if (res.error)
+      throw new HTTPException(502, { message: worldsApiError(res) });
+    return respond(c, { token: res.data }, 201);
   });
 
   app.openapi(deleteTokenRoute, async (c) => {
@@ -784,15 +733,12 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     const user = await currentUser(c, query.email, query.email);
     const existing = await worldForUser(c, user.uid, c.req.param("worldId"));
     if (!existing) return notFound(c);
-    const res = await fetch(
-      `${worldsApiBase(c.env)}/api-keys/${c.req.param("tokenUid")}`,
-      {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}` },
-      },
-    );
-    if (!res.ok && res.status !== 404)
-      throw new HTTPException(502, { message: await worldsApiError(res) });
+    const res = await deleteApiKey({
+      client: worldsAdminClient(c.env),
+      path: { keyId: c.req.param("tokenUid") },
+    });
+    if (res.error && res.response?.status !== 404)
+      throw new HTTPException(502, { message: worldsApiError(res) });
     return c.body(null, 204) as any;
   });
 }

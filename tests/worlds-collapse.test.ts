@@ -43,18 +43,28 @@ function api(
   return Promise.resolve(app.request(path, init, env, executionCtx));
 }
 
+/** Normalizes either `fetch(request)` (Request object) or `fetch(url, init)`. */
+function requestFromCall(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Request {
+  return input instanceof Request ? input : new Request(String(input), init);
+}
+
 function worldsApiMockHandler(input: RequestInfo | URL, init?: RequestInit) {
-  const url = String(input);
+  const req = requestFromCall(input, init);
+  const url = req.url;
+  const method = req.method;
   if (!url.startsWith(WORLDS_BASE)) {
     throw new Error(`unexpected fetch to ${url}`);
   }
-  if (url.endsWith("/api-keys") && init?.method === "POST") {
+  if (url.endsWith("/api-keys") && method === "POST") {
     return new Response(
       JSON.stringify({ uid: "key-1", token: "wzw_test-key" }),
       { status: 201, headers: { "content-type": "application/json" } },
     );
   }
-  if (url.endsWith("/worlds") && init?.method === "POST") {
+  if (url.endsWith("/worlds") && method === "POST") {
     return new Response(
       JSON.stringify({
         name: `worlds/${CREATED_UID}`,
@@ -72,13 +82,10 @@ function worldsApiMockHandler(input: RequestInfo | URL, init?: RequestInit) {
       { status: 201, headers: { "content-type": "application/json" } },
     );
   }
-  if (url.endsWith(`/worlds/${CREATED_UID}`) && init?.method === "DELETE") {
+  if (url.endsWith(`/worlds/${CREATED_UID}`) && method === "DELETE") {
     return new Response(null, { status: 204 });
   }
-  if (
-    url.endsWith(`/worlds/${CREATED_UID}/undelete`) &&
-    init?.method === "POST"
-  ) {
+  if (url.endsWith(`/worlds/${CREATED_UID}/undelete`) && method === "POST") {
     return new Response(
       JSON.stringify({ name: `worlds/${CREATED_UID}`, uid: CREATED_UID }),
       { status: 200, headers: { "content-type": "application/json" } },
@@ -169,24 +176,22 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     expect(body.world.worldId).toBe("my-world");
     expect(body.world.worldUid).toBe(CREATED_UID);
 
-    const keyCall = worldsApiMock.mock.calls.find(
-      (call) =>
-        String(call[0]).endsWith("/api-keys") && call[1]?.method === "POST",
-    );
+    const keyCall = worldsApiMock.mock.calls.find((call) => {
+      const req = requestFromCall(call[0], call[1]);
+      return req.url.endsWith("/api-keys") && req.method === "POST";
+    });
     expect(keyCall).toBeTruthy();
-    const keyBody = JSON.parse(String(keyCall![1]!.body)) as {
-      namespace: string;
-    };
+    const keyReq = requestFromCall(keyCall![0], keyCall![1]);
+    const keyBody = (await keyReq.json()) as { namespace: string };
     expect(keyBody.namespace).toBeTruthy();
 
-    const worldCall = worldsApiMock.mock.calls.find(
-      (call) =>
-        String(call[0]).endsWith("/worlds") && call[1]?.method === "POST",
-    );
+    const worldCall = worldsApiMock.mock.calls.find((call) => {
+      const req = requestFromCall(call[0], call[1]);
+      return req.url.endsWith("/worlds") && req.method === "POST";
+    });
     expect(worldCall).toBeTruthy();
-    expect(
-      (worldCall![1]!.headers as Record<string, string>).Authorization,
-    ).toBe("Bearer wzw_test-key");
+    const worldReq = requestFromCall(worldCall![0], worldCall![1]);
+    expect(worldReq.headers.get("Authorization")).toBe("Bearer wzw_test-key");
 
     const client = createClient({ url: env.TURSO_DATABASE_URL });
     const rs = await client.execute({
@@ -228,11 +233,12 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     const body = (await res.json()) as { world: { state: string } };
     expect(body.world.state).toBe("DELETED");
 
-    const deleteCall = worldsApiMock.mock.calls.find(
-      (call) =>
-        String(call[0]).includes(`/worlds/${CREATED_UID}`) &&
-        call[1]?.method === "DELETE",
-    );
+    const deleteCall = worldsApiMock.mock.calls.find((call) => {
+      const req = requestFromCall(call[0], call[1]);
+      return (
+        req.url.includes(`/worlds/${CREATED_UID}`) && req.method === "DELETE"
+      );
+    });
     expect(deleteCall).toBeTruthy();
   });
 

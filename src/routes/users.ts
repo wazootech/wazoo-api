@@ -4,9 +4,11 @@ import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
 import type { AppEnv } from "../env";
 import { createToken, sha256Hex } from "../lib/crypto";
-import { db, id, now } from "../lib/db";
-import { isAdmin, requireScope, respond } from "../lib/http";
+import { db, id, now } from "@/lib/db";
+import { isAdmin, requireScope, respond } from "@/lib/http";
 import { UserSchema } from "../lib/schemas";
+import { deleteNamespaceWorlds } from "@worlds/client";
+import { worldsAdminClient } from "@/lib/worlds-client";
 
 const DELETION_TOKEN_TTL_MS = 15 * 60 * 1000;
 
@@ -199,10 +201,6 @@ function userResource(row: UserRow) {
   };
 }
 
-function worldsApiBase(env: AppEnv["Bindings"]) {
-  return env.WORLDS_API_URL.replace(/\/+$/, "");
-}
-
 /** Ensures the token belongs to a user (not an env/admin token) and returns it. */
 function requireUserToken(c: Context<AppEnv>): { userUid: string } {
   const auth = c.get("auth");
@@ -389,17 +387,11 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
 
     // Mark every world for this user (namespace) deleted in worlds-api so the
     // purge sweep destroys the underlying databases after the grace period.
-    const worldsRes = await fetch(
-      `${worldsApiBase(c.env)}/admin/namespaces/${encodeURIComponent(userUid)}/delete`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${c.env.WORLDS_API_ADMIN_KEY}`,
-          "Content-Type": "application/json",
-        },
-      },
-    );
-    if (!worldsRes.ok) {
+    const worldsRes = await deleteNamespaceWorlds({
+      client: worldsAdminClient(c.env),
+      path: { namespace: userUid },
+    });
+    if (worldsRes.error) {
       return respond(
         c,
         {
