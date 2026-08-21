@@ -1,0 +1,2495 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Wazoo Platform API",
+    "version": "0.1.0",
+    "description": "Management-plane API for Wazoo users, Worlds, platform tokens, usage, limits, and beta billing."
+  },
+  "servers": [
+    {
+      "url": "https://api.wazoo.dev",
+      "description": "Wazoo Platform API"
+    }
+  ],
+  "security": [
+    {
+      "bearerPlatformToken": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerPlatformToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "wzp",
+        "description": "Wazoo platform API token."
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "uid": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ACTIVE"
+            ]
+          },
+          "createTime": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "uid",
+          "email",
+          "displayName",
+          "state",
+          "createTime"
+        ]
+      },
+      "World": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "uid": {
+            "type": "string"
+          },
+          "worldId": {
+            "type": "string"
+          },
+          "worldUid": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SUSPENDED",
+              "DELETED"
+            ]
+          },
+          "restorable": {
+            "type": "boolean"
+          },
+          "backend": {
+            "type": "string",
+            "enum": [
+              "worlds-api"
+            ]
+          },
+          "createTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updateTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleteTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expireTime": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "name",
+          "uid",
+          "worldId",
+          "displayName",
+          "region",
+          "state",
+          "restorable",
+          "backend"
+        ]
+      },
+      "CreateWorldRequest": {
+        "type": "object",
+        "properties": {
+          "ownerEmail": {
+            "type": "string",
+            "format": "email"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "worldId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{2,62}$",
+            "description": "Resource ID matching ^[a-z][a-z0-9-]{2,62}$"
+          },
+          "world": {
+            "type": "object",
+            "properties": {
+              "displayName": {
+                "type": "string",
+                "minLength": 1
+              },
+              "region": {
+                "type": "string",
+                "default": "auto"
+              }
+            },
+            "required": [
+              "displayName"
+            ]
+          }
+        },
+        "required": [
+          "worldId",
+          "world"
+        ]
+      },
+      "UpdateWorldRequest": {
+        "type": "object",
+        "properties": {
+          "updateMask": {
+            "type": "string"
+          },
+          "world": {
+            "type": "object",
+            "properties": {
+              "displayName": {
+                "type": "string"
+              },
+              "region": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "ACTIVE",
+                  "SUSPENDED"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "updateMask",
+          "world"
+        ]
+      },
+      "WorldToken": {
+        "type": "object",
+        "properties": {
+          "uid": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "worldId": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createTime": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "uid",
+          "name"
+        ]
+      },
+      "WorldTokenCreateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "PlatformToken": {
+        "type": "object",
+        "properties": {
+          "uid": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "last_used_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "createTime": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "uid",
+          "name"
+        ]
+      },
+      "PlatformTokenCreateResponse": {
+        "type": "object",
+        "properties": {
+          "uid": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "uid",
+          "name",
+          "token"
+        ]
+      },
+      "PlatformTokenCreateRequest": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tokenName": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UsageEvent": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "metric": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "providerCostMicrocents": {
+            "type": "integer",
+            "nullable": true
+          },
+          "wazooMarkupMicrocents": {
+            "type": "integer"
+          },
+          "estimatedCostMicrocents": {
+            "type": "integer",
+            "nullable": true
+          },
+          "billingSource": {
+            "type": "string"
+          },
+          "createTime": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "name",
+          "metric",
+          "quantity",
+          "unit",
+          "billingSource",
+          "createTime"
+        ]
+      },
+      "QuotaSummary": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "OK",
+              "WARN",
+              "THROTTLED"
+            ]
+          },
+          "usagePercent": {
+            "type": "number"
+          },
+          "limits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LimitSummary"
+            }
+          }
+        },
+        "required": [
+          "state",
+          "usagePercent",
+          "limits"
+        ]
+      },
+      "LimitSummary": {
+        "type": "object",
+        "properties": {
+          "metric": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "limitQuantity": {
+            "type": "number"
+          },
+          "usagePercent": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "metric",
+          "quantity",
+          "limitQuantity",
+          "usagePercent"
+        ]
+      },
+      "UsageRecordRequest": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "metric": {
+            "type": "string",
+            "minLength": 1
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "unit": {
+            "type": "string",
+            "default": "count"
+          },
+          "providerCostMicrocents": {
+            "type": "integer"
+          },
+          "wazooMarkupMicrocents": {
+            "type": "integer",
+            "default": 0
+          },
+          "estimatedCostMicrocents": {
+            "type": "integer"
+          },
+          "billingSource": {
+            "type": "string",
+            "default": "BETA_FREE"
+          },
+          "createTime": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "metric",
+          "quantity"
+        ]
+      },
+      "Billing": {
+        "type": "object",
+        "properties": {
+          "world": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "customerConfigured": {
+            "type": "boolean"
+          },
+          "subscriptionConfigured": {
+            "type": "boolean"
+          },
+          "paymentRequired": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "world",
+          "state",
+          "provider",
+          "customerConfigured",
+          "subscriptionConfigured",
+          "paymentRequired"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "security": [],
+        "tags": [
+          "Health"
+        ],
+        "operationId": "getHealth",
+        "summary": "Get health",
+        "x-mint": {
+          "metadata": {
+            "title": "Get health"
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "operationId": "getUserMe",
+        "summary": "Get authenticated user",
+        "x-mint": {
+          "metadata": {
+            "title": "Get authenticated user"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authenticated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  },
+                  "required": [
+                    "user"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "operationId": "deleteUserMe",
+        "summary": "Delete the authenticated user's account (two-step confirmation)",
+        "x-mint": {
+          "metadata": {
+            "title": "Delete account"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "confirmationToken": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "confirmationToken"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Account deleted"
+          },
+          "400": {
+            "description": "Invalid or expired confirmation token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated as a user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me/deletion": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "operationId": "initiateAccountDeletion",
+        "summary": "Initiate account deletion (returns a short-lived confirmation token)",
+        "x-mint": {
+          "metadata": {
+            "title": "Initiate account deletion"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Deletion initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deletion": {
+                      "type": "object",
+                      "properties": {
+                        "uid": {
+                          "type": "string"
+                        },
+                        "expiresAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "uid",
+                        "expiresAt"
+                      ]
+                    },
+                    "confirmationToken": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "deletion",
+                    "confirmationToken",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated as a user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me/export": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "operationId": "exportUserMe",
+        "summary": "Export the data Wazoo holds on the authenticated user",
+        "x-mint": {
+          "metadata": {
+            "title": "Export user data"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User data export",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    },
+                    "worlds": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "uid": {
+                            "type": "string"
+                          },
+                          "worldId": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "createTime": {
+                            "type": "string"
+                          },
+                          "deleteTime": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "uid",
+                          "worldId",
+                          "displayName",
+                          "state"
+                        ]
+                      }
+                    },
+                    "apiTokens": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "uid": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "string"
+                          },
+                          "createTime": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "uid",
+                          "name",
+                          "scope"
+                        ]
+                      }
+                    },
+                    "usageEvents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "metric": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "unit": {
+                            "type": "string"
+                          },
+                          "createTime": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "metric",
+                          "quantity",
+                          "unit",
+                          "createTime"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "user",
+                    "worlds",
+                    "apiTokens",
+                    "usageEvents"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated as a user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/worlds": {
+      "get": {
+        "tags": [
+          "Worlds"
+        ],
+        "operationId": "listWorlds",
+        "summary": "List worlds",
+        "x-mint": {
+          "metadata": {
+            "title": "List worlds"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "email"
+            },
+            "required": false,
+            "name": "email",
+            "in": "query",
+            "description": "User email to operate on when using an admin token. User tokens ignore this parameter."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "World list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "worlds": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/World"
+                      }
+                    }
+                  },
+                  "required": [
+                    "worlds"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Worlds"
+        ],
+        "operationId": "createWorld",
+        "summary": "Create world",
+        "x-mint": {
+          "metadata": {
+            "title": "Create world"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorldRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created World",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "world": {
+                      "$ref": "#/components/schemas/World"
+                    }
+                  },
+                  "required": [
+                    "world"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "quota": {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string"
+                        },
+                        "reason": {
+                          "type": "string"
+                        },
+                        "usagePercent": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "state"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "quota"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/worlds/{worldId}": {
+      "get": {
+        "tags": [
+          "Worlds"
+        ],
+        "operationId": "getWorld",
+        "summary": "Get world",
+        "x-mint": {
+          "metadata": {
+            "title": "Get world"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "worldId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "email"
+            },
+            "required": false,
+            "name": "email",
+            "in": "query",
+            "description": "User email to operate on when using an admin token. User tokens ignore this parameter."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "World",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "world": {
+                      "$ref": "#/components/schemas/World"
+                    }
+                  },
+                  "required": [
+                    "world"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Worlds"
+        ],
+        "operationId": "updateWorld",
+        "summary": "Update world",
+        "x-mint": {
+          "metadata": {
+            "title": "Update world"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "worldId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "email"
+            },
+            "required": false,
+            "name": "email",
+            "in": "query",
+            "description": "User email to operate on when using an admin token. User tokens ignore this parameter."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorldRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated World",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "world": {
+                      "$ref": "#/components/schemas/World"
+                    }
+                  },
+                  "required": [
+                    "world"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Worlds"
+        ],
+        "operationId": "deleteWorld",
+        "summary": "Delete world",
+        "x-mint": {
+          "metadata": {
+            "title": "Delete world"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "worldId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "email"
+            },
+            "required": false,
+            "name": "email",
+            "in": "query",
+            "description": "User email to operate on when using an admin token. User tokens ignore this parameter."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted World",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "world": {
+                      "$ref": "#/components/schemas/World"
+                    }
+                  },
+                  "required": [
+                    "world"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/worlds/{worldId}/undelete": {
+      "post": {
+        "tags": [
+          "Worlds"
+        ],
+        "operationId": "undeleteWorld",
+        "summary": "Undelete world",
+        "x-mint": {
+          "metadata": {
+            "title": "Undelete world"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "worldId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "email"
+            },
+            "required": false,
+            "name": "email",
+            "in": "query",
+            "description": "User email to operate on when using an admin token. User tokens ignore this parameter."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Restored World",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "world": {
+                      "$ref": "#/components/schemas/World"
+                    }
+                  },
+                  "required": [
+                    "world"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/worlds/{worldId}/auth/tokens": {
+      "get": {
+        "tags": [
+          "WorldTokens"
+        ],
+        "operationId": "listWorldTokens",
+        "summary": "List world tokens",
+        "x-mint": {
+          "metadata": {
+            "title": "List world tokens"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "worldId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "email"
+            },
+            "required": false,
+            "name": "email",
+            "in": "query",
+            "description": "User email to operate on when using an admin token. User tokens ignore this parameter."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "World tokens",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tokens": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WorldToken"
+                      }
+                    }
+                  },
+                  "required": [
+                    "tokens"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "WorldTokens"
+        ],
+        "operationId": "createWorldToken",
+        "summary": "Create world token",
+        "x-mint": {
+          "metadata": {
+            "title": "Create world token"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "worldId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "email"
+            },
+            "required": false,
+            "name": "email",
+            "in": "query",
+            "description": "User email to operate on when using an admin token. User tokens ignore this parameter."
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorldTokenCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created World token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "$ref": "#/components/schemas/WorldToken"
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/worlds/{worldId}/auth/tokens/{tokenUid}": {
+      "delete": {
+        "tags": [
+          "WorldTokens"
+        ],
+        "operationId": "deleteWorldToken",
+        "summary": "Revoke world token",
+        "x-mint": {
+          "metadata": {
+            "title": "Revoke world token"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "worldId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "tokenUid",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "email"
+            },
+            "required": false,
+            "name": "email",
+            "in": "query",
+            "description": "User email to operate on when using an admin token. User tokens ignore this parameter."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Revoked"
+          }
+        }
+      }
+    },
+    "/v1/auth/api-tokens": {
+      "get": {
+        "tags": [
+          "PlatformTokens"
+        ],
+        "operationId": "listPlatformTokens",
+        "summary": "List platform tokens",
+        "x-mint": {
+          "metadata": {
+            "title": "List platform tokens"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Platform tokens",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tokens": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PlatformToken"
+                      }
+                    }
+                  },
+                  "required": [
+                    "tokens"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "PlatformTokens"
+        ],
+        "operationId": "createPlatformToken",
+        "summary": "Create platform token",
+        "x-mint": {
+          "metadata": {
+            "title": "Create platform token"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformTokenCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created platform token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformTokenCreateResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/api-tokens/{tokenName}": {
+      "post": {
+        "tags": [
+          "PlatformTokens"
+        ],
+        "operationId": "createNamedPlatformToken",
+        "summary": "Create named platform token",
+        "x-mint": {
+          "metadata": {
+            "title": "Create named platform token"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "tokenName",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformTokenCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created platform token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformTokenCreateResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "PlatformTokens"
+        ],
+        "operationId": "deletePlatformToken",
+        "summary": "Revoke platform token",
+        "x-mint": {
+          "metadata": {
+            "title": "Revoke platform token"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "tokenName",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted platform token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/api-tokens/validate": {
+      "get": {
+        "tags": [
+          "PlatformTokens"
+        ],
+        "operationId": "validatePlatformToken",
+        "summary": "Validate platform token",
+        "x-mint": {
+          "metadata": {
+            "title": "Validate platform token"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Token validity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "exp": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "exp"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/worlds/{worldId}/usage": {
+      "get": {
+        "tags": [
+          "Usage"
+        ],
+        "operationId": "getWorldUsage",
+        "summary": "Get world usage",
+        "x-mint": {
+          "metadata": {
+            "title": "Get world usage"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "worldId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "email"
+            },
+            "required": false,
+            "name": "email",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "to",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usage summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "world": {
+                          "type": "string"
+                        },
+                        "total": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "metric": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "metric",
+                              "quantity"
+                            ]
+                          }
+                        },
+                        "events": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/UsageEvent"
+                          }
+                        }
+                      },
+                      "required": [
+                        "world",
+                        "total",
+                        "events"
+                      ]
+                    },
+                    "quota": {
+                      "$ref": "#/components/schemas/QuotaSummary"
+                    }
+                  },
+                  "required": [
+                    "usage",
+                    "quota"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Usage"
+        ],
+        "operationId": "recordWorldUsage",
+        "summary": "Record world usage",
+        "x-mint": {
+          "metadata": {
+            "title": "Record world usage"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "worldId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsageRecordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Usage accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accepted": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "accepted"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "quota": {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "state"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "quota"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/worlds/{worldId}/limits": {
+      "get": {
+        "tags": [
+          "Usage"
+        ],
+        "operationId": "getWorldLimits",
+        "summary": "Get world limits",
+        "x-mint": {
+          "metadata": {
+            "title": "Get world limits"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "worldId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "email",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "World limits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "limits": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "metric": {
+                            "type": "string"
+                          },
+                          "limitQuantity": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "metric",
+                          "limitQuantity"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "limits"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/worlds/{worldId}/billing": {
+      "get": {
+        "tags": [
+          "Billing"
+        ],
+        "operationId": "getWorldBilling",
+        "summary": "Get world billing",
+        "x-mint": {
+          "metadata": {
+            "title": "Get world billing"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "worldId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "email",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "World billing state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "billing": {
+                      "$ref": "#/components/schemas/Billing"
+                    },
+                    "quota": {
+                      "$ref": "#/components/schemas/QuotaSummary"
+                    }
+                  },
+                  "required": [
+                    "billing",
+                    "quota"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/worlds/{worldId}/billing/invoices": {
+      "get": {
+        "tags": [
+          "Billing"
+        ],
+        "operationId": "listWorldInvoices",
+        "summary": "List world invoices",
+        "x-mint": {
+          "metadata": {
+            "title": "List world invoices"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "worldId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "email",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "World invoices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invoices": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "invoices"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/worlds/{worldId}/billing/cancel": {
+      "post": {
+        "tags": [
+          "Billing"
+        ],
+        "operationId": "cancelWorldSubscription",
+        "summary": "Cancel world subscription",
+        "x-mint": {
+          "metadata": {
+            "title": "Cancel world subscription"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "worldId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "email",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancelled subscription",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "billing": {
+                      "type": "object",
+                      "properties": {
+                        "world": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "customerConfigured": {
+                          "type": "boolean"
+                        },
+                        "subscriptionConfigured": {
+                          "type": "boolean"
+                        },
+                        "paymentRequired": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "world",
+                        "state",
+                        "provider",
+                        "customerConfigured",
+                        "subscriptionConfigured",
+                        "paymentRequired"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "billing"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No subscription to cancel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/worlds/{worldId}/billing/openPortal": {
+      "post": {
+        "tags": [
+          "Billing"
+        ],
+        "operationId": "openWorldBillingPortal",
+        "summary": "Open billing portal",
+        "x-mint": {
+          "metadata": {
+            "title": "Open billing portal"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "worldId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "email",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Not available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

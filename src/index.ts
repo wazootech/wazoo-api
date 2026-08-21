@@ -54,7 +54,12 @@ registerTokensRoutes(app);
 registerUsageRoutes(app);
 registerBillingRoutes(app);
 
-app.doc("/openapi.json", {
+/**
+ * openApiDocOptions is the OpenAPI document configuration. It is the single
+ * source of truth for the served spec (GET /openapi.json) and the committed
+ * snapshot in openapi/openapi.json, so the two cannot drift apart.
+ */
+export const openApiDocOptions = {
   openapi: "3.0.0",
   info: {
     title: "Wazoo Platform API",
@@ -66,6 +71,8 @@ app.doc("/openapi.json", {
     { url: "https://api.wazoo.dev", description: "Wazoo Platform API" },
   ],
   security: [{ bearerPlatformToken: [] }],
-});
+};
+
+app.doc("/openapi.json", openApiDocOptions);
 
 export default app;
