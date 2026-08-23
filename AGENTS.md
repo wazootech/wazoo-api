@@ -1,5 +1,7 @@
 # Agent guidelines
 
+This file overrides the workspace root AGENTS.md for repo-specific guidance.
+
 ## What this repo is
 
 This repository contains the Wazoo API service.
