@@ -11,9 +11,9 @@ import * as z from "zod/v4";
  * through the worlds-api. Auth reuses the existing bearer platform token.
  *
  * Tool surface v0:
- * - search_worlds: hybrid search across a world's graph
- * - sparql_query: run a SPARQL query against a world
- * - list_worlds: list all worlds for the authenticated user
+ * - wazoo_search_worlds: hybrid search across a world's graph
+ * - wazoo_sparql_query: run a SPARQL query against a world
+ * - wazoo_list_worlds: list all worlds for the authenticated user
  */
 export function registerMcpRoute(app: OpenAPIHono<AppEnv>) {
   const worldsApiUrl = process.env.WORLDS_API_URL ?? "https://data.wazoo.dev";
@@ -37,7 +37,7 @@ export function registerMcpRoute(app: OpenAPIHono<AppEnv>) {
     const server = new McpServer({ name: "wazoo", version: "0.1.0" });
 
     server.registerTool(
-      "search_worlds",
+      "wazoo_search_worlds",
       {
         description:
           "Search across world graphs using hybrid vector + pattern matching",
@@ -64,7 +64,7 @@ export function registerMcpRoute(app: OpenAPIHono<AppEnv>) {
     );
 
     server.registerTool(
-      "sparql_query",
+      "wazoo_sparql_query",
       {
         description: "Execute a SPARQL query against a world's RDF graph",
         inputSchema: z.object({
@@ -89,7 +89,7 @@ export function registerMcpRoute(app: OpenAPIHono<AppEnv>) {
     );
 
     server.registerTool(
-      "list_worlds",
+      "wazoo_list_worlds",
       {
         description: "List all worlds accessible to the authenticated user",
         inputSchema: z.object({}),
