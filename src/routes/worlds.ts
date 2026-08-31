@@ -417,22 +417,6 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     });
     if (res.error) {
       const detail = worldsApiErrorDetail(res);
-      // Surface the org-wide database-plan cap as a quota-style error instead
-      // of burying it in a generic provisioning failure.
-      if (detail.code === "DATABASE_LIMIT_REACHED") {
-        return respond(
-          c,
-          {
-            error: { code: detail.code, message: detail.message },
-            quota: {
-              state: "THROTTLED",
-              reason: "DATABASE_LIMIT_REACHED",
-              usagePercent: 100,
-            },
-          },
-          429,
-        );
-      }
       return respond(
         c,
         {

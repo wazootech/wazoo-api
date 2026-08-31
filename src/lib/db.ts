@@ -1,4 +1,3 @@
-import { createClient, type InValue } from "@libsql/client";
 import type { Bindings } from "../env";
 
 export type Row = Record<string, unknown>;
@@ -18,26 +17,23 @@ export type Database = {
   batch(statements: Array<{ sql: string; args?: unknown[] }>): Promise<void>;
 };
 
+/** Returns the D1 binding from the worker environment. */
 export function db(env: Bindings): Database {
-  const client = createClient({
-    url: env.TURSO_DATABASE_URL,
-    authToken: env.TURSO_AUTH_TOKEN,
-  });
+  const d1 = env.DB;
   return {
     prepare(sql) {
       const bound = (...args: unknown[]): BoundStatement => {
-        const statement = { sql, args: args as InValue[] };
+        const stmt = d1.prepare(sql).bind(...args);
         return {
           async all<T extends Row>() {
-            const result = await client.execute(statement);
-            return { results: result.rows as unknown as T[] };
+            const result = await stmt.all<T>();
+            return { results: result.results ?? [] };
           },
           async first<T extends Row>() {
-            const result = await client.execute(statement);
-            return (result.rows[0] as unknown as T | undefined) ?? null;
+            return await stmt.first<T>();
           },
           async run() {
-            await client.execute(statement);
+            await stmt.run();
           },
         };
       };
@@ -51,13 +47,12 @@ export function db(env: Bindings): Database {
       };
     },
     async batch(statements) {
-      await client.batch(
-        statements.map((statement) => ({
-          sql: statement.sql,
-          args: (statement.args ?? []) as InValue[],
-        })),
-        "write",
+      const stmts = statements.map((s) =>
+        s.args && s.args.length > 0
+          ? d1.prepare(s.sql).bind(...s.args)
+          : d1.prepare(s.sql),
       );
+      await d1.batch(stmts);
     },
   };
 }

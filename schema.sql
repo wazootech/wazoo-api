@@ -17,8 +17,6 @@ CREATE TABLE worlds (
   region TEXT NOT NULL DEFAULT 'auto',
   state TEXT NOT NULL DEFAULT 'active',
   worlds_api_uid TEXT,
-  turso_database_name TEXT,
-  turso_database_url TEXT,
   billing_provider TEXT NOT NULL DEFAULT 'STRIPE',
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT,

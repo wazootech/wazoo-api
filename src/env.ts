@@ -1,6 +1,5 @@
 export type Bindings = {
-  TURSO_DATABASE_URL: string;
-  TURSO_AUTH_TOKEN: string;
+  DB: import("@cloudflare/workers-types").D1Database;
   WAZOO_ENV?: string;
   API_BASE_URL?: string;
   WORLDS_API_URL: string;
@@ -27,8 +26,7 @@ export type AuthContext = {
 
 export function bindingsFromProcessEnv(): Bindings {
   const keys: (keyof Bindings)[] = [
-    "TURSO_DATABASE_URL",
-    "TURSO_AUTH_TOKEN",
+    "DB",
     "WAZOO_ENV",
     "API_BASE_URL",
     "WORLDS_API_URL",
