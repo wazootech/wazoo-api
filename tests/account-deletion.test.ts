@@ -6,20 +6,15 @@ import { join } from "node:path";
 import app from "../src/index";
 import type { Bindings } from "../src/env";
 
-import { createTestD1 } from "./helpers/d1-test-adapter";
+import { createTestD1, type TestD1 } from "./helpers/d1-test-adapter";
 
 const ADMIN_TOKEN = "wzp_test-admin-token";
 const TEST_EMAIL = "delete-me@example.com";
 
-type TestBindings = Bindings & {
-  TURSO_DATABASE_URL: string;
-  TURSO_AUTH_TOKEN: string;
-};
+type TestBindings = Bindings & { DB: TestD1 };
 
 function makeBindings(dbPath: string): TestBindings {
   return {
-    TURSO_DATABASE_URL: `file:${dbPath}`,
-    TURSO_AUTH_TOKEN: "",
     DB: createTestD1(dbPath),
     WORLDS_API_URL: "http://localhost:9999",
     WORLDS_API_ADMIN_KEY: "test",
@@ -178,7 +173,7 @@ describe("account deletion and data export (wazoo-api#26)", () => {
     const rawToken = "wzdel_test-confirm-token";
     const hash = await sha256Hex(rawToken);
 
-    const client = createClient({ url: `file:${env.TURSO_DATABASE_URL!}` });
+    const client = createClient({ url: `file:${(env.DB as TestD1).path}` });
     const ts = new Date(Date.now() + 60_000).toISOString();
     await client.execute({
       sql: "INSERT INTO deletion_requests (uid, user_uid, token_hash, expires_at) VALUES (?, ?, ?, ?)",
@@ -212,7 +207,7 @@ describe("account deletion and data export (wazoo-api#26)", () => {
     expect(worldsCall).toBeTruthy();
 
     // The user row is gone; world mirror + usage events cascaded away.
-    const check = createClient({ url: `file:${env.TURSO_DATABASE_URL!}` });
+    const check = createClient({ url: `file:${(env.DB as TestD1).path}` });
     const userRows = await check.execute({
       sql: "SELECT uid FROM users WHERE uid = ?",
       args: [userUid],

@@ -1,21 +1,23 @@
 import { createClient } from "@libsql/client";
 import type { Client, InStatement } from "@libsql/client";
 
-export function createTestD1(dbPath: string): D1Database {
+export type TestD1 = D1Database & { path: string };
+
+type BoundStatement = D1PreparedStatement & {
+  __input?: InStatement | string;
+};
+
+export function createTestD1(dbPath: string): TestD1 {
   const client = createClient({ url: `file:${dbPath}` });
-  return {
+  const database = {
     prepare(sql: string) {
       return createPrepared(client, sql);
     },
     async batch(statements: D1PreparedStatement[]) {
       const inputs = statements.map((statement) => {
-        const candidate = statement as D1PreparedStatement & {
-          __input?: InStatement | string;
-        };
-        if (!candidate.__input) {
-          throw new Error("Test D1 statement was not bound");
-        }
-        return candidate.__input;
+        const input = (statement as BoundStatement).__input;
+        if (!input) throw new Error("Test D1 statement was not bound");
+        return input;
       });
       await client.batch(inputs as InStatement[]);
       return [];
@@ -24,10 +26,12 @@ export function createTestD1(dbPath: string): D1Database {
       await client.executeMultiple(sql);
     },
   } as unknown as D1Database;
+
+  return Object.assign(database, { path: dbPath }) as TestD1;
 }
 
-function createPrepared(client: Client, sql: string): D1PreparedStatement {
-  const statement = {
+function createPrepared(client: Client, sql: string): BoundStatement {
+  return {
     bind(...args: unknown[]) {
       return createPreparedWithArgs(client, sql, args);
     },
@@ -35,15 +39,14 @@ function createPrepared(client: Client, sql: string): D1PreparedStatement {
     first: () => executeFirst(client, sql),
     run: () => executeRun(client, sql),
     __input: sql,
-  } as unknown as D1PreparedStatement & { __input?: InStatement | string };
-  return statement;
+  } as BoundStatement;
 }
 
 function createPreparedWithArgs(
   client: Client,
   sql: string,
   args: unknown[],
-): D1PreparedStatement {
+): BoundStatement {
   const input = { sql, args } as InStatement;
   return {
     bind: (...nextArgs: unknown[]) =>
@@ -52,7 +55,7 @@ function createPreparedWithArgs(
     first: () => executeFirst(client, input),
     run: () => executeRun(client, input),
     __input: input,
-  } as unknown as D1PreparedStatement;
+  } as BoundStatement;
 }
 
 async function execute(client: Client, input: string | InStatement) {
@@ -69,6 +72,6 @@ async function executeFirst<T = unknown>(
 }
 
 async function executeRun(client: Client, input: string | InStatement) {
-  await client.execute(input);
-  return { success: true, meta: { changes: 0 } };
+  const result = await client.execute(input);
+  return { success: true, meta: { changes: result.rowsAffected } };
 }

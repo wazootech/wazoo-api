@@ -6,7 +6,7 @@ import { join } from "node:path";
 import app from "../src/index";
 import type { Bindings } from "../src/env";
 
-import { createTestD1 } from "./helpers/d1-test-adapter";
+import { createTestD1, type TestD1 } from "./helpers/d1-test-adapter";
 import {
   SESSION_DEFAULT_SCOPES,
   TOKEN_DEFAULT_SCOPES,
@@ -17,15 +17,10 @@ import {
 const ADMIN_TOKEN = "wzp_test-admin-token";
 const TEST_EMAIL = "beta-user@example.com";
 
-type TestBindings = Bindings & {
-  TURSO_DATABASE_URL: string;
-  TURSO_AUTH_TOKEN: string;
-};
+type TestBindings = Bindings & { DB: TestD1 };
 
 function makeBindings(dbPath: string): TestBindings {
   return {
-    TURSO_DATABASE_URL: `file:${dbPath}`,
-    TURSO_AUTH_TOKEN: "",
     DB: createTestD1(dbPath),
     WORLDS_API_URL: "http://localhost:9999",
     WORLDS_API_ADMIN_KEY: "test",

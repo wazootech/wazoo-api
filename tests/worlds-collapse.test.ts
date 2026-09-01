@@ -14,22 +14,17 @@ import { join } from "node:path";
 import app from "../src/index";
 import type { Bindings } from "../src/env";
 
-import { createTestD1 } from "./helpers/d1-test-adapter";
+import { createTestD1, type TestD1 } from "./helpers/d1-test-adapter";
 
 const ADMIN_TOKEN = "wzp_test-admin-token";
 const TEST_EMAIL = "worlds-user@example.com";
 const WORLDS_BASE = "http://localhost:9999";
 const CREATED_UID = "w_created-123";
 
-type TestBindings = Bindings & {
-  TURSO_DATABASE_URL: string;
-  TURSO_AUTH_TOKEN: string;
-};
+type TestBindings = Bindings & { DB: TestD1 };
 
 function makeBindings(dbPath: string): TestBindings {
   return {
-    TURSO_DATABASE_URL: `file:${dbPath}`,
-    TURSO_AUTH_TOKEN: "",
     DB: createTestD1(dbPath),
     WORLDS_API_URL: WORLDS_BASE,
     WORLDS_API_ADMIN_KEY: "test",
@@ -201,7 +196,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     const worldReq = requestFromCall(worldCall![0], worldCall![1]);
     expect(worldReq.headers.get("Authorization")).toBe("Bearer wzw_test-key");
 
-    const client = createClient({ url: env.TURSO_DATABASE_URL! });
+    const client = createClient({ url: `file:${(env.DB as TestD1).path}` });
     const rs = await client.execute({
       sql: "SELECT worlds_api_uid FROM worlds WHERE world_id = 'my-world'",
     });

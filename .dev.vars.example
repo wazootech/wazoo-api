@@ -1,11 +1,12 @@
-# Local development variables for wazoo-api
+# Local development variables for wazoo-api.
 # Copy this file to `.dev.vars` and fill in real values.
+# The control plane uses Wrangler's local D1 binding; no database URL is needed.
 
 # Platform API base URL used by health scripts and local wrangler dev.
 API_BASE_URL="http://localhost:8787"
 
 # Local D1 control-plane database is managed by Wrangler.
-# Use `npx wrangler d1 migrations apply wazoo-api --local` when needed.
+# Apply schema with: npx wrangler d1 migrations apply wazoo-api --local
 
 # Data-plane API used for world storage/query/import/export.
 WORLDS_API_URL="http://localhost:8081"

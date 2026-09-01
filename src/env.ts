@@ -1,9 +1,5 @@
 export type Bindings = {
   DB: import("@cloudflare/workers-types").D1Database;
-  /** Legacy test fixture path; production uses DB. */
-  TURSO_DATABASE_URL?: string;
-  /** Legacy test fixture path; production uses DB. */
-  TURSO_AUTH_TOKEN?: string;
   WAZOO_ENV?: string;
   API_BASE_URL?: string;
   WORLDS_API_URL: string;

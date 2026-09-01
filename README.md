@@ -28,8 +28,7 @@ Control-plane API for Wazoo. This repo owns the `api.wazoo.dev` Cloudflare Worke
 
 Required runtime variables:
 
-- `TURSO_DATABASE_URL`: control-plane libSQL database URL.
-- `TURSO_AUTH_TOKEN`: control-plane database auth token.
+- `DB`: Cloudflare D1 control-plane binding, configured by Wrangler.
 - `WORLDS_API_URL`: data-plane API base URL.
 - `WORLDS_API_ADMIN_KEY`: admin key accepted by `worlds-api`.
 - `API_BASE_URL`: public base URL for this service.
@@ -38,15 +37,13 @@ Required runtime variables:
   server-to-server admin calls. Must be seeded in the control-plane database.
   See [CONTRIBUTING.md](CONTRIBUTING.md) for how to generate and seed it. For D1, use `npm run launch:seed-admin-d1` with the Cloudflare credentials and target database ID.
 
-Required for world database provisioning (Cloudflare Worker only):
+D1 provisioning:
 
-- `TURSO_ORG`: Turso organization slug.
-- `TURSO_GROUP`: Turso group name for new world databases.
-- `TURSO_PLATFORM_API_TOKEN`: Turso platform API token with permission to create
-  databases and issue auth tokens. This must be set as a Wrangler secret on the
-  deployed Worker. Without it, creating a new World returns "Turso provisioning
-  is not configured". See [CONTRIBUTING.md](CONTRIBUTING.md) for the full
-  end-to-end setup (Turso CLI install, token minting, and `wrangler secret put`).
+- The control-plane D1 database is created and bound by Wrangler configuration.
+- Apply `schema.sql` before deploying a new environment.
+- Generate a fresh global admin token with `npm run launch:seed-admin-d1`.
+  The database stores only its SHA-256 hash; save the printed plaintext only in
+  the approved secret store and repository secret managers.
 
 Optional Stripe variables:
 
@@ -88,11 +85,8 @@ npm run deploy:dry
 npm run deploy
 ```
 
-Docker component:
+GitHub Actions validates formatting, typechecking, Worker dry deploy, Docker build, publishes the GHCR image on `main`, and deploys the configured Cloudflare Worker on `main`.
 
-```sh
-docker build -t ghcr.io/wazootech/wazoo-api:latest .
-docker compose up
-```
-
-GitHub Actions validates formatting, typechecking, Worker dry deploy, Docker build, publishes the GHCR image on `main`, and deploys `api.wazoo.dev` on `main`.
+Docker Compose is not a supported runtime for this service because D1 is a
+Cloudflare-managed binding. Use Wrangler for local development and D1 schema
+initialization.
