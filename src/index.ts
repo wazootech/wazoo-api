@@ -8,6 +8,7 @@ import { registerTokensRoutes } from "./routes/tokens";
 import { registerUsageRoutes } from "./routes/usage";
 import { registerUsersRoutes } from "./routes/users";
 import { registerWorldsRoutes } from "./routes/worlds";
+import { registerMcpRoute } from "./routes/mcp";
 import { errorHandler, requireAuth } from "./lib/http";
 
 const app = new OpenAPIHono<AppEnv>();
@@ -53,6 +54,9 @@ registerWorldsRoutes(app);
 registerTokensRoutes(app);
 registerUsageRoutes(app);
 registerBillingRoutes(app);
+
+app.use("/mcp", requireAuth);
+registerMcpRoute(app);
 
 /**
  * openApiDocOptions is the OpenAPI document configuration. It is the single

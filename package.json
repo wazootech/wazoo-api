@@ -20,6 +20,8 @@
   "dependencies": {
     "@hono/node-server": "^2.0.10",
     "@hono/zod-openapi": "^1.5.1",
+    "@modelcontextprotocol/hono": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "@workos-inc/node": "^10.8.0",
     "@worlds/client": "npm:@jsr/worlds__client@^0.1.0",
     "hono": "^4.10.3",
