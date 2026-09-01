@@ -10,6 +10,7 @@
     "launch:seed-admin-d1": "node scripts/seed-admin-token-d1.mjs",
     "health:beta": "node scripts/private-beta-health.mjs",
     "health:local": "node scripts/local-health.mjs",
+    "smoke:qa": "node scripts/platform-smoke.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

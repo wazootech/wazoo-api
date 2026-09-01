@@ -1,0 +1,41 @@
+name: smoke-qa
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      apiBaseUrl:
+        description: "Management API base URL"
+        required: false
+        default: "https://api-qa.wazoo.dev"
+      worldsApiUrl:
+        description: "Data API base URL"
+        required: false
+        default: "https://data-qa.wazoo.dev"
+      consoleUrl:
+        description: "Console base URL"
+        required: false
+        default: "https://console-qa.wazoo.dev"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Platform smoke gate against QA
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run platform smoke gate
+        run: npm run smoke:qa
+        env:
+          API_BASE_URL: ${{ inputs.apiBaseUrl || 'https://api-qa.wazoo.dev' }}
+          WORLDS_API_URL: ${{ inputs.worldsApiUrl || 'https://data-qa.wazoo.dev' }}
+          CONSOLE_URL: ${{ inputs.consoleUrl || 'https://console-qa.wazoo.dev' }}
+          WAZOO_PLATFORM_ADMIN_TOKEN: ${{ secrets.WAZOO_PLATFORM_ADMIN_TOKEN }}
