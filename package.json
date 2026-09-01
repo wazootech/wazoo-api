@@ -10,6 +10,7 @@
     "launch:create-control-db": "node scripts/create-control-db.mjs",
     "launch:apply-schema": "node scripts/apply-control-schema.mjs",
     "launch:seed-admin": "node scripts/seed-admin-token.mjs",
+    "launch:seed-admin-d1": "node scripts/seed-admin-token-d1.mjs",
     "health:beta": "node scripts/private-beta-health.mjs",
     "health:local": "node scripts/local-health.mjs",
     "typecheck": "tsc --noEmit",
@@ -21,6 +22,7 @@
   "dependencies": {
     "@hono/node-server": "^2.0.10",
     "@hono/zod-openapi": "^1.5.1",
+    "@libsql/client": "^0.17.4",
     "@workos-inc/node": "^10.8.0",
     "@worlds/client": "npm:@jsr/worlds__client@^0.1.0",
     "hono": "^4.10.3",

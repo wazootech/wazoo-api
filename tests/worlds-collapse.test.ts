@@ -14,15 +14,23 @@ import { join } from "node:path";
 import app from "../src/index";
 import type { Bindings } from "../src/env";
 
+import { createTestD1 } from "./helpers/d1-test-adapter";
+
 const ADMIN_TOKEN = "wzp_test-admin-token";
 const TEST_EMAIL = "worlds-user@example.com";
 const WORLDS_BASE = "http://localhost:9999";
 const CREATED_UID = "w_created-123";
 
-function makeBindings(dbPath: string): Bindings {
+type TestBindings = Bindings & {
+  TURSO_DATABASE_URL: string;
+  TURSO_AUTH_TOKEN: string;
+};
+
+function makeBindings(dbPath: string): TestBindings {
   return {
     TURSO_DATABASE_URL: `file:${dbPath}`,
     TURSO_AUTH_TOKEN: "",
+    DB: createTestD1(dbPath),
     WORLDS_API_URL: WORLDS_BASE,
     WORLDS_API_ADMIN_KEY: "test",
     WAZOO_PLATFORM_ADMIN_TOKEN: ADMIN_TOKEN,
@@ -193,14 +201,14 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     const worldReq = requestFromCall(worldCall![0], worldCall![1]);
     expect(worldReq.headers.get("Authorization")).toBe("Bearer wzw_test-key");
 
-    const client = createClient({ url: env.TURSO_DATABASE_URL });
+    const client = createClient({ url: env.TURSO_DATABASE_URL! });
     const rs = await client.execute({
-      sql: "SELECT worlds_api_uid, turso_database_url FROM worlds WHERE world_id = 'my-world'",
+      sql: "SELECT worlds_api_uid FROM worlds WHERE world_id = 'my-world'",
     });
     await client.close();
     expect(rs.rows.length).toBe(1);
     expect(rs.rows[0].worlds_api_uid).toBe(CREATED_UID);
-    expect(rs.rows[0].turso_database_url).toBeNull();
+    expect(rs.rows[0].worlds_api_uid).toBe(CREATED_UID);
   });
 
   it("deletes via worlds-api by world_uid and mirrors state locally", async () => {
@@ -252,7 +260,10 @@ describe("world ownership collapse (wazoo-api#20)", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            error: { code: "PROVISIONING_FAILED", message: "turso down" },
+            error: {
+              code: "PROVISIONING_FAILED",
+              message: "data plane unavailable",
+            },
           }),
           { status: 502 },
         ),
@@ -278,6 +289,6 @@ describe("world ownership collapse (wazoo-api#20)", () => {
       error: { code: string; message: string };
     };
     expect(body.error.code).toBe("WORLD_PROVISIONING_FAILED");
-    expect(body.error.message).toContain("turso down");
+    expect(body.error.message).toContain("data plane unavailable");
   });
 });

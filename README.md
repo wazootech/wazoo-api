@@ -36,7 +36,7 @@ Required runtime variables:
 - `WAZOO_ENV`: deployment environment label.
 - `WAZOO_PLATFORM_ADMIN_TOKEN`: global admin token used by health checks and
   server-to-server admin calls. Must be seeded in the control-plane database.
-  See [CONTRIBUTING.md](CONTRIBUTING.md) for how to generate and seed it.
+  See [CONTRIBUTING.md](CONTRIBUTING.md) for how to generate and seed it. For D1, use `npm run launch:seed-admin-d1` with the Cloudflare credentials and target database ID.
 
 Required for world database provisioning (Cloudflare Worker only):
 
@@ -73,11 +73,7 @@ npm run dev
 npm run typecheck
 ```
 
-Apply the clean beta schema to a new libSQL database:
-
-```sh
-turso db shell <database-name> < schema.sql
-```
+The control plane uses Cloudflare D1. Apply `schema.sql` through the approved D1 deployment/provisioning process before serving traffic.
 
 Platform tokens use the `wzp_` prefix. Global admin tokens must be manually seeded with `kind = 'ADMIN'`, `user_uid = NULL`, and a scope containing `admin`.
 

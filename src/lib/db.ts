@@ -20,6 +20,7 @@ export type Database = {
 /** Returns the D1 binding from the worker environment. */
 export function db(env: Bindings): Database {
   const d1 = env.DB;
+  if (!d1) throw new Error("D1 database binding DB is required");
   return {
     prepare(sql) {
       const bound = (...args: unknown[]): BoundStatement => {

@@ -1,5 +1,9 @@
 export type Bindings = {
   DB: import("@cloudflare/workers-types").D1Database;
+  /** Legacy test fixture path; production uses DB. */
+  TURSO_DATABASE_URL?: string;
+  /** Legacy test fixture path; production uses DB. */
+  TURSO_AUTH_TOKEN?: string;
   WAZOO_ENV?: string;
   API_BASE_URL?: string;
   WORLDS_API_URL: string;
@@ -47,7 +51,7 @@ export function bindingsFromProcessEnv(): Bindings {
     const value = process.env[key];
     if (value !== undefined) env[key] = value;
   }
-  return env as Bindings;
+  return env as unknown as Bindings;
 }
 
 export type AppEnv = {

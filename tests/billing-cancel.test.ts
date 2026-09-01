@@ -6,13 +6,21 @@ import { join } from "node:path";
 import app from "../src/index";
 import type { Bindings } from "../src/env";
 
+import { createTestD1 } from "./helpers/d1-test-adapter";
+
 const ADMIN_TOKEN = "wzp_test-admin-token";
 const TEST_EMAIL = "billing-user@example.com";
 
-function makeBindings(dbPath: string): Bindings {
+type TestBindings = Bindings & {
+  TURSO_DATABASE_URL: string;
+  TURSO_AUTH_TOKEN: string;
+};
+
+function makeBindings(dbPath: string): TestBindings {
   return {
     TURSO_DATABASE_URL: `file:${dbPath}`,
     TURSO_AUTH_TOKEN: "",
+    DB: createTestD1(dbPath),
     WORLDS_API_URL: "http://localhost:9999",
     WORLDS_API_ADMIN_KEY: "test",
     WAZOO_PLATFORM_ADMIN_TOKEN: ADMIN_TOKEN,
@@ -134,7 +142,7 @@ describe("cancel subscription (wazoo-console#53)", () => {
 
   it("cancels via Stripe when a secret key is configured", async () => {
     // Reset the world to a configured subscription.
-    const client = createClient({ url: `file:${env.TURSO_DATABASE_URL}` });
+    const client = createClient({ url: `file:${env.TURSO_DATABASE_URL!}` });
     await client.execute({
       sql: "UPDATE worlds SET stripe_subscription_id = 'sub_test2', billing_state = 'ACTIVE' WHERE world_id = 'billing-world'",
     });

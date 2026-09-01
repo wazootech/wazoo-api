@@ -6,12 +6,19 @@ import { join } from "node:path";
 import app from "../src/index";
 import type { Bindings } from "../src/env";
 
+import { createTestD1 } from "./helpers/d1-test-adapter";
 const ADMIN_TOKEN = "wzp_test-admin-token";
 
-function makeBindings(dbPath: string): Bindings {
+type TestBindings = Bindings & {
+  TURSO_DATABASE_URL: string;
+  TURSO_AUTH_TOKEN: string;
+};
+
+function makeBindings(dbPath: string): TestBindings {
   return {
     TURSO_DATABASE_URL: `file:${dbPath}`,
     TURSO_AUTH_TOKEN: "",
+    DB: createTestD1(dbPath),
     WORLDS_API_URL: "http://localhost:9999",
     WORLDS_API_ADMIN_KEY: "test",
     WAZOO_PLATFORM_ADMIN_TOKEN: ADMIN_TOKEN,
@@ -116,7 +123,7 @@ describe("age gate / COPPA affirmation (wazoo-api#27)", () => {
       ((await res.json()) as { token: string }).token.startsWith("wzp_"),
     ).toBe(true);
 
-    const client = createClient({ url: `file:${env.TURSO_DATABASE_URL}` });
+    const client = createClient({ url: `file:${env.TURSO_DATABASE_URL!}` });
     const row = await client.execute({
       sql: "SELECT age_confirmed_at FROM users WHERE email = ?",
       args: ["beta-user@example.com"],
