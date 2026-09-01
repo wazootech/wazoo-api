@@ -106,7 +106,7 @@ describe("platform token scopes (wazoo-api#13 / wazoo-api#14)", () => {
   });
 
   afterAll(() => {
-    // Libsql clients opened inside the app may briefly hold file handles on
+    // Local SQLite-backed D1 adapters may briefly hold file handles on
     // Windows; retry so temp-dir cleanup does not flake.
     try {
       rmSync(dir, {

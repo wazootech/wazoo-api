@@ -74,7 +74,7 @@ function worldsApiMockHandler(input: RequestInfo | URL, init?: RequestInit) {
         uid: CREATED_UID,
         displayName: "My World",
         state: "active",
-        storage: "libsql-per-world",
+        storage: "d1-world",
         embeddingModel: "tfjs-universal-sentence-encoder",
         chunkSize: 1000,
         topK: 20,
