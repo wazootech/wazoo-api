@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
@@ -70,7 +71,7 @@ jobs:
       - run: npm run health:beta
         env:
           API_BASE_URL: https://api-qa.wazoo.dev
-          WORLDS_API_URL: https://worlds-api-qa.wazoo.dev
+          WORLDS_API_URL: https://data-qa.wazoo.dev
           WAZOO_PLATFORM_ADMIN_TOKEN: ${{ secrets.WAZOO_PLATFORM_ADMIN_TOKEN }}
 
   deploy-prod:

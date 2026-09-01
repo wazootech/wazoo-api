@@ -4,7 +4,7 @@ const apiBaseUrl = normalizeBaseUrl(
   process.env.API_BASE_URL ?? "http://localhost:8787",
 );
 const worldsBaseUrl = normalizeBaseUrl(
-  process.env.WORLDS_API_URL ?? "https://worlds-api.wazoo.dev",
+  process.env.WORLDS_API_URL ?? "https://data.wazoo.dev",
 );
 const adminToken = required("WAZOO_PLATFORM_ADMIN_TOKEN");
 const runId = process.env.WAZOO_HEALTH_RUN_ID ?? Date.now().toString(36);
@@ -14,7 +14,12 @@ const worldIds = [
   process.env.WAZOO_HEALTH_WORLD_2 ?? `health-${runId}-b`,
 ];
 
-const state = { userUid: null, worldUid: null, worldTokenUid: null, worldToken: null };
+const state = {
+  userUid: null,
+  worldUid: null,
+  worldTokenUid: null,
+  worldToken: null,
+};
 
 try {
   await step("platform health", () => apiRequest("/health", { auth: false }));

@@ -1,17 +1,19 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createClient } from "@libsql/client";
+import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import app from "../src/index";
 import type { Bindings } from "../src/env";
 
+import { createTestD1, type TestD1 } from "./helpers/d1-test-adapter";
 const ADMIN_TOKEN = "wzp_test-admin-token";
 
-function makeBindings(dbPath: string): Bindings {
+type TestBindings = Bindings & { DB: TestD1 };
+
+function makeBindings(dbPath: string): TestBindings {
   return {
-    TURSO_DATABASE_URL: `file:${dbPath}`,
-    TURSO_AUTH_TOKEN: "",
+    DB: createTestD1(dbPath),
     WORLDS_API_URL: "http://localhost:9999",
     WORLDS_API_ADMIN_KEY: "test",
     WAZOO_PLATFORM_ADMIN_TOKEN: ADMIN_TOKEN,
@@ -57,11 +59,9 @@ describe("age gate / COPPA affirmation (wazoo-api#27)", () => {
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), "wazoo-api-age-gate-"));
     const dbPath = join(dir, "test.db");
-    const client = createClient({ url: `file:${dbPath}` });
-    await client.executeMultiple(
-      readFileSync(join(process.cwd(), "schema.sql"), "utf8"),
-    );
-    await client.close();
+    const client = new DatabaseSync(dbPath);
+    client.exec(readFileSync(join(process.cwd(), "schema.sql"), "utf8"));
+    client.close();
     env = makeBindings(dbPath);
   });
 
@@ -116,14 +116,13 @@ describe("age gate / COPPA affirmation (wazoo-api#27)", () => {
       ((await res.json()) as { token: string }).token.startsWith("wzp_"),
     ).toBe(true);
 
-    const client = createClient({ url: `file:${env.TURSO_DATABASE_URL}` });
-    const row = await client.execute({
-      sql: "SELECT age_confirmed_at FROM users WHERE email = ?",
-      args: ["beta-user@example.com"],
-    });
-    await client.close();
+    const client = new DatabaseSync((env.DB as TestD1).path);
+    const row = client
+      .prepare("SELECT age_confirmed_at FROM users WHERE email = ?")
+      .all("beta-user@example.com");
+    client.close();
     expect(
-      (row.rows[0] as Record<string, unknown> | undefined)?.age_confirmed_at,
+      (row[0] as Record<string, unknown> | undefined)?.age_confirmed_at,
     ).toBeTruthy();
   });
 

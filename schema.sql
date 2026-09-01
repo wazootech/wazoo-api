@@ -1,6 +1,6 @@
 PRAGMA foreign_keys = ON;
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   uid TEXT PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
   display_name TEXT,
@@ -9,7 +9,7 @@ CREATE TABLE users (
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
-CREATE TABLE worlds (
+CREATE TABLE IF NOT EXISTS worlds (
   uid TEXT PRIMARY KEY,
   user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
   world_id TEXT NOT NULL,
@@ -17,8 +17,6 @@ CREATE TABLE worlds (
   region TEXT NOT NULL DEFAULT 'auto',
   state TEXT NOT NULL DEFAULT 'active',
   worlds_api_uid TEXT,
-  turso_database_name TEXT,
-  turso_database_url TEXT,
   billing_provider TEXT NOT NULL DEFAULT 'STRIPE',
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT,
@@ -31,7 +29,7 @@ CREATE TABLE worlds (
   UNIQUE (user_uid, world_id)
 );
 
-CREATE TABLE platform_api_tokens (
+CREATE TABLE IF NOT EXISTS platform_api_tokens (
   uid TEXT PRIMARY KEY,
   user_uid TEXT REFERENCES users(uid) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -45,7 +43,7 @@ CREATE TABLE platform_api_tokens (
   CHECK (kind != 'ADMIN' OR (user_uid IS NULL AND instr(scope, 'admin') > 0))
 );
 
-CREATE TABLE usage_events (
+CREATE TABLE IF NOT EXISTS usage_events (
   uid TEXT PRIMARY KEY,
   user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
   world_uid TEXT REFERENCES worlds(uid) ON DELETE SET NULL,
@@ -59,7 +57,7 @@ CREATE TABLE usage_events (
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
-CREATE TABLE world_limits (
+CREATE TABLE IF NOT EXISTS world_limits (
   world_uid TEXT NOT NULL REFERENCES worlds(uid) ON DELETE CASCADE,
   metric TEXT NOT NULL,
   limit_quantity INTEGER NOT NULL,
@@ -68,12 +66,12 @@ CREATE TABLE world_limits (
   PRIMARY KEY (world_uid, metric)
 );
 
-CREATE TABLE beta_allowlist (
+CREATE TABLE IF NOT EXISTS beta_allowlist (
   email TEXT PRIMARY KEY,
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
-CREATE TABLE admin_audit_events (
+CREATE TABLE IF NOT EXISTS admin_audit_events (
   uid TEXT PRIMARY KEY,
   actor_token_uid TEXT,
   action TEXT NOT NULL,
@@ -83,9 +81,9 @@ CREATE TABLE admin_audit_events (
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
-CREATE INDEX idx_worlds_user ON worlds(user_uid);
-CREATE INDEX idx_usage_world_time ON usage_events(world_uid, create_time);
-CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_worlds_user ON worlds(user_uid);
+CREATE INDEX IF NOT EXISTS idx_usage_world_time ON usage_events(world_uid, create_time);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
 -- One row per pending account-deletion request. The confirmation token is
 -- stored hashed (never plaintext) and short-lived; DELETE /v1/users/me
@@ -93,7 +91,7 @@ CREATE INDEX idx_users_email ON users(email);
 -- delete: FK cascades remove the user's worlds mirror rows, platform tokens,
 -- and usage events, while worlds-api's namespace delete marks the underlying
 -- per-world databases for the purge sweep.
-CREATE TABLE deletion_requests (
+CREATE TABLE IF NOT EXISTS deletion_requests (
   uid TEXT PRIMARY KEY,
   user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
   token_hash TEXT NOT NULL UNIQUE,
@@ -101,7 +99,7 @@ CREATE TABLE deletion_requests (
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
-CREATE TABLE rate_limit_entries (
+CREATE TABLE IF NOT EXISTS rate_limit_entries (
   key TEXT PRIMARY KEY,
   count INTEGER NOT NULL DEFAULT 1,
   reset_at_ms INTEGER NOT NULL

@@ -7,10 +7,14 @@ routes = [
   { pattern = "api.wazoo.dev", custom_domain = true }
 ]
 
+[[d1_databases]]
+binding = "DB"
+database_name = "wazoo-api"
+database_id = "478c3732-dd9d-4931-825b-cf763ab67017"
+
 [vars]
 API_BASE_URL = "https://api.wazoo.dev"
-TURSO_DATABASE_URL = "libsql://wazoo-platform-prod-ethanthatonekid.aws-us-west-2.turso.io"
-WORLDS_API_URL = "https://worlds-api.wazoo.dev"
+WORLDS_API_URL = "https://data.wazoo.dev"
 WAZOO_ENV = "prod"
 STRIPE_PRICE_ID = ""
 
@@ -20,10 +24,14 @@ routes = [
   { pattern = "api-qa.wazoo.dev", custom_domain = true }
 ]
 
+[[env.qa.d1_databases]]
+binding = "DB"
+database_name = "wazoo-api-qa"
+database_id = "54648bbf-c775-4c89-96b0-d1eb00dd2e43"
+
 [env.qa.vars]
 API_BASE_URL = "https://api-qa.wazoo.dev"
-TURSO_DATABASE_URL = "libsql://wazoo-platform-qa-ethanthatonekid.aws-us-west-2.turso.io"
-WORLDS_API_URL = "https://worlds-api-qa.wazoo.dev"
+WORLDS_API_URL = "https://data-qa.wazoo.dev"
 WAZOO_ENV = "qa"
 STRIPE_PRICE_ID = ""
 
