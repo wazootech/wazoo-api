@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createClient } from "@libsql/client";
+import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -59,11 +59,9 @@ describe("age gate / COPPA affirmation (wazoo-api#27)", () => {
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), "wazoo-api-age-gate-"));
     const dbPath = join(dir, "test.db");
-    const client = createClient({ url: `file:${dbPath}` });
-    await client.executeMultiple(
-      readFileSync(join(process.cwd(), "schema.sql"), "utf8"),
-    );
-    await client.close();
+    const client = new DatabaseSync(dbPath);
+    client.exec(readFileSync(join(process.cwd(), "schema.sql"), "utf8"));
+    client.close();
     env = makeBindings(dbPath);
   });
 
@@ -118,14 +116,13 @@ describe("age gate / COPPA affirmation (wazoo-api#27)", () => {
       ((await res.json()) as { token: string }).token.startsWith("wzp_"),
     ).toBe(true);
 
-    const client = createClient({ url: `file:${(env.DB as TestD1).path}` });
-    const row = await client.execute({
-      sql: "SELECT age_confirmed_at FROM users WHERE email = ?",
-      args: ["beta-user@example.com"],
-    });
-    await client.close();
+    const client = new DatabaseSync((env.DB as TestD1).path);
+    const row = client
+      .prepare("SELECT age_confirmed_at FROM users WHERE email = ?")
+      .all("beta-user@example.com");
+    client.close();
     expect(
-      (row.rows[0] as Record<string, unknown> | undefined)?.age_confirmed_at,
+      (row[0] as Record<string, unknown> | undefined)?.age_confirmed_at,
     ).toBeTruthy();
   });
 

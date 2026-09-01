@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createClient } from "@libsql/client";
+import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -51,11 +51,9 @@ describe("platform token scopes (wazoo-api#13 / wazoo-api#14)", () => {
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), "wazoo-api-token-scopes-"));
     const dbPath = join(dir, "test.db");
-    const client = createClient({ url: `file:${dbPath}` });
-    await client.executeMultiple(
-      readFileSync(join(process.cwd(), "schema.sql"), "utf8"),
-    );
-    await client.close();
+    const client = new DatabaseSync(dbPath);
+    client.exec(readFileSync(join(process.cwd(), "schema.sql"), "utf8"));
+    client.close();
     env = makeBindings(dbPath);
 
     // Mint a console session token through the real admin-gated endpoint.

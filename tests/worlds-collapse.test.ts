@@ -7,7 +7,7 @@ import {
   it,
   vi,
 } from "vitest";
-import { createClient } from "@libsql/client";
+import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -109,11 +109,9 @@ describe("world ownership collapse (wazoo-api#20)", () => {
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), "wazoo-api-worlds-collapse-"));
     const dbPath = join(dir, "test.db");
-    const client = createClient({ url: `file:${dbPath}` });
-    await client.executeMultiple(
-      readFileSync(join(process.cwd(), "schema.sql"), "utf8"),
-    );
-    await client.close();
+    const client = new DatabaseSync(dbPath);
+    client.exec(readFileSync(join(process.cwd(), "schema.sql"), "utf8"));
+    client.close();
     env = makeBindings(dbPath);
 
     const sessionRes = await api(
@@ -196,14 +194,14 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     const worldReq = requestFromCall(worldCall![0], worldCall![1]);
     expect(worldReq.headers.get("Authorization")).toBe("Bearer wzw_test-key");
 
-    const client = createClient({ url: `file:${(env.DB as TestD1).path}` });
-    const rs = await client.execute({
-      sql: "SELECT worlds_api_uid FROM worlds WHERE world_id = 'my-world'",
-    });
-    await client.close();
-    expect(rs.rows.length).toBe(1);
-    expect(rs.rows[0].worlds_api_uid).toBe(CREATED_UID);
-    expect(rs.rows[0].worlds_api_uid).toBe(CREATED_UID);
+    const client = new DatabaseSync((env.DB as TestD1).path);
+    const rs = client
+      .prepare("SELECT worlds_api_uid FROM worlds WHERE world_id = 'my-world'")
+      .all();
+    client.close();
+    expect(rs.length).toBe(1);
+    expect(rs[0].worlds_api_uid).toBe(CREATED_UID);
+    expect(rs[0].worlds_api_uid).toBe(CREATED_UID);
   });
 
   it("deletes via worlds-api by world_uid and mirrors state locally", async () => {

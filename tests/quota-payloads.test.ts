@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { createClient } from "@libsql/client";
+import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -64,11 +64,9 @@ describe("quota payloads on usage and billing surfaces (wazoo-api#34)", () => {
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), "wazoo-api-quota-payloads-"));
     const dbPath = join(dir, "test.db");
-    const client = createClient({ url: `file:${dbPath}` });
-    await client.executeMultiple(
-      readFileSync(join(process.cwd(), "schema.sql"), "utf8"),
-    );
-    await client.close();
+    const client = new DatabaseSync(dbPath);
+    client.exec(readFileSync(join(process.cwd(), "schema.sql"), "utf8"));
+    client.close();
     env = makeBindings(dbPath);
 
     const sessionRes = await api(
@@ -94,27 +92,29 @@ describe("quota payloads on usage and billing surfaces (wazoo-api#34)", () => {
     );
     const userUid = ((await me.json()) as { user: { uid: string } }).user.uid;
 
-    const seed = createClient({ url: `file:${dbPath}` });
+    const seed = new DatabaseSync(dbPath);
     const ts = new Date().toISOString();
-    await seed.execute({
-      sql: "INSERT INTO worlds (uid, user_uid, world_id, display_name, state, billing_state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', 'BETA_FREE', ?, ?)",
-      args: ["w_quota_1", userUid, "quota-world", "Quota World", ts, ts],
-    });
-    await seed.execute({
-      sql: "INSERT INTO worlds (uid, user_uid, world_id, display_name, state, billing_state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', 'PAST_DUE', ?, ?)",
-      args: ["w_quota_2", userUid, "due-world", "Due World", ts, ts],
-    });
-    await seed.execute({
-      sql: "INSERT INTO world_limits (world_uid, metric, limit_quantity, create_time, update_time) VALUES (?, ?, ?, ?, ?)",
-      args: ["w_quota_1", "SPARQL_QUERIES", 10000, ts, ts],
-    });
-    for (let i = 0; i < 92; i++) {
-      await seed.execute({
-        sql: "INSERT INTO usage_events (uid, user_uid, world_uid, metric, quantity, unit, create_time) VALUES (?, ?, ?, 'SPARQL_QUERIES', 100, 'count', ?)",
-        args: [`usage_${i}`, userUid, "w_quota_1", ts],
-      });
-    }
-    await seed.close();
+    seed
+      .prepare(
+        "INSERT INTO worlds (uid, user_uid, world_id, display_name, state, billing_state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', 'BETA_FREE', ?, ?)",
+      )
+      .run("w_quota_1", userUid, "quota-world", "Quota World", ts, ts);
+    seed
+      .prepare(
+        "INSERT INTO worlds (uid, user_uid, world_id, display_name, state, billing_state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', 'PAST_DUE', ?, ?)",
+      )
+      .run("w_quota_2", userUid, "due-world", "Due World", ts, ts);
+    seed
+      .prepare(
+        "INSERT INTO world_limits (world_uid, metric, limit_quantity, create_time, update_time) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run("w_quota_1", "SPARQL_QUERIES", 10000, ts, ts);
+    const usage = seed.prepare(
+      "INSERT INTO usage_events (uid, user_uid, world_uid, metric, quantity, unit, create_time) VALUES (?, ?, ?, 'SPARQL_QUERIES', 100, 'count', ?)",
+    );
+    for (let i = 0; i < 92; i++)
+      usage.run(`usage_${i}`, userUid, "w_quota_1", ts);
+    seed.close();
   });
 
   afterAll(() => {

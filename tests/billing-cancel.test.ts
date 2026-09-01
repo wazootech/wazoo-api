@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { createClient } from "@libsql/client";
+import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -51,11 +51,9 @@ describe("cancel subscription (wazoo-console#53)", () => {
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), "wazoo-api-billing-cancel-"));
     const dbPath = join(dir, "test.db");
-    const client = createClient({ url: `file:${dbPath}` });
-    await client.executeMultiple(
-      readFileSync(join(process.cwd(), "schema.sql"), "utf8"),
-    );
-    await client.close();
+    const client = new DatabaseSync(dbPath);
+    client.exec(readFileSync(join(process.cwd(), "schema.sql"), "utf8"));
+    client.close();
     env = makeBindings(dbPath);
 
     const sessionRes = await api(
@@ -81,17 +79,19 @@ describe("cancel subscription (wazoo-console#53)", () => {
       env,
     );
     const userUid = ((await me.json()) as { user: { uid: string } }).user.uid;
-    const seed = createClient({ url: `file:${dbPath}` });
+    const seed = new DatabaseSync(dbPath);
     const ts = new Date().toISOString();
-    await seed.execute({
-      sql: "INSERT INTO worlds (uid, user_uid, world_id, display_name, state, stripe_customer_id, stripe_subscription_id, billing_state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', 'cus_test', 'sub_test', 'ACTIVE', ?, ?)",
-      args: ["w_billing_1", userUid, "billing-world", "Billing World", ts, ts],
-    });
-    await seed.execute({
-      sql: "INSERT INTO worlds (uid, user_uid, world_id, display_name, state, billing_state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', 'BETA_FREE', ?, ?)",
-      args: ["w_billing_free", userUid, "free-world", "Free World", ts, ts],
-    });
-    await seed.close();
+    seed
+      .prepare(
+        "INSERT INTO worlds (uid, user_uid, world_id, display_name, state, stripe_customer_id, stripe_subscription_id, billing_state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', 'cus_test', 'sub_test', 'ACTIVE', ?, ?)",
+      )
+      .run("w_billing_1", userUid, "billing-world", "Billing World", ts, ts);
+    seed
+      .prepare(
+        "INSERT INTO worlds (uid, user_uid, world_id, display_name, state, billing_state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', 'BETA_FREE', ?, ?)",
+      )
+      .run("w_billing_free", userUid, "free-world", "Free World", ts, ts);
+    seed.close();
   });
 
   afterAll(() => {
@@ -137,11 +137,13 @@ describe("cancel subscription (wazoo-console#53)", () => {
 
   it("cancels via Stripe when a secret key is configured", async () => {
     // Reset the world to a configured subscription.
-    const client = createClient({ url: `file:${(env.DB as TestD1).path}` });
-    await client.execute({
-      sql: "UPDATE worlds SET stripe_subscription_id = 'sub_test2', billing_state = 'ACTIVE' WHERE world_id = 'billing-world'",
-    });
-    await client.close();
+    const client = new DatabaseSync((env.DB as TestD1).path);
+    client
+      .prepare(
+        "UPDATE worlds SET stripe_subscription_id = 'sub_test2', billing_state = 'ACTIVE' WHERE world_id = 'billing-world'",
+      )
+      .run();
+    client.close();
 
     const stripeFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ id: "sub_test2", status: "canceled" }), {

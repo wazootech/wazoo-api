@@ -1,17 +1,16 @@
-import { createClient } from "@libsql/client";
-import type { Client, InStatement } from "@libsql/client";
+import { DatabaseSync } from "node:sqlite";
 
-export type TestD1 = D1Database & { path: string };
+export type TestD1 = D1Database & { path: string; close(): void };
 
-type BoundStatement = D1PreparedStatement & {
-  __input?: InStatement | string;
-};
+type SqliteValue = string | number | bigint | Uint8Array | null;
+type SqlInput = { sql: string; args: SqliteValue[] } | string;
+type BoundStatement = D1PreparedStatement & { __input?: SqlInput };
 
 export function createTestD1(dbPath: string): TestD1 {
-  const client = createClient({ url: `file:${dbPath}` });
+  const db = new DatabaseSync(dbPath, { allowExtension: true });
   const database = {
     prepare(sql: string) {
-      return createPrepared(client, sql);
+      return createPrepared(db, sql);
     },
     async batch(statements: D1PreparedStatement[]) {
       const inputs = statements.map((statement) => {
@@ -19,59 +18,80 @@ export function createTestD1(dbPath: string): TestD1 {
         if (!input) throw new Error("Test D1 statement was not bound");
         return input;
       });
-      await client.batch(inputs as InStatement[]);
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        for (const input of inputs) executeRun(db, input);
+        db.exec("COMMIT");
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
       return [];
     },
     async exec(sql: string) {
-      await client.executeMultiple(sql);
+      db.exec(sql);
     },
   } as unknown as D1Database;
 
-  return Object.assign(database, { path: dbPath }) as TestD1;
+  return Object.assign(database, {
+    path: dbPath,
+    close: () => db.close(),
+  }) as TestD1;
 }
 
-function createPrepared(client: Client, sql: string): BoundStatement {
+function createPrepared(db: DatabaseSync, sql: string): BoundStatement {
   return {
-    bind(...args: unknown[]) {
-      return createPreparedWithArgs(client, sql, args);
+    bind(...args: SqliteValue[]) {
+      return createPreparedWithArgs(db, sql, args);
     },
-    all: () => execute(client, sql),
-    first: () => executeFirst(client, sql),
-    run: () => executeRun(client, sql),
+    all: () => executeAll(db, sql),
+    first: () => executeFirst(db, sql),
+    run: () => executeRun(db, sql),
     __input: sql,
-  } as BoundStatement;
+  } as unknown as BoundStatement;
 }
 
 function createPreparedWithArgs(
-  client: Client,
+  db: DatabaseSync,
   sql: string,
-  args: unknown[],
+  args: SqliteValue[],
 ): BoundStatement {
-  const input = { sql, args } as InStatement;
+  const input = { sql, args };
   return {
-    bind: (...nextArgs: unknown[]) =>
-      createPreparedWithArgs(client, sql, nextArgs),
-    all: () => execute(client, input),
-    first: () => executeFirst(client, input),
-    run: () => executeRun(client, input),
+    bind: (...nextArgs: SqliteValue[]) =>
+      createPreparedWithArgs(db, sql, nextArgs),
+    all: () => executeAll(db, input),
+    first: () => executeFirst(db, input),
+    run: () => executeRun(db, input),
     __input: input,
-  } as BoundStatement;
+  } as unknown as BoundStatement;
 }
 
-async function execute(client: Client, input: string | InStatement) {
-  const result = await client.execute(input);
-  return { results: result.rows };
+function normalize(input: SqlInput): { sql: string; args: SqliteValue[] } {
+  return typeof input === "string" ? { sql: input, args: [] } : input;
 }
 
-async function executeFirst<T = unknown>(
-  client: Client,
-  input: string | InStatement,
-): Promise<T | null> {
-  const result = await client.execute(input);
-  return (result.rows[0] as T | undefined) ?? null;
+function executeAll(db: DatabaseSync, input: SqlInput) {
+  const { sql, args } = normalize(input);
+  return { results: db.prepare(sql).all(...args) };
 }
 
-async function executeRun(client: Client, input: string | InStatement) {
-  const result = await client.execute(input);
-  return { success: true, meta: { changes: result.rowsAffected } };
+function executeFirst<T = unknown>(
+  db: DatabaseSync,
+  input: SqlInput,
+): T | null {
+  const rows = executeAll(db, input).results;
+  return (rows[0] as T | undefined) ?? null;
+}
+
+function executeRun(db: DatabaseSync, input: SqlInput) {
+  const { sql, args } = normalize(input);
+  const result = db.prepare(sql).run(...args);
+  return {
+    success: true,
+    meta: {
+      changes: Number(result.changes),
+      last_row_id: Number(result.lastInsertRowid),
+    },
+  };
 }

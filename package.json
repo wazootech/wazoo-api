@@ -8,7 +8,6 @@
     "deploy": "wrangler deploy",
     "deploy:dry": "wrangler deploy --dry-run",
     "launch:seed-admin-d1": "node scripts/seed-admin-token-d1.mjs",
-    "launch:seed-admin-d1": "node scripts/seed-admin-token-d1.mjs",
     "health:beta": "node scripts/private-beta-health.mjs",
     "health:local": "node scripts/local-health.mjs",
     "typecheck": "tsc --noEmit",

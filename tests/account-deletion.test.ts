@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { createClient } from "@libsql/client";
+import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -53,11 +53,9 @@ describe("account deletion and data export (wazoo-api#26)", () => {
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), "wazoo-api-deletion-"));
     const dbPath = join(dir, "test.db");
-    const client = createClient({ url: `file:${dbPath}` });
-    await client.executeMultiple(
-      readFileSync(join(process.cwd(), "schema.sql"), "utf8"),
-    );
-    await client.close();
+    const client = new DatabaseSync(dbPath);
+    client.exec(readFileSync(join(process.cwd(), "schema.sql"), "utf8"));
+    client.close();
     env = makeBindings(dbPath);
 
     // Mint a console session token through the real admin-gated endpoint.
@@ -87,17 +85,19 @@ describe("account deletion and data export (wazoo-api#26)", () => {
     userUid = ((await me.json()) as { user: { uid: string } }).user.uid;
 
     // Seed a world row + usage event so export has data and deletion cascades.
-    const seed = createClient({ url: `file:${dbPath}` });
+    const seed = new DatabaseSync(dbPath);
     const ts = new Date().toISOString();
-    await seed.execute({
-      sql: "INSERT INTO worlds (uid, user_uid, world_id, display_name, state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', ?, ?)",
-      args: ["w_del_mirror", userUid, "del-world", "Del World", ts, ts],
-    });
-    await seed.execute({
-      sql: "INSERT INTO usage_events (uid, user_uid, world_uid, metric, quantity, unit, create_time) VALUES (?, ?, ?, 'requests', 5, 'request', ?)",
-      args: ["u_del_1", userUid, "w_del_mirror", ts],
-    });
-    await seed.close();
+    seed
+      .prepare(
+        "INSERT INTO worlds (uid, user_uid, world_id, display_name, state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', ?, ?)",
+      )
+      .run("w_del_mirror", userUid, "del-world", "Del World", ts, ts);
+    seed
+      .prepare(
+        "INSERT INTO usage_events (uid, user_uid, world_uid, metric, quantity, unit, create_time) VALUES (?, ?, ?, 'requests', 5, 'request', ?)",
+      )
+      .run("u_del_1", userUid, "w_del_mirror", ts);
+    seed.close();
 
     // Stub the worlds-api namespace-delete call.
     worldsApiFetch = vi.fn().mockResolvedValue(
@@ -173,13 +173,14 @@ describe("account deletion and data export (wazoo-api#26)", () => {
     const rawToken = "wzdel_test-confirm-token";
     const hash = await sha256Hex(rawToken);
 
-    const client = createClient({ url: `file:${(env.DB as TestD1).path}` });
+    const client = new DatabaseSync((env.DB as TestD1).path);
     const ts = new Date(Date.now() + 60_000).toISOString();
-    await client.execute({
-      sql: "INSERT INTO deletion_requests (uid, user_uid, token_hash, expires_at) VALUES (?, ?, ?, ?)",
-      args: ["wzdel_request_2", userUid, hash, ts],
-    });
-    await client.close();
+    client
+      .prepare(
+        "INSERT INTO deletion_requests (uid, user_uid, token_hash, expires_at) VALUES (?, ?, ?, ?)",
+      )
+      .run("wzdel_request_2", userUid, hash, ts);
+    client.close();
 
     const del = await api(
       "/v1/users/me",
@@ -207,30 +208,27 @@ describe("account deletion and data export (wazoo-api#26)", () => {
     expect(worldsCall).toBeTruthy();
 
     // The user row is gone; world mirror + usage events cascaded away.
-    const check = createClient({ url: `file:${(env.DB as TestD1).path}` });
-    const userRows = await check.execute({
-      sql: "SELECT uid FROM users WHERE uid = ?",
-      args: [userUid],
-    });
-    const worldRows = await check.execute({
-      sql: "SELECT uid FROM worlds WHERE uid = 'w_del_mirror'",
-    });
-    const usageRows = await check.execute({
-      sql: "SELECT uid FROM usage_events WHERE uid = 'u_del_1'",
-    });
-    const tokenRows = await check.execute({
-      sql: "SELECT uid FROM platform_api_tokens WHERE user_uid = ?",
-      args: [userUid],
-    });
-    const reqRows = await check.execute({
-      sql: "SELECT uid FROM deletion_requests WHERE user_uid = ?",
-      args: [userUid],
-    });
-    await check.close();
-    expect(userRows.rows).toHaveLength(0);
-    expect(worldRows.rows).toHaveLength(0);
-    expect(usageRows.rows).toHaveLength(0);
-    expect(tokenRows.rows).toHaveLength(0);
-    expect(reqRows.rows).toHaveLength(0);
+    const check = new DatabaseSync((env.DB as TestD1).path);
+    const userRows = check
+      .prepare("SELECT uid FROM users WHERE uid = ?")
+      .all(userUid);
+    const worldRows = check
+      .prepare("SELECT uid FROM worlds WHERE uid = 'w_del_mirror'")
+      .all();
+    const usageRows = check
+      .prepare("SELECT uid FROM usage_events WHERE uid = 'u_del_1'")
+      .all();
+    const tokenRows = check
+      .prepare("SELECT uid FROM platform_api_tokens WHERE user_uid = ?")
+      .all(userUid);
+    const reqRows = check
+      .prepare("SELECT uid FROM deletion_requests WHERE user_uid = ?")
+      .all(userUid);
+    check.close();
+    expect(userRows).toHaveLength(0);
+    expect(worldRows).toHaveLength(0);
+    expect(usageRows).toHaveLength(0);
+    expect(tokenRows).toHaveLength(0);
+    expect(reqRows).toHaveLength(0);
   });
 });
