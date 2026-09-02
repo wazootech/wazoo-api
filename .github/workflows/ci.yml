@@ -26,7 +26,10 @@ jobs:
       - run: npm test
 
   publish-image:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # PAUSED: this container image cannot obtain a Cloudflare D1 binding and has
+    # been inert since the Turso->D1 migration. The official Docker story now lives
+    # in wazootech/wazoo-docker. Re-enable only if a real container use case demands it.
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
