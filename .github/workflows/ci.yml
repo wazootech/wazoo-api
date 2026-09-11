@@ -10,6 +10,7 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 jobs:
   verify:
@@ -55,6 +56,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Fetch secrets from Infisical (qa)
+        uses: Infisical/secrets-action@v1.0.17
+        with:
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_MACHINE_ID }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: "qa"
       - run: npm run deploy -- --env qa
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -71,11 +79,17 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Fetch secrets from Infisical (qa)
+        uses: Infisical/secrets-action@v1.0.17
+        with:
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_MACHINE_ID }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: "qa"
       - run: npm run health:beta
         env:
           API_BASE_URL: https://api-qa.wazoo.dev
           WORLDS_API_URL: https://data-qa.wazoo.dev
-          WAZOO_PLATFORM_ADMIN_TOKEN: ${{ secrets.WAZOO_PLATFORM_ADMIN_TOKEN }}
 
   deploy-prod:
     if: github.event_name == 'workflow_dispatch'
@@ -88,6 +102,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Fetch secrets from Infisical (prod)
+        uses: Infisical/secrets-action@v1.0.17
+        with:
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_MACHINE_ID }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: "prod"
       - run: npm run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
