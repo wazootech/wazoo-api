@@ -20,6 +20,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   smoke:
@@ -32,10 +33,16 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Fetch secrets from Infisical (qa)
+        uses: Infisical/secrets-action@v1.0.17
+        with:
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_MACHINE_ID }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: "qa"
       - name: Run platform smoke gate
         run: npm run smoke:qa
         env:
           API_BASE_URL: ${{ inputs.apiBaseUrl || 'https://api-qa.wazoo.dev' }}
           WORLDS_API_URL: ${{ inputs.worldsApiUrl || 'https://data-qa.wazoo.dev' }}
           CONSOLE_URL: ${{ inputs.consoleUrl || 'https://console-qa.wazoo.dev' }}
-          WAZOO_PLATFORM_ADMIN_TOKEN: ${{ secrets.WAZOO_PLATFORM_ADMIN_TOKEN }}
