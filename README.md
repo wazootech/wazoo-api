@@ -20,6 +20,15 @@ Control-plane API for Wazoo. This repo owns the `api.wazoo.dev` Cloudflare Worke
 - Usage: `/v1/worlds/:worldId/usage`
 - Limits: `/v1/worlds/:worldId/limits`
 - Billing stubs: `/v1/worlds/:worldId/billing`, `/v1/worlds/:worldId/billing/openPortal`, `/v1/stripe/webhook`
+
+## Vocabulary
+
+`worldId` is the canonical worlds-api identifier (`w_<uuid>`) and is the routing
+key for every `/v1/worlds/:worldId` path. `slug` is the friendly, user-chosen
+alias and is never used to route. The `worldUid` contract field is gone;
+internal columns named `world_uid` are foreign keys to `worlds.uid` (the
+management row id) and are not canonical world identifiers.
+
 - Platform API tokens: `/v1/auth/api-tokens`
 - Health: `/health`
 - OpenAPI-ish route list: `/openapi.json`

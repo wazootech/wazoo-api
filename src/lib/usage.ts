@@ -5,7 +5,7 @@ export async function recordUsage(
   env: Bindings,
   input: {
     userUid: string;
-    worldUid?: string | null;
+    worldRowUid?: string | null;
     metric: string;
     quantity?: number;
     unit?: string;
@@ -19,7 +19,7 @@ export async function recordUsage(
     .bind(
       id(),
       input.userUid,
-      input.worldUid ?? null,
+      input.worldRowUid ?? null,
       input.metric,
       input.quantity ?? 1,
       input.unit ?? "count",

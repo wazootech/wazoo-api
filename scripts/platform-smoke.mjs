@@ -174,7 +174,7 @@ async function testWorldLifecycle() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        worldId: slug,
+        slug,
         ownerEmail,
         world: { displayName: "E2E Test", region: "auto" },
       }),
@@ -194,18 +194,18 @@ async function testWorldLifecycle() {
         detail: `create world: expected state ACTIVE, got ${created?.world?.state}`,
       };
     }
-    const worldUid = created.world?.worldUid;
-    const detail = worldUid
-      ? `world ${slug} created, ACTIVE, uid ${worldUid}`
-      : `world ${slug} created and ACTIVE (no worldUid in response)`;
-    return { name: "testWorldLifecycle", passed: true, detail, worldUid };
+    const worldId = created.world?.worldId;
+    const detail = worldId
+      ? `world ${slug} created, ACTIVE, id ${worldId}`
+      : `world ${slug} created and ACTIVE (no worldId in response)`;
+    return { name: "testWorldLifecycle", passed: true, detail, worldId };
   });
 }
 
-async function testTokenManagement(worldUid) {
+async function testTokenManagement(worldId) {
   return check("testTokenManagement", async () => {
     const tokenResponse = await fetch(
-      `${API_BASE_URL}/v1/worlds/${slug}/auth/tokens?email=${encodeURIComponent(ownerEmail)}`,
+      `${API_BASE_URL}/v1/worlds/${worldId}/auth/tokens?email=${encodeURIComponent(ownerEmail)}`,
       {
         method: "POST",
         headers: {
@@ -236,12 +236,12 @@ async function testTokenManagement(worldUid) {
       passed: true,
       detail: `world auth token minted (${worldToken.slice(0, 12)}...)`,
       worldToken,
-      worldUid,
+      worldId,
     };
   });
 }
 
-async function testSparqlQuery(worldToken, worldUid) {
+async function testSparqlQuery(worldToken, canonicalId) {
   return check("testSparqlQuery", async () => {
     if (!worldToken) {
       return {
@@ -250,7 +250,7 @@ async function testSparqlQuery(worldToken, worldUid) {
         detail: "no world token on context; run testTokenManagement first",
       };
     }
-    const worldId = worldUid ?? slug;
+    const worldId = canonicalId ?? slug;
     const headers = {
       Authorization: `Bearer ${worldToken}`,
       "Content-Type": "application/json",
@@ -330,10 +330,10 @@ SELECT ?name ?age ?city WHERE {
   });
 }
 
-async function cleanupWorld() {
+async function cleanupWorld(worldId) {
   return check("cleanupWorld", async () => {
     const response = await fetch(
-      `${API_BASE_URL}/v1/worlds/${slug}?email=${encodeURIComponent(ownerEmail)}`,
+      `${API_BASE_URL}/v1/worlds/${worldId}?email=${encodeURIComponent(ownerEmail)}`,
       { method: "DELETE", headers: { Authorization: `Bearer ${ADMIN_TOKEN}` } },
     );
     const passed = response.ok || response.status === 404;
@@ -342,8 +342,8 @@ async function cleanupWorld() {
       passed,
       detail: passed
         ? response.status === 404
-          ? `world ${slug} did not exist; nothing to delete`
-          : `deleted world ${slug}`
+          ? `world ${worldId} did not exist; nothing to delete`
+          : `deleted world ${worldId}`
         : `delete world: expected ok or 404, got ${response.status}`,
     };
   });
@@ -360,9 +360,9 @@ results.push(
 const lifecycle = await testWorldLifecycle();
 results.push(lifecycle);
 if (lifecycle.passed) {
-  const token = await testTokenManagement(lifecycle.worldUid);
+  const token = await testTokenManagement(lifecycle.worldId);
   results.push(token);
-  results.push(await testSparqlQuery(token.worldToken, token.worldUid));
+  results.push(await testSparqlQuery(token.worldToken, token.worldId));
 } else {
   results.push(
     {
@@ -377,7 +377,7 @@ if (lifecycle.passed) {
     },
   );
 }
-results.push(await cleanupWorld());
+results.push(await cleanupWorld(lifecycle.worldId ?? slug));
 
 let failed = false;
 for (const result of results) {

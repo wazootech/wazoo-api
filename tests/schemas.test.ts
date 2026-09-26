@@ -67,7 +67,7 @@ describe("nonEmptyString", () => {
 describe("CreateWorldBodySchema", () => {
   it("accepts a valid create world request", () => {
     const result = CreateWorldBodySchema.safeParse({
-      worldId: "my-world",
+      slug: "my-world",
       world: { displayName: "My World" },
     });
     expect(result.success).toBe(true);
@@ -75,14 +75,14 @@ describe("CreateWorldBodySchema", () => {
 
   it("accepts with optional fields", () => {
     const result = CreateWorldBodySchema.safeParse({
-      worldId: "my-world",
+      slug: "my-world",
       world: { displayName: "My World", region: "us-east" },
       ownerEmail: "user@example.com",
     });
     expect(result.success).toBe(true);
   });
 
-  it("rejects missing worldId", () => {
+  it("rejects missing slug", () => {
     const result = CreateWorldBodySchema.safeParse({
       world: { displayName: "My World" },
     });
@@ -91,15 +91,15 @@ describe("CreateWorldBodySchema", () => {
 
   it("rejects missing world.displayName", () => {
     const result = CreateWorldBodySchema.safeParse({
-      worldId: "my-world",
+      slug: "my-world",
       world: { region: "us-east" },
     });
     expect(result.success).toBe(false);
   });
 
-  it("rejects invalid worldId format", () => {
+  it("rejects invalid slug format", () => {
     const result = CreateWorldBodySchema.safeParse({
-      worldId: "",
+      slug: "",
       world: { displayName: "My World" },
     });
     expect(result.success).toBe(false);
@@ -107,14 +107,14 @@ describe("CreateWorldBodySchema", () => {
 
   it("rejects missing world object", () => {
     const result = CreateWorldBodySchema.safeParse({
-      worldId: "my-world",
+      slug: "my-world",
     });
     expect(result.success).toBe(false);
   });
 
   it("rejects when world is not an object", () => {
     const result = CreateWorldBodySchema.safeParse({
-      worldId: "my-world",
+      slug: "my-world",
       world: "not-an-object",
     });
     expect(result.success).toBe(false);

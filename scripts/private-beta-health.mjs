@@ -16,7 +16,8 @@ const worldIds = [
 
 const state = {
   userUid: null,
-  worldUid: null,
+  worldId: null,
+  canonicalBySlug: {},
   worldTokenUid: null,
   worldToken: null,
 };
@@ -32,7 +33,7 @@ try {
     apiRequest(`/v1/worlds?email=${encodeURIComponent(email)}`),
   );
   await step("get world", () =>
-    apiRequest(`/v1/worlds/${worldIds[0]}?email=${encodeURIComponent(email)}`),
+    apiRequest(`/v1/worlds/${state.worldId}?email=${encodeURIComponent(email)}`),
   );
   await step("create world token", createWorldToken);
   await step("import chunks", importChunks);
@@ -43,7 +44,7 @@ try {
   await step("sparql select", sparqlSelect);
   await step("sparql ask", sparqlAsk);
   await step("record usage", () =>
-    apiRequest(`/v1/worlds/${worldIds[0]}/usage`, {
+    apiRequest(`/v1/worlds/${state.worldId}/usage`, {
       method: "POST",
       body: {
         email,
@@ -55,24 +56,24 @@ try {
   );
   await step("read usage", () =>
     apiRequest(
-      `/v1/worlds/${worldIds[0]}/usage?email=${encodeURIComponent(email)}`,
+      `/v1/worlds/${state.worldId}/usage?email=${encodeURIComponent(email)}`,
     ),
   );
   await step("read limits", () =>
     apiRequest(
-      `/v1/worlds/${worldIds[0]}/limits?email=${encodeURIComponent(email)}`,
+      `/v1/worlds/${state.worldId}/limits?email=${encodeURIComponent(email)}`,
     ),
   );
   await step("read billing", () =>
     apiRequest(
-      `/v1/worlds/${worldIds[0]}/billing?email=${encodeURIComponent(email)}`,
+      `/v1/worlds/${state.worldId}/billing?email=${encodeURIComponent(email)}`,
     ),
   );
   await step("revoke world token", revokeWorldToken);
-  await step("soft-delete first world", () => deleteWorld(worldIds[0]));
-  await step("undelete first world", () => undeleteWorld(worldIds[0]));
-  await step("final soft-delete first world", () => deleteWorld(worldIds[0]));
-  await step("final soft-delete second world", () => deleteWorld(worldIds[1]));
+  await step("soft-delete first world", () => deleteWorld(state.canonicalBySlug[worldIds[0]]));
+  await step("undelete first world", () => undeleteWorld(state.canonicalBySlug[worldIds[0]]));
+  await step("final soft-delete first world", () => deleteWorld(state.canonicalBySlug[worldIds[0]]));
+  await step("final soft-delete second world", () => deleteWorld(state.canonicalBySlug[worldIds[1]]));
 
   console.log(
     `\nPrivate beta health test passed for user ${email} and worlds ${worldIds.join(", ")}`,
@@ -96,23 +97,22 @@ async function createWorld(worldId) {
     method: "POST",
     body: {
       ownerEmail: email,
-      worldId,
+      slug: worldId,
       world: { displayName: `Health World ${worldId}` },
     },
   });
   assert(
-    response.body.world.worldId === worldId,
+    response.body.world.slug === worldId,
     `World ${worldId} was not created`,
   );
-  if (worldId === worldIds[0] && response.body.world.worldUid) {
-    state.worldUid = response.body.world.worldUid;
-  }
+  state.canonicalBySlug[worldId] = response.body.world.worldId;
+  if (worldId === worldIds[0]) state.worldId = response.body.world.worldId;
   return response;
 }
 
 async function createWorldToken() {
   const response = await apiRequest(
-    `/v1/worlds/${worldIds[0]}/auth/tokens?email=${encodeURIComponent(email)}`,
+    `/v1/worlds/${state.worldId}/auth/tokens?email=${encodeURIComponent(email)}`,
     {
       method: "POST",
       body: { name: `health-${runId}` },
@@ -125,7 +125,7 @@ async function createWorldToken() {
 }
 
 async function importChunks() {
-  const response = await worldsRequest(`/worlds/${state.worldUid}/import`, {
+  const response = await worldsRequest(`/worlds/${state.worldId}/import`, {
     method: "POST",
     body: {
       contentType: "text/plain",
@@ -137,7 +137,7 @@ async function importChunks() {
 }
 
 async function importQuads() {
-  const response = await worldsRequest(`/worlds/${state.worldUid}/import`, {
+  const response = await worldsRequest(`/worlds/${state.worldId}/import`, {
     method: "POST",
     body: {
       contentType: "application/json",
@@ -160,7 +160,7 @@ async function importQuads() {
 }
 
 async function searchWorld() {
-  const response = await worldsRequest(`/worlds/${state.worldUid}/search`, {
+  const response = await worldsRequest(`/worlds/${state.worldId}/search`, {
     method: "POST",
     body: { query: `alpha ${runId}`, limit: 5 },
   });
@@ -170,7 +170,7 @@ async function searchWorld() {
 
 async function exportChunks() {
   const response = await worldsRequest(
-    `/worlds/${state.worldUid}/export?format=text/plain`,
+    `/worlds/${state.worldId}/export?format=text/plain`,
   );
   assert(
     String(response.body).includes(`Wazoo health alpha ${runId}`),
@@ -181,7 +181,7 @@ async function exportChunks() {
 
 async function exportQuads() {
   const response = await worldsRequest(
-    `/worlds/${state.worldUid}/export?format=application/json`,
+    `/worlds/${state.worldId}/export?format=application/json`,
   );
   assert(
     response.body.quads.some(
@@ -193,7 +193,7 @@ async function exportQuads() {
 }
 
 async function sparqlSelect() {
-  const response = await worldsRequest(`/worlds/${state.worldUid}/sparql`, {
+  const response = await worldsRequest(`/worlds/${state.worldId}/sparql`, {
     method: "POST",
     body: {
       query: `SELECT ?name WHERE { <urn:wazoo:health:${runId}:alpha> <http://schema.org/name> ?name } LIMIT 5`,
@@ -209,7 +209,7 @@ async function sparqlSelect() {
 }
 
 async function sparqlAsk() {
-  const response = await worldsRequest(`/worlds/${state.worldUid}/sparql`, {
+  const response = await worldsRequest(`/worlds/${state.worldId}/sparql`, {
     method: "POST",
     body: {
       query: `ASK WHERE { <urn:wazoo:health:${runId}:alpha> <http://schema.org/knows> <urn:wazoo:health:${runId}:beta> }`,
@@ -222,7 +222,7 @@ async function sparqlAsk() {
 async function revokeWorldToken() {
   if (!state.worldTokenUid) throw new Error("Missing world token uid");
   return apiRequest(
-    `/v1/worlds/${worldIds[0]}/auth/tokens/${state.worldTokenUid}?email=${encodeURIComponent(email)}`,
+    `/v1/worlds/${state.worldId}/auth/tokens/${state.worldTokenUid}?email=${encodeURIComponent(email)}`,
     { method: "DELETE" },
   );
 }
