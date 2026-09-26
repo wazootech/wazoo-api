@@ -78,19 +78,20 @@ describe("cancel subscription (wazoo-console#53)", () => {
       { headers: authHeaders(sessionToken) },
       env,
     );
-    const userUid = ((await me.json()) as { user: { uid: string } }).user.uid;
+    const userId = ((await me.json()) as { user: { userId: string } }).user
+      .userId;
     const seed = new DatabaseSync(dbPath);
     const ts = new Date().toISOString();
     seed
       .prepare(
-        "INSERT INTO worlds (uid, user_uid, world_id, display_name, state, stripe_customer_id, stripe_subscription_id, billing_state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', 'cus_test', 'sub_test', 'ACTIVE', ?, ?)",
+        "INSERT INTO worlds (world_id, user_id, slug, display_name, state, stripe_customer_id, stripe_subscription_id, billing_state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', 'cus_test', 'sub_test', 'ACTIVE', ?, ?)",
       )
-      .run("w_billing_1", userUid, "billing-world", "Billing World", ts, ts);
+      .run("w_billing_1", userId, "billing-world", "Billing World", ts, ts);
     seed
       .prepare(
-        "INSERT INTO worlds (uid, user_uid, world_id, display_name, state, billing_state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', 'BETA_FREE', ?, ?)",
+        "INSERT INTO worlds (world_id, user_id, slug, display_name, state, billing_state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', 'BETA_FREE', ?, ?)",
       )
-      .run("w_billing_free", userUid, "free-world", "Free World", ts, ts);
+      .run("w_billing_free", userId, "free-world", "Free World", ts, ts);
     seed.close();
   });
 
@@ -110,7 +111,7 @@ describe("cancel subscription (wazoo-console#53)", () => {
 
   it("rejects cancel for a world on the free beta tier", async () => {
     const res = await api(
-      "/v1/worlds/free-world/billing/cancel",
+      "/v1/worlds/w_billing_free/billing/cancel",
       { method: "POST", headers: authHeaders(sessionToken) },
       env,
     );
@@ -123,7 +124,7 @@ describe("cancel subscription (wazoo-console#53)", () => {
     // No STRIPE_SECRET_KEY in bindings, so the route skips the provider call
     // and marks the world CANCELLED with the subscription id cleared.
     const res = await api(
-      "/v1/worlds/billing-world/billing/cancel",
+      "/v1/worlds/w_billing_1/billing/cancel",
       { method: "POST", headers: authHeaders(sessionToken) },
       env,
     );
@@ -140,7 +141,7 @@ describe("cancel subscription (wazoo-console#53)", () => {
     const client = new DatabaseSync((env.DB as TestD1).path);
     client
       .prepare(
-        "UPDATE worlds SET stripe_subscription_id = 'sub_test2', billing_state = 'ACTIVE' WHERE world_id = 'billing-world'",
+        "UPDATE worlds SET stripe_subscription_id = 'sub_test2', billing_state = 'ACTIVE' WHERE world_id = 'w_billing_1'",
       )
       .run();
     client.close();
@@ -156,7 +157,7 @@ describe("cancel subscription (wazoo-console#53)", () => {
     const stripeEnv = { ...env, STRIPE_SECRET_KEY: "sk_test" };
     const res = await Promise.resolve(
       app.request(
-        "/v1/worlds/billing-world/billing/cancel",
+        "/v1/worlds/w_billing_1/billing/cancel",
         {
           method: "POST",
           headers: authHeaders(sessionToken),

@@ -77,7 +77,7 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
   if (envAdminToken && token === envAdminToken) {
     c.set("auth", {
       tokenId: "env_admin",
-      userUid: null,
+      userId: null,
       scope:
         "admin users.read users.write worlds.read worlds.write worlds.admin usage.read billing.read",
       kind: "ADMIN",
@@ -91,12 +91,12 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
   const database = db(c.env);
   const row = await database
     .prepare(
-      "SELECT uid, user_uid, scope, kind, expires_at FROM platform_api_tokens WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > ?)",
+      "SELECT token_id AS tokenId, user_id, scope, kind, expires_at FROM platform_api_tokens WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > ?)",
     )
     .bind(hash, new Date().toISOString())
     .first<{
-      uid: string;
-      user_uid: string | null;
+      tokenId: string;
+      user_id: string | null;
       scope: string;
       kind: "USER" | "ADMIN" | null;
       expires_at: string | null;
@@ -107,28 +107,30 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
   }
 
   c.set("auth", {
-    tokenId: row.uid,
-    userUid: row.user_uid,
+    tokenId: row.tokenId,
+    userId: row.user_id,
     scope: row.scope,
     kind: row.kind ?? "USER",
     expiresAt: row.expires_at,
   });
   c.executionCtx.waitUntil(
     database
-      .prepare("UPDATE platform_api_tokens SET last_used_at = ? WHERE uid = ?")
-      .bind(new Date().toISOString(), row.uid)
+      .prepare(
+        "UPDATE platform_api_tokens SET last_used_at = ? WHERE token_id = ?",
+      )
+      .bind(new Date().toISOString(), row.tokenId)
       .run(),
   );
   await next();
 }
 
-export function requireUserAccess(c: Context<AppEnv>, userUid: string) {
+export function requireUserAccess(c: Context<AppEnv>, userId: string) {
   const auth = c.get("auth");
   if (isAdmin(c)) return;
   if (auth.kind === "ADMIN") {
     throw new HTTPException(403, { message: "Invalid admin token shape" });
   }
-  if (auth.userUid !== userUid) {
+  if (auth.userId !== userId) {
     throw new HTTPException(403, {
       message: "Token cannot access this user",
     });
@@ -140,7 +142,7 @@ export function isAdmin(c: Context<AppEnv>): boolean {
   return (
     auth.kind === "ADMIN" &&
     auth.scope.split(/\s+/).includes("admin") &&
-    auth.userUid === null
+    auth.userId === null
   );
 }
 
@@ -162,14 +164,14 @@ export function requireScope(c: Context<AppEnv>, scope: string) {
 
 export async function resolveUser(c: Context<AppEnv>, identifier?: string) {
   const auth = c.get("auth");
-  const user = auth.userUid
-    ? await userByIdentifier(db(c.env), auth.userUid)
+  const user = auth.userId
+    ? await userByIdentifier(db(c.env), auth.userId)
     : identifier
       ? await userByIdentifier(db(c.env), identifier)
       : null;
   if (!user) {
     throw new HTTPException(404, { message: "User not found" });
   }
-  requireUserAccess(c, user.uid);
+  requireUserAccess(c, user.userId);
   return user;
 }

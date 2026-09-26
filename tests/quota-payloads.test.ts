@@ -90,30 +90,31 @@ describe("quota payloads on usage and billing surfaces (wazoo-api#34)", () => {
       { headers: authHeaders(sessionToken) },
       env,
     );
-    const userUid = ((await me.json()) as { user: { uid: string } }).user.uid;
+    const userId = ((await me.json()) as { user: { userId: string } }).user
+      .userId;
 
     const seed = new DatabaseSync(dbPath);
     const ts = new Date().toISOString();
     seed
       .prepare(
-        "INSERT INTO worlds (uid, user_uid, world_id, display_name, state, billing_state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', 'BETA_FREE', ?, ?)",
+        "INSERT INTO worlds (world_id, user_id, slug, display_name, state, billing_state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', 'BETA_FREE', ?, ?)",
       )
-      .run("w_quota_1", userUid, "quota-world", "Quota World", ts, ts);
+      .run("w_quota_1", userId, "quota-world", "Quota World", ts, ts);
     seed
       .prepare(
-        "INSERT INTO worlds (uid, user_uid, world_id, display_name, state, billing_state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', 'PAST_DUE', ?, ?)",
+        "INSERT INTO worlds (world_id, user_id, slug, display_name, state, billing_state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', 'PAST_DUE', ?, ?)",
       )
-      .run("w_quota_2", userUid, "due-world", "Due World", ts, ts);
+      .run("w_quota_2", userId, "due-world", "Due World", ts, ts);
     seed
       .prepare(
-        "INSERT INTO world_limits (world_uid, metric, limit_quantity, create_time, update_time) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO world_limits (world_id, metric, limit_quantity, create_time, update_time) VALUES (?, ?, ?, ?, ?)",
       )
       .run("w_quota_1", "SPARQL_QUERIES", 10000, ts, ts);
     const usage = seed.prepare(
-      "INSERT INTO usage_events (uid, user_uid, world_uid, metric, quantity, unit, create_time) VALUES (?, ?, ?, 'SPARQL_QUERIES', 100, 'count', ?)",
+      "INSERT INTO usage_events (event_id, user_id, world_id, metric, quantity, unit, create_time) VALUES (?, ?, ?, 'SPARQL_QUERIES', 100, 'count', ?)",
     );
     for (let i = 0; i < 92; i++)
-      usage.run(`usage_${i}`, userUid, "w_quota_1", ts);
+      usage.run(`usage_${i}`, userId, "w_quota_1", ts);
     seed.close();
   });
 
@@ -133,7 +134,7 @@ describe("quota payloads on usage and billing surfaces (wazoo-api#34)", () => {
 
   it("usage response includes per-metric limits with real usage percent", async () => {
     const res = await api(
-      "/v1/worlds/quota-world/usage",
+      "/v1/worlds/w_quota_1/usage",
       { headers: authHeaders(sessionToken) },
       env,
     );
@@ -159,7 +160,7 @@ describe("quota payloads on usage and billing surfaces (wazoo-api#34)", () => {
 
   it("usage response without limits reports an empty, OK quota", async () => {
     const res = await api(
-      "/v1/worlds/due-world/usage",
+      "/v1/worlds/w_quota_2/usage",
       { headers: authHeaders(sessionToken) },
       env,
     );
@@ -172,7 +173,7 @@ describe("quota payloads on usage and billing surfaces (wazoo-api#34)", () => {
 
   it("billing response includes plan caps and derives paymentRequired from state", async () => {
     const res = await api(
-      "/v1/worlds/quota-world/billing",
+      "/v1/worlds/w_quota_1/billing",
       { headers: authHeaders(sessionToken) },
       env,
     );
@@ -202,7 +203,7 @@ describe("quota payloads on usage and billing surfaces (wazoo-api#34)", () => {
 
   it("billing paymentRequired is true for a past-due world", async () => {
     const res = await api(
-      "/v1/worlds/due-world/billing",
+      "/v1/worlds/w_quota_2/billing",
       { headers: authHeaders(sessionToken) },
       env,
     );

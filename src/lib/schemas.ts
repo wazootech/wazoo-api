@@ -20,7 +20,7 @@ export const ErrorResponseSchema = z
 
 export const UserSchema = z
   .object({
-    uid: z.string(),
+    userId: z.string(),
     email: z.string().email(),
     displayName: z.string().nullable(),
     state: z.enum(["ACTIVE"]),
@@ -31,7 +31,6 @@ export const UserSchema = z
 export const WorldSchema = z
   .object({
     name: z.string(),
-    uid: z.string(),
     worldId: z.string(),
     slug: z.string().optional(),
     displayName: z.string(),
@@ -79,7 +78,7 @@ export const UpdateWorldBodySchema = z
 
 export const PlatformTokenSchema = z
   .object({
-    uid: z.string(),
+    tokenId: z.string(),
     name: z.string(),
     scope: z.string().optional(),
     last_used_at: z.string().datetime().nullable().optional(),
@@ -105,7 +104,7 @@ export const PlatformTokenCreateRequestSchema = z
 
 export const PlatformTokenCreateResponseSchema = z
   .object({
-    uid: z.string(),
+    tokenId: z.string(),
     name: z.string(),
     token: z.string(),
   })
@@ -121,7 +120,7 @@ export const PlatformTokenValidateResponseSchema = z.object({
 
 export const WorldTokenSchema = z
   .object({
-    uid: z.string(),
+    tokenId: z.string(),
     name: z.string(),
     namespace: z.string().optional(),
     worldId: z.string().optional(),
@@ -147,6 +146,7 @@ export const WorldTokenSingleResponseSchema = z.object({
 export const UsageEventSchema = z
   .object({
     name: z.string(),
+    eventId: z.string(),
     metric: z.string(),
     quantity: z.number().int(),
     unit: z.string(),
@@ -249,10 +249,10 @@ export const tokenNameParam = z.object({
     .openapi({ param: { name: "tokenName", in: "path", required: true } }),
 });
 
-export const tokenUidParam = z.object({
-  tokenUid: z
+export const tokenIdParam = z.object({
+  tokenId: z
     .string()
-    .openapi({ param: { name: "tokenUid", in: "path", required: true } }),
+    .openapi({ param: { name: "tokenId", in: "path", required: true } }),
 });
 
 export const emailQuery = z.object({

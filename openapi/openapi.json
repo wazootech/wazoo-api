@@ -29,7 +29,7 @@
       "User": {
         "type": "object",
         "properties": {
-          "uid": {
+          "userId": {
             "type": "string"
           },
           "email": {
@@ -52,7 +52,7 @@
           }
         },
         "required": [
-          "uid",
+          "userId",
           "email",
           "displayName",
           "state",
@@ -63,9 +63,6 @@
         "type": "object",
         "properties": {
           "name": {
-            "type": "string"
-          },
-          "uid": {
             "type": "string"
           },
           "worldId": {
@@ -116,7 +113,6 @@
         },
         "required": [
           "name",
-          "uid",
           "worldId",
           "displayName",
           "region",
@@ -196,7 +192,7 @@
       "WorldToken": {
         "type": "object",
         "properties": {
-          "uid": {
+          "tokenId": {
             "type": "string"
           },
           "name": {
@@ -220,7 +216,7 @@
           }
         },
         "required": [
-          "uid",
+          "tokenId",
           "name"
         ]
       },
@@ -235,7 +231,7 @@
       "PlatformToken": {
         "type": "object",
         "properties": {
-          "uid": {
+          "tokenId": {
             "type": "string"
           },
           "name": {
@@ -260,14 +256,14 @@
           }
         },
         "required": [
-          "uid",
+          "tokenId",
           "name"
         ]
       },
       "PlatformTokenCreateResponse": {
         "type": "object",
         "properties": {
-          "uid": {
+          "tokenId": {
             "type": "string"
           },
           "name": {
@@ -278,7 +274,7 @@
           }
         },
         "required": [
-          "uid",
+          "tokenId",
           "name",
           "token"
         ]
@@ -314,6 +310,9 @@
           "name": {
             "type": "string"
           },
+          "eventId": {
+            "type": "string"
+          },
           "metric": {
             "type": "string"
           },
@@ -344,6 +343,7 @@
         },
         "required": [
           "name",
+          "eventId",
           "metric",
           "quantity",
           "unit",
@@ -715,7 +715,7 @@
                     "deletion": {
                       "type": "object",
                       "properties": {
-                        "uid": {
+                        "deletionRequestId": {
                           "type": "string"
                         },
                         "expiresAt": {
@@ -723,7 +723,7 @@
                         }
                       },
                       "required": [
-                        "uid",
+                        "deletionRequestId",
                         "expiresAt"
                       ]
                     },
@@ -809,9 +809,6 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "uid": {
-                            "type": "string"
-                          },
                           "worldId": {
                             "type": "string"
                           },
@@ -830,7 +827,6 @@
                           }
                         },
                         "required": [
-                          "uid",
                           "worldId",
                           "displayName",
                           "state"
@@ -842,7 +838,7 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "uid": {
+                          "tokenId": {
                             "type": "string"
                           },
                           "name": {
@@ -856,7 +852,7 @@
                           }
                         },
                         "required": [
-                          "uid",
+                          "tokenId",
                           "name",
                           "scope"
                         ]
@@ -1601,7 +1597,7 @@
         }
       }
     },
-    "/v1/worlds/{worldId}/auth/tokens/{tokenUid}": {
+    "/v1/worlds/{worldId}/auth/tokens/{tokenId}": {
       "delete": {
         "tags": [
           "WorldTokens"
@@ -1632,7 +1628,7 @@
               "type": "string"
             },
             "required": true,
-            "name": "tokenUid",
+            "name": "tokenId",
             "in": "path"
           },
           {

@@ -17,23 +17,23 @@ export type QuotaStatus = {
 
 export async function activeWorldCount(
   c: Context<AppEnv>,
-  userUid: string,
+  userId: string,
 ): Promise<number> {
   const row = await first<{ count: number }>(
     db(c.env)
       .prepare(
-        "SELECT COUNT(*) AS count FROM worlds WHERE user_uid = ? AND state != 'deleted'",
+        "SELECT COUNT(*) AS count FROM worlds WHERE user_id = ? AND state != 'deleted'",
       )
-      .bind(userUid),
+      .bind(userId),
   );
   return row?.count ?? 0;
 }
 
 export async function quotaStatus(
   c: Context<AppEnv>,
-  userUid: string,
+  userId: string,
 ): Promise<QuotaStatus> {
-  const count = await activeWorldCount(c, userUid);
+  const count = await activeWorldCount(c, userId);
   if (count >= privateBetaQuota.maxWorlds) {
     return {
       state: "THROTTLED",
@@ -99,15 +99,15 @@ export function summarizeLimits(limits: LimitSummary[]): QuotaSummary {
  */
 export async function worldUsageQuota(
   c: Context<AppEnv>,
-  worldRowUid: string,
+  worldId: string,
   totals: Array<{ metric: string; quantity: number }>,
 ): Promise<QuotaSummary> {
   const limitRows = await all<{ metric: string; limit_quantity: number }>(
     db(c.env)
       .prepare(
-        "SELECT metric, limit_quantity FROM world_limits WHERE world_uid = ? ORDER BY metric",
+        "SELECT metric, limit_quantity FROM world_limits WHERE world_id = ? ORDER BY metric",
       )
-      .bind(worldRowUid),
+      .bind(worldId),
   );
   const totalByMetric = new Map(
     totals.map((total) => [total.metric, total.quantity]),
@@ -131,12 +131,12 @@ export async function worldUsageQuota(
  */
 export async function worldBillingQuota(
   c: Context<AppEnv>,
-  userUid: string,
-  worldRowUid: string,
+  userId: string,
+  worldId: string,
   totals: Array<{ metric: string; quantity: number }>,
 ): Promise<QuotaSummary> {
-  const active = await activeWorldCount(c, userUid);
-  const perWorld = await worldUsageQuota(c, worldRowUid, totals);
+  const active = await activeWorldCount(c, userId);
+  const perWorld = await worldUsageQuota(c, worldId, totals);
   return summarizeLimits([
     {
       metric: "MAX_WORLDS",

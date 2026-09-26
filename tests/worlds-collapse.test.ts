@@ -19,7 +19,7 @@ import { createTestD1, type TestD1 } from "./helpers/d1-test-adapter";
 const ADMIN_TOKEN = "wzp_test-admin-token";
 const TEST_EMAIL = "worlds-user@example.com";
 const WORLDS_BASE = "http://localhost:9999";
-const CREATED_UID = "w_created-123";
+const CREATED_WORLD_ID = "w_created-123";
 
 type TestBindings = Bindings & { DB: TestD1 };
 
@@ -55,7 +55,7 @@ function requestFromCall(
 }
 
 let createdCounter = 0;
-let lastCreatedUid = CREATED_UID;
+let lastCreatedWorldId = CREATED_WORLD_ID;
 
 function worldsApiMockHandler(input: RequestInfo | URL, init?: RequestInit) {
   const req = requestFromCall(input, init);
@@ -66,17 +66,17 @@ function worldsApiMockHandler(input: RequestInfo | URL, init?: RequestInit) {
   }
   if (url.endsWith("/api-keys") && method === "POST") {
     return new Response(
-      JSON.stringify({ uid: "key-1", token: "wzw_test-key" }),
+      JSON.stringify({ tokenId: "key-1", token: "wzw_test-key" }),
       { status: 201, headers: { "content-type": "application/json" } },
     );
   }
   if (url.endsWith("/worlds") && method === "POST") {
     // Canonical ids are minted by the data plane and unique per world.
-    lastCreatedUid = `w_created-${++createdCounter}`;
+    lastCreatedWorldId = `w_created-${++createdCounter}`;
     return new Response(
       JSON.stringify({
-        name: `worlds/${lastCreatedUid}`,
-        uid: lastCreatedUid,
+        name: `worlds/${lastCreatedWorldId}`,
+        worldId: lastCreatedWorldId,
         displayName: "My World",
         state: "active",
         storage: "d1-world",
@@ -90,12 +90,18 @@ function worldsApiMockHandler(input: RequestInfo | URL, init?: RequestInit) {
       { status: 201, headers: { "content-type": "application/json" } },
     );
   }
-  if (url.endsWith(`/worlds/${lastCreatedUid}`) && method === "DELETE") {
+  if (url.endsWith(`/worlds/${lastCreatedWorldId}`) && method === "DELETE") {
     return new Response(null, { status: 204 });
   }
-  if (url.endsWith(`/worlds/${lastCreatedUid}/undelete`) && method === "POST") {
+  if (
+    url.endsWith(`/worlds/${lastCreatedWorldId}/undelete`) &&
+    method === "POST"
+  ) {
     return new Response(
-      JSON.stringify({ name: `worlds/${lastCreatedUid}`, uid: lastCreatedUid }),
+      JSON.stringify({
+        name: `worlds/${lastCreatedWorldId}`,
+        worldId: lastCreatedWorldId,
+      }),
       { status: 200, headers: { "content-type": "application/json" } },
     );
   }
@@ -176,11 +182,10 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     );
     expect(res.status).toBe(201);
     const body = (await res.json()) as {
-      world: { uid: string; worldId: string; slug: string };
+      world: { worldId: string; slug: string };
     };
-    expect(body.world.uid).toBeTruthy();
     // worldId is the canonical data-plane id; the friendly id moved to slug.
-    expect(body.world.worldId).toBe(lastCreatedUid);
+    expect(body.world.worldId).toBe(lastCreatedWorldId);
     expect(body.world.slug).toBe("my-world");
 
     const keyCall = worldsApiMock.mock.calls.find((call) => {
@@ -206,7 +211,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
       .all();
     client.close();
     expect(rs.length).toBe(1);
-    expect(rs[0].world_id).toBe(lastCreatedUid);
+    expect(rs[0].world_id).toBe(lastCreatedWorldId);
     expect(rs[0].slug).toBe("my-world");
   });
 
@@ -229,7 +234,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     expect(create.status).toBe(201);
 
     const res = await api(
-      `/v1/worlds/${lastCreatedUid}`,
+      `/v1/worlds/${lastCreatedWorldId}`,
       {
         method: "DELETE",
         headers: { authorization: `Bearer ${sessionToken}` },
@@ -243,7 +248,8 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     const deleteCall = worldsApiMock.mock.calls.find((call) => {
       const req = requestFromCall(call[0], call[1]);
       return (
-        req.url.includes(`/worlds/${lastCreatedUid}`) && req.method === "DELETE"
+        req.url.includes(`/worlds/${lastCreatedWorldId}`) &&
+        req.method === "DELETE"
       );
     });
     expect(deleteCall).toBeTruthy();
@@ -252,9 +258,12 @@ describe("world ownership collapse (wazoo-api#20)", () => {
   it("returns 502 when worlds-api create fails", async () => {
     worldsApiMock
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ uid: "key-1", token: "wzw_test-key" }), {
-          status: 201,
-        }),
+        new Response(
+          JSON.stringify({ tokenId: "key-1", token: "wzw_test-key" }),
+          {
+            status: 201,
+          },
+        ),
       )
       .mockResolvedValueOnce(
         new Response(

@@ -1,36 +1,36 @@
 # Migrations
 
-Hand-applied D1 migrations, run with `wrangler d1 execute` against the target
-database (QA first, then prod). There is no migration runner; each file is
-idempotent-safe to re-run and states its own preconditions.
+Hand-applied D1 migrations, run with `wrangler d1 execute` against QA first,
+then production. There is no migration runner. The world-identity and hard
+identifier cutovers are ordered, one-time migrations and are not safe to rerun.
 
 ## 2026-09-25-world-id-canonical.sql
 
-Makes `world_id` the canonical data-plane identifier (`w_<uuid>`) and moves the
-friendly user-chosen id into `slug`, matching `wazoo-api#54` (canonical-only
-routing) and `wazoo-api#58` (worlds table transition).
+Promotes the canonical data-plane identifier to `world_id` and moves the
+friendly value to `slug`. It is a prerequisite for the hard cutover below.
+Its old identifier names are historical migration inputs, not live schema or
+API names.
 
-**Run this before deploying the code that ships with it.** The new code reads
-`world_id` as canonical, so a deploy without the migration would pass a slug to
-the data plane and 404 every world-scoped call.
+## 2026-09-26-entity-identifiers.sql
 
-The migration does **not** drop `worlds_api_uid`. It is kept as a vestigial,
-reversible copy of the promotion source:
+Apply this exactly once after the 2026-09-25 migration and before deploying the
+matching Worker. It verifies canonical world IDs and old child relationships,
+then remaps usage and limit world references from the old world row key to
+`world_id`. It replaces `worlds` with `world_id` as the primary key and rebuilds
+child tables with foreign keys to that key. User, token, usage-event,
+audit-event, and deletion-request fields receive semantic IDs.
 
-- SQLite performs `ON DELETE CASCADE` actions when a parent table is dropped,
-  even under `PRAGMA defer_foreign_keys`. The textbook table rebuild (which is
-  the only way to drop a column referenced by the table's `UNIQUE` constraint)
-  silently deleted `world_limits` rows and nulled `usage_events.world_uid` in a
-  local rehearsal — live billing data. Rehearsed and rejected.
-- Keeping the column makes rollback a one-liner:
-  `UPDATE worlds SET world_id = slug;`
+The migration stages child records before replacing the parent table so SQLite's
+old `ON DELETE` actions cannot clear billing data. Legacy identifier names are
+retained only as inputs in these one-time migration files and in the test-only
+old-schema fixture `tests/fixtures/platform-id-cutover-old-schema.sql`. These
+isolated upgrade artifacts remain P0 until the cutover is deployed and the
+upgrade path is retired; none of the names may return to the live schema,
+runtime, OpenAPI, clients, or current docs.
 
-Dropping it later is tracked separately and needs a rebuild that runs with
-foreign keys disabled, which D1 does not currently expose.
+### Verification
 
-### Verified
-
-Rehearsed against the pre-migration schema with child rows present
-(1 `usage_events` row, 1 `world_limits` row): both preserved, zero rows nulled,
-zero `PRAGMA foreign_key_check` violations, and a world with a NULL
-`worlds_api_uid` keeps its existing `world_id` while gaining a matching `slug`.
+`tests/platform-id-cutover-migration.test.ts` executes the migration against
+`tests/fixtures/platform-id-cutover-old-schema.sql`, checks row/value and
+relationship preservation, then runs `PRAGMA foreign_key_check` and verifies
+cascade / `SET NULL` behavior on the new keys.

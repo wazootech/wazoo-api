@@ -45,17 +45,22 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
       const user = await resolveUser(c, query.email ?? undefined);
       const world = await resolveWorldBilling(
         c,
-        user.uid,
+        user.userId,
         c.req.param("worldId"),
       );
       const totals = await all<{ metric: string; quantity: number }>(
         db(c.env)
           .prepare(
-            "SELECT metric, SUM(quantity) AS quantity FROM usage_events WHERE world_uid = ? GROUP BY metric",
+            "SELECT metric, SUM(quantity) AS quantity FROM usage_events WHERE world_id = ? GROUP BY metric",
           )
-          .bind(world.uid),
+          .bind(world.world_id),
       );
-      const quota = await worldBillingQuota(c, user.uid, world.uid, totals);
+      const quota = await worldBillingQuota(
+        c,
+        user.userId,
+        world.world_id,
+        totals,
+      );
       return respond(c, {
         billing: {
           world: `worlds/${world.world_id}`,
@@ -103,7 +108,7 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
       requireScope(c, "billing.read");
       const query = c.req.valid("query");
       const user = await resolveUser(c, query.email ?? undefined);
-      await resolveWorldBilling(c, user.uid, c.req.param("worldId"));
+      await resolveWorldBilling(c, user.userId, c.req.param("worldId"));
       return respond(c, { invoices: [] });
     },
   );
@@ -163,7 +168,7 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
       const user = await resolveUser(c, query.email ?? undefined);
       const world = await resolveWorldBilling(
         c,
-        user.uid,
+        user.userId,
         c.req.param("worldId"),
       );
 
@@ -211,14 +216,14 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
 
       await db(c.env)
         .prepare(
-          "UPDATE worlds SET billing_state = 'CANCELLED', stripe_subscription_id = NULL, update_time = ? WHERE uid = ?",
+          "UPDATE worlds SET billing_state = 'CANCELLED', stripe_subscription_id = NULL, update_time = ? WHERE world_id = ?",
         )
-        .bind(new Date().toISOString(), world.uid)
+        .bind(new Date().toISOString(), world.world_id)
         .run();
 
       const updated = await resolveWorldBilling(
         c,
-        user.uid,
+        user.userId,
         c.req.param("worldId"),
       );
       return respond(c, {
@@ -271,7 +276,7 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
       requireScope(c, "billing.read");
       const query = c.req.valid("query");
       const user = await resolveUser(c, query.email ?? undefined);
-      await resolveWorldBilling(c, user.uid, c.req.param("worldId"));
+      await resolveWorldBilling(c, user.userId, c.req.param("worldId"));
       return respond(
         c,
         {
@@ -317,10 +322,9 @@ export const stripeWebhook = new Hono<AppEnv>().post(
 
 async function resolveWorldBilling(
   c: Context<AppEnv>,
-  userUid: string,
+  userId: string,
   worldId: string,
 ): Promise<{
-  uid: string;
   world_id: string;
   billing_provider: string;
   stripe_customer_id: string | null;
@@ -328,7 +332,6 @@ async function resolveWorldBilling(
   billing_state: string;
 }> {
   const row = await first<{
-    uid: string;
     world_id: string;
     billing_provider: string;
     stripe_customer_id: string | null;
@@ -337,9 +340,9 @@ async function resolveWorldBilling(
   }>(
     db(c.env)
       .prepare(
-        "SELECT uid, world_id, billing_provider, stripe_customer_id, stripe_subscription_id, billing_state FROM worlds WHERE user_uid = ? AND world_id = ?",
+        "SELECT world_id, billing_provider, stripe_customer_id, stripe_subscription_id, billing_state FROM worlds WHERE user_id = ? AND world_id = ?",
       )
-      .bind(userUid, worldId),
+      .bind(userId, worldId),
   );
   if (!row) throw new HTTPException(404, { message: "World not found" });
   return row;

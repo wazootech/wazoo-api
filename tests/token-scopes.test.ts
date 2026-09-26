@@ -138,7 +138,7 @@ describe("platform token scopes (wazoo-api#13 / wazoo-api#14)", () => {
     );
     expect(res.status).toBe(201);
     const body = (await res.json()) as {
-      uid: string;
+      tokenId: string;
       name: string;
       token: string;
     };
