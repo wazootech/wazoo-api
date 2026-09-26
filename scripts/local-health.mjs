@@ -119,12 +119,12 @@ await test("POST /v1/worlds without body returns 400", async () => {
   await assertBadRequest(res);
 });
 
-await test("POST /v1/worlds with invalid worldId returns 400", async () => {
+await test("POST /v1/worlds with invalid slug returns 400", async () => {
   const res = await fetch(`${BASE_URL}/v1/worlds`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({
-      worldId: "",
+      slug: "",
       world: { displayName: "Test" },
     }),
   });
@@ -141,7 +141,8 @@ await test("POST /v1/users/me without email returns 400", async () => {
 // ── Authenticated health flow (requires admin token) ───
 
 const testEmail = `health-${Date.now()}@wazoo.dev`;
-const testWorldId = `health-${Date.now()}`;
+const testWorldSlug = `health-${Date.now()}`;
+let createdWorldId;
 
 await test("GET /v1/users/me?email=... creates/returns user", async () => {
   const res = await fetch(
@@ -152,10 +153,10 @@ await test("GET /v1/users/me?email=... creates/returns user", async () => {
   if (res.status !== 200 && res.status !== 201) {
     throw new Error(`Unexpected status ${res.status}: ${JSON.stringify(body)}`);
   }
-  if (!body.user?.uid) throw new Error("Missing user.uid");
+  if (!body.user?.userId) throw new Error("Missing user.userId");
   if (body.user.email !== testEmail)
     throw new Error(`Email mismatch: ${body.user.email}`);
-  console.log(`        user uid: ${body.user.uid}`);
+  console.log(`        userId: ${body.user.userId}`);
 });
 
 await test("GET /v1/worlds returns list (may be empty)", async () => {
@@ -174,7 +175,7 @@ await test("POST /v1/worlds creates a World", async () => {
     headers: authHeaders(),
     body: JSON.stringify({
       ownerEmail: testEmail,
-      worldId: testWorldId,
+      slug: testWorldSlug,
       world: { displayName: "Health Test World" },
     }),
   });
@@ -194,13 +195,14 @@ await test("POST /v1/worlds creates a World", async () => {
     }
     throw new Error(`Unexpected status ${res.status}: ${JSON.stringify(body)}`);
   }
-  if (!body.world?.uid) throw new Error("Missing world.uid");
-  console.log(`        world uid: ${body.world.uid}`);
+  if (!body.world?.worldId) throw new Error("Missing world.worldId");
+  createdWorldId = body.world.worldId;
+  console.log(`        worldId: ${createdWorldId}`);
 });
 
 await test("GET /v1/worlds/:worldId returns the World", async () => {
   const res = await fetch(
-    `${BASE_URL}/v1/worlds/${testWorldId}?email=${encodeURIComponent(testEmail)}`,
+    `${BASE_URL}/v1/worlds/${createdWorldId}?email=${encodeURIComponent(testEmail)}`,
     { headers: authHeaders() },
   );
   const body = await res.json();
@@ -212,13 +214,13 @@ await test("GET /v1/worlds/:worldId returns the World", async () => {
     }
     throw new Error(`Unexpected status ${res.status}: ${JSON.stringify(body)}`);
   }
-  if (body.world?.worldId !== testWorldId)
+  if (body.world?.worldId !== createdWorldId)
     throw new Error(`worldId mismatch: ${body.world?.worldId}`);
 });
 
 await test("PATCH /v1/worlds/:worldId updates displayName", async () => {
   const res = await fetch(
-    `${BASE_URL}/v1/worlds/${testWorldId}?email=${encodeURIComponent(testEmail)}`,
+    `${BASE_URL}/v1/worlds/${createdWorldId}?email=${encodeURIComponent(testEmail)}`,
     {
       method: "PATCH",
       headers: authHeaders(),
@@ -243,7 +245,7 @@ await test("PATCH /v1/worlds/:worldId updates displayName", async () => {
 
 await test("DELETE /v1/worlds/:worldId deletes the World", async () => {
   const res = await fetch(
-    `${BASE_URL}/v1/worlds/${testWorldId}?email=${encodeURIComponent(testEmail)}`,
+    `${BASE_URL}/v1/worlds/${createdWorldId}?email=${encodeURIComponent(testEmail)}`,
     { method: "DELETE", headers: authHeaders() },
   );
   if (res.status !== 200 && res.status !== 404) {

@@ -19,7 +19,7 @@ import { createTestD1, type TestD1 } from "./helpers/d1-test-adapter";
 const ADMIN_TOKEN = "wzp_test-admin-token";
 const TEST_EMAIL = "worlds-user@example.com";
 const WORLDS_BASE = "http://localhost:9999";
-const CREATED_UID = "w_created-123";
+const CREATED_WORLD_ID = "w_created-123";
 
 type TestBindings = Bindings & { DB: TestD1 };
 
@@ -55,7 +55,7 @@ function requestFromCall(
 }
 
 let createdCounter = 0;
-let lastCreatedUid = CREATED_UID;
+let lastCreatedWorldId = CREATED_WORLD_ID;
 
 function worldsApiMockHandler(input: RequestInfo | URL, init?: RequestInit) {
   const req = requestFromCall(input, init);
@@ -64,19 +64,43 @@ function worldsApiMockHandler(input: RequestInfo | URL, init?: RequestInit) {
   if (!url.startsWith(WORLDS_BASE)) {
     throw new Error(`unexpected fetch to ${url}`);
   }
-  if (url.endsWith("/api-keys") && method === "POST") {
+  if (new URL(url).pathname.endsWith("/api-keys") && method === "POST") {
     return new Response(
-      JSON.stringify({ uid: "key-1", token: "wzw_test-key" }),
+      JSON.stringify({
+        apiKeyId: "key-1",
+        token: "wzw_test-key",
+        name: "test-key",
+        namespace: "test-user",
+        worldId: lastCreatedWorldId,
+        createTime: new Date().toISOString(),
+      }),
       { status: 201, headers: { "content-type": "application/json" } },
+    );
+  }
+  if (new URL(url).pathname.endsWith("/api-keys") && method === "GET") {
+    return new Response(
+      JSON.stringify({
+        keys: [
+          {
+            apiKeyId: "key-1",
+            name: "test-key",
+            namespace: "test-user",
+            worldId: lastCreatedWorldId,
+            scopes: ["data:read"],
+            createTime: new Date().toISOString(),
+          },
+        ],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
     );
   }
   if (url.endsWith("/worlds") && method === "POST") {
     // Canonical ids are minted by the data plane and unique per world.
-    lastCreatedUid = `w_created-${++createdCounter}`;
+    lastCreatedWorldId = `w_created-${++createdCounter}`;
     return new Response(
       JSON.stringify({
-        name: `worlds/${lastCreatedUid}`,
-        uid: lastCreatedUid,
+        name: `worlds/${lastCreatedWorldId}`,
+        worldId: lastCreatedWorldId,
         displayName: "My World",
         state: "active",
         storage: "d1-world",
@@ -90,12 +114,18 @@ function worldsApiMockHandler(input: RequestInfo | URL, init?: RequestInit) {
       { status: 201, headers: { "content-type": "application/json" } },
     );
   }
-  if (url.endsWith(`/worlds/${lastCreatedUid}`) && method === "DELETE") {
+  if (url.endsWith(`/worlds/${lastCreatedWorldId}`) && method === "DELETE") {
     return new Response(null, { status: 204 });
   }
-  if (url.endsWith(`/worlds/${lastCreatedUid}/undelete`) && method === "POST") {
+  if (
+    url.endsWith(`/worlds/${lastCreatedWorldId}/undelete`) &&
+    method === "POST"
+  ) {
     return new Response(
-      JSON.stringify({ name: `worlds/${lastCreatedUid}`, uid: lastCreatedUid }),
+      JSON.stringify({
+        name: `worlds/${lastCreatedWorldId}`,
+        worldId: lastCreatedWorldId,
+      }),
       { status: 200, headers: { "content-type": "application/json" } },
     );
   }
@@ -176,11 +206,10 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     );
     expect(res.status).toBe(201);
     const body = (await res.json()) as {
-      world: { uid: string; worldId: string; slug: string };
+      world: { worldId: string; slug: string };
     };
-    expect(body.world.uid).toBeTruthy();
     // worldId is the canonical data-plane id; the friendly id moved to slug.
-    expect(body.world.worldId).toBe(lastCreatedUid);
+    expect(body.world.worldId).toBe(lastCreatedWorldId);
     expect(body.world.slug).toBe("my-world");
 
     const keyCall = worldsApiMock.mock.calls.find((call) => {
@@ -206,7 +235,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
       .all();
     client.close();
     expect(rs.length).toBe(1);
-    expect(rs[0].world_id).toBe(lastCreatedUid);
+    expect(rs[0].world_id).toBe(lastCreatedWorldId);
     expect(rs[0].slug).toBe("my-world");
   });
 
@@ -229,7 +258,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     expect(create.status).toBe(201);
 
     const res = await api(
-      `/v1/worlds/${lastCreatedUid}`,
+      `/v1/worlds/${lastCreatedWorldId}`,
       {
         method: "DELETE",
         headers: { authorization: `Bearer ${sessionToken}` },
@@ -243,18 +272,77 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     const deleteCall = worldsApiMock.mock.calls.find((call) => {
       const req = requestFromCall(call[0], call[1]);
       return (
-        req.url.includes(`/worlds/${lastCreatedUid}`) && req.method === "DELETE"
+        req.url.includes(`/worlds/${lastCreatedWorldId}`) &&
+        req.method === "DELETE"
       );
     });
     expect(deleteCall).toBeTruthy();
   });
 
+  it("returns semantic token IDs for world API keys", async () => {
+    const worldResponse = await api(
+      "/v1/worlds",
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          slug: "token-world",
+          world: { displayName: "Token World" },
+        }),
+      },
+      env,
+    );
+    expect(worldResponse.status).toBe(201);
+    const worldBody = (await worldResponse.json()) as {
+      world: { worldId: string };
+    };
+    const worldId = worldBody.world.worldId;
+    const tokenResponse = await api(
+      `/v1/worlds/${worldId}/auth/tokens?email=${encodeURIComponent(TEST_EMAIL)}`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name: "test-key" }),
+      },
+      env,
+    );
+    expect(tokenResponse.status).toBe(201);
+    const createdToken = (await tokenResponse.json()) as {
+      token: { tokenId: string; token: string; worldId: string };
+    };
+    expect(createdToken.token.tokenId).toBe("key-1");
+    expect(createdToken.token.token).toBe("wzw_test-key");
+    expect(createdToken.token.worldId).toBe(worldId);
+
+    const listResponse = await api(
+      `/v1/worlds/${worldId}/auth/tokens?email=${encodeURIComponent(TEST_EMAIL)}`,
+      { headers: { authorization: `Bearer ${sessionToken}` } },
+      env,
+    );
+    expect(listResponse.status).toBe(200);
+    const listedTokens = (await listResponse.json()) as {
+      tokens: Array<{ tokenId: string; worldId: string }>;
+    };
+    expect(listedTokens.tokens).toEqual([
+      expect.objectContaining({ tokenId: "key-1", worldId }),
+    ]);
+  });
+
   it("returns 502 when worlds-api create fails", async () => {
     worldsApiMock
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ uid: "key-1", token: "wzw_test-key" }), {
-          status: 201,
-        }),
+        new Response(
+          JSON.stringify({ apiKeyId: "key-1", token: "wzw_test-key" }),
+          {
+            status: 201,
+          },
+        ),
       )
       .mockResolvedValueOnce(
         new Response(

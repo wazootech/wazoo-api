@@ -1,36 +1,15 @@
 # Migrations
 
-Hand-applied D1 migrations, run with `wrangler d1 execute` against the target
-database (QA first, then prod). There is no migration runner; each file is
-idempotent-safe to re-run and states its own preconditions.
+Apply D1 migrations manually with `wrangler d1 execute`, QA first and then production. There is no migration runner. Each migration states its preconditions; never assume a hand-applied migration is safe to rerun.
+
+## 2026-09-26-entity-identifiers.sql
+
+This one-time, data-preserving cutover follows `2026-09-25-world-id-canonical.sql` and must run before deploying the matching Worker. It rebuilds the world table so `world_id` becomes the primary key and every world foreign key targets it. It also renames all other entity keys to semantic names, including user, platform-token, usage-event, deletion-request, and audit-event identifiers.
+
+The SQL necessarily reads the previous column names as migration inputs; it does not retain compatibility columns or expose those names in the resulting schema or API. The migration checks canonical IDs before changing tables, stages usage and limit records before replacing the parent table, and preserves each record's IDs, values, and world relationship. It is a one-time upgrade and is not safe to retry after partial execution; inspect the database before attempting recovery.
+
+Before deployment, rehearse the migration against a copy of the pre-cutover schema and data, then verify row counts and `PRAGMA foreign_key_check`. Do not deploy the new Worker until the migration has succeeded in the target environment.
 
 ## 2026-09-25-world-id-canonical.sql
 
-Makes `world_id` the canonical data-plane identifier (`w_<uuid>`) and moves the
-friendly user-chosen id into `slug`, matching `wazoo-api#54` (canonical-only
-routing) and `wazoo-api#58` (worlds table transition).
-
-**Run this before deploying the code that ships with it.** The new code reads
-`world_id` as canonical, so a deploy without the migration would pass a slug to
-the data plane and 404 every world-scoped call.
-
-The migration does **not** drop `worlds_api_uid`. It is kept as a vestigial,
-reversible copy of the promotion source:
-
-- SQLite performs `ON DELETE CASCADE` actions when a parent table is dropped,
-  even under `PRAGMA defer_foreign_keys`. The textbook table rebuild (which is
-  the only way to drop a column referenced by the table's `UNIQUE` constraint)
-  silently deleted `world_limits` rows and nulled `usage_events.world_uid` in a
-  local rehearsal — live billing data. Rehearsed and rejected.
-- Keeping the column makes rollback a one-liner:
-  `UPDATE worlds SET world_id = slug;`
-
-Dropping it later is tracked separately and needs a rebuild that runs with
-foreign keys disabled, which D1 does not currently expose.
-
-### Verified
-
-Rehearsed against the pre-migration schema with child rows present
-(1 `usage_events` row, 1 `world_limits` row): both preserved, zero rows nulled,
-zero `PRAGMA foreign_key_check` violations, and a world with a NULL
-`worlds_api_uid` keeps its existing `world_id` while gaining a matching `slug`.
+This earlier migration promoted the data-plane key to `world_id` and moved the friendly world name into `slug`. It is a required first step for the entity-identifier migration above. Its retained staging column exists only to support that upgrade path; it is removed by the subsequent one-time cutover.

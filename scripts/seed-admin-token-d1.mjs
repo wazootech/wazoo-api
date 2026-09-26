@@ -18,14 +18,14 @@ const scope =
   process.env.WAZOO_PLATFORM_ADMIN_TOKEN_SCOPE ??
   "admin users.read users.write worlds.read worlds.write worlds.admin usage.read billing.read";
 const hash = createHash("sha256").update(token).digest("hex");
-const uid = `admin_${randomUUID()}`;
+const tokenId = `admin_${randomUUID()}`;
 const directory = await mkdtemp(join(tmpdir(), "wazoo-admin-seed-"));
 const sqlPath = join(directory, "seed.sql");
 
 try {
   await writeFile(
     sqlPath,
-    `INSERT INTO platform_api_tokens (uid, user_uid, name, token_hash, kind, scope) VALUES ('${uid}', NULL, '${escapeSql(name)}', '${hash}', 'ADMIN', '${escapeSql(scope)}');\n`,
+    `INSERT INTO platform_api_tokens (token_id, user_id, name, token_hash, kind, scope) VALUES ('${token_id}', NULL, '${escapeSql(name)}', '${hash}', 'ADMIN', '${escapeSql(scope)}');\n`,
     { encoding: "utf8", mode: 0o600 },
   );
   const command = process.platform === "win32" ? "cmd.exe" : npx;

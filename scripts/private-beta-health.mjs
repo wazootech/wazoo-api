@@ -15,10 +15,10 @@ const worldIds = [
 ];
 
 const state = {
-  userUid: null,
+  userId: null,
   worldId: null,
   canonicalBySlug: {},
-  worldTokenUid: null,
+  worldTokenId: null,
   worldToken: null,
 };
 
@@ -87,7 +87,7 @@ async function ensureUser() {
     `/v1/users/me?email=${encodeURIComponent(email)}`,
     { allowStatus: [200, 201] },
   );
-  state.userUid = response.body.user.uid;
+  state.userId = response.body.user.userId;
   assert(response.body.user.email === email, "Test user email mismatch");
   return response;
 }
@@ -118,7 +118,7 @@ async function createWorldToken() {
       body: { name: `health-${runId}` },
     },
   );
-  state.worldTokenUid = response.body.token.uid;
+  state.worldTokenId = response.body.token.tokenId;
   state.worldToken = response.body.token.token;
   assert(state.worldToken?.startsWith("wzw_"), "World token was not returned");
   return response;
@@ -220,9 +220,9 @@ async function sparqlAsk() {
 }
 
 async function revokeWorldToken() {
-  if (!state.worldTokenUid) throw new Error("Missing world token uid");
+  if (!state.worldTokenId) throw new Error("Missing world token ID");
   return apiRequest(
-    `/v1/worlds/${state.worldId}/auth/tokens/${state.worldTokenUid}?email=${encodeURIComponent(email)}`,
+    `/v1/worlds/${state.worldId}/auth/tokens/${state.worldTokenId}?email=${encodeURIComponent(email)}`,
     { method: "DELETE" },
   );
 }
