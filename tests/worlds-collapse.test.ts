@@ -54,6 +54,9 @@ function requestFromCall(
   return input instanceof Request ? input : new Request(String(input), init);
 }
 
+let createdCounter = 0;
+let lastCreatedUid = CREATED_UID;
+
 function worldsApiMockHandler(input: RequestInfo | URL, init?: RequestInit) {
   const req = requestFromCall(input, init);
   const url = req.url;
@@ -68,10 +71,12 @@ function worldsApiMockHandler(input: RequestInfo | URL, init?: RequestInit) {
     );
   }
   if (url.endsWith("/worlds") && method === "POST") {
+    // Canonical ids are minted by the data plane and unique per world.
+    lastCreatedUid = `w_created-${++createdCounter}`;
     return new Response(
       JSON.stringify({
-        name: `worlds/${CREATED_UID}`,
-        uid: CREATED_UID,
+        name: `worlds/${lastCreatedUid}`,
+        uid: lastCreatedUid,
         displayName: "My World",
         state: "active",
         storage: "d1-world",
@@ -85,12 +90,12 @@ function worldsApiMockHandler(input: RequestInfo | URL, init?: RequestInit) {
       { status: 201, headers: { "content-type": "application/json" } },
     );
   }
-  if (url.endsWith(`/worlds/${CREATED_UID}`) && method === "DELETE") {
+  if (url.endsWith(`/worlds/${lastCreatedUid}`) && method === "DELETE") {
     return new Response(null, { status: 204 });
   }
-  if (url.endsWith(`/worlds/${CREATED_UID}/undelete`) && method === "POST") {
+  if (url.endsWith(`/worlds/${lastCreatedUid}/undelete`) && method === "POST") {
     return new Response(
-      JSON.stringify({ name: `worlds/${CREATED_UID}`, uid: CREATED_UID }),
+      JSON.stringify({ name: `worlds/${lastCreatedUid}`, uid: lastCreatedUid }),
       { status: 200, headers: { "content-type": "application/json" } },
     );
   }
@@ -163,7 +168,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          worldId: "my-world",
+          slug: "my-world",
           world: { displayName: "My World" },
         }),
       },
@@ -171,11 +176,12 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     );
     expect(res.status).toBe(201);
     const body = (await res.json()) as {
-      world: { uid: string; worldId: string; worldUid: string };
+      world: { uid: string; worldId: string; slug: string };
     };
     expect(body.world.uid).toBeTruthy();
-    expect(body.world.worldId).toBe("my-world");
-    expect(body.world.worldUid).toBe(CREATED_UID);
+    // worldId is the canonical data-plane id; the friendly id moved to slug.
+    expect(body.world.worldId).toBe(lastCreatedUid);
+    expect(body.world.slug).toBe("my-world");
 
     const keyCall = worldsApiMock.mock.calls.find((call) => {
       const req = requestFromCall(call[0], call[1]);
@@ -196,15 +202,15 @@ describe("world ownership collapse (wazoo-api#20)", () => {
 
     const client = new DatabaseSync((env.DB as TestD1).path);
     const rs = client
-      .prepare("SELECT worlds_api_uid FROM worlds WHERE world_id = 'my-world'")
+      .prepare("SELECT world_id, slug FROM worlds WHERE slug = 'my-world'")
       .all();
     client.close();
     expect(rs.length).toBe(1);
-    expect(rs[0].worlds_api_uid).toBe(CREATED_UID);
-    expect(rs[0].worlds_api_uid).toBe(CREATED_UID);
+    expect(rs[0].world_id).toBe(lastCreatedUid);
+    expect(rs[0].slug).toBe("my-world");
   });
 
-  it("deletes via worlds-api by world_uid and mirrors state locally", async () => {
+  it("deletes via worlds-api by canonical world_id and mirrors state locally", async () => {
     const create = await api(
       "/v1/worlds",
       {
@@ -214,7 +220,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          worldId: "del-world",
+          slug: "del-world",
           world: { displayName: "Del World" },
         }),
       },
@@ -223,7 +229,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     expect(create.status).toBe(201);
 
     const res = await api(
-      "/v1/worlds/del-world",
+      `/v1/worlds/${lastCreatedUid}`,
       {
         method: "DELETE",
         headers: { authorization: `Bearer ${sessionToken}` },
@@ -237,7 +243,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     const deleteCall = worldsApiMock.mock.calls.find((call) => {
       const req = requestFromCall(call[0], call[1]);
       return (
-        req.url.includes(`/worlds/${CREATED_UID}`) && req.method === "DELETE"
+        req.url.includes(`/worlds/${lastCreatedUid}`) && req.method === "DELETE"
       );
     });
     expect(deleteCall).toBeTruthy();
@@ -271,7 +277,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          worldId: "fail-world",
+          slug: "fail-world",
           world: { displayName: "Fail World" },
         }),
       },

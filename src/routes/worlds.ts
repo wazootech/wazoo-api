@@ -45,7 +45,7 @@ interface WorldRow extends Record<string, unknown> {
   display_name: string;
   region: string;
   state: string;
-  worlds_api_uid: string | null;
+  slug: string | null;
   create_time?: string;
   update_time?: string;
   delete_time?: string | null;
@@ -60,7 +60,7 @@ function worldResource(row: WorldRow) {
     name: `worlds/${row.world_id}`,
     uid: row.uid,
     worldId: row.world_id,
-    worldUid: row.worlds_api_uid ?? undefined,
+    slug: row.slug ?? undefined,
     displayName: row.display_name,
     region: row.region,
     state: row.state.toUpperCase(),
@@ -402,7 +402,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
 
     const world = {
       id: `w_${id()}`,
-      worldId: body.worldId,
+      slug: body.slug,
       displayName: body.world.displayName,
       region: body.world.region,
       now: now(),
@@ -432,15 +432,15 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
 
     await database
       .prepare(
-        "INSERT INTO worlds (uid, user_uid, world_id, display_name, region, worlds_api_uid, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO worlds (uid, user_uid, world_id, slug, display_name, region, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .bind(
         world.id,
         user.uid,
-        world.worldId,
+        createdWorld.uid,
+        world.slug,
         world.displayName,
         world.region,
-        createdWorld.uid,
         world.now,
         world.now,
       )
@@ -449,7 +449,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     if (isAdmin(c) && quota.state !== "OK" && quota.state !== "WARN") {
       await recordAdminAudit(c, {
         action: "worlds.create_quota_bypass",
-        targetResourceName: `users/${user.uid}/worlds/${world.worldId}`,
+        targetResourceName: `users/${user.uid}/worlds/${world.slug}`,
       });
     }
 
@@ -524,10 +524,10 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
       .run();
 
     if (updateMask.includes("displayName") && patch.displayName) {
-      if (existing.worlds_api_uid) {
+      if (existing.world_id) {
         const res = await updateWorld({
           client: worldsAdminClient(c.env),
-          path: { id: existing.worlds_api_uid },
+          path: { id: existing.world_id },
           body: { displayName: patch.displayName },
         });
         if (res.error) {
@@ -561,10 +561,10 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     const existing = await worldForUser(c, user.uid, worldId);
     if (!existing) return notFound(c);
 
-    if (existing.worlds_api_uid) {
+    if (existing.world_id) {
       const res = await deleteWorld({
         client: worldsAdminClient(c.env),
-        path: { id: existing.worlds_api_uid },
+        path: { id: existing.world_id },
       });
       if (res.error && res.response?.status !== 404) {
         return respond(
@@ -639,10 +639,10 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
         usagePercent: 100,
       });
     }
-    if (existing.worlds_api_uid) {
+    if (existing.world_id) {
       const res = await undeleteWorld({
         client: worldsAdminClient(c.env),
-        path: { id: existing.worlds_api_uid },
+        path: { id: existing.world_id },
       });
       if (res.error) {
         return respond(
@@ -686,7 +686,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
       throw new HTTPException(502, { message: worldsApiError(res) });
     return respond(c, {
       tokens: (res.data?.keys ?? []).filter(
-        (key) => key.worldId === existing.worlds_api_uid,
+        (key) => key.worldId === existing.world_id,
       ),
     });
   });
@@ -702,7 +702,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
       client: worldsAdminClient(c.env),
       body: {
         namespace: user.uid,
-        worldId: existing.worlds_api_uid ?? undefined,
+        worldId: existing.world_id,
         name: body.name ?? "",
       },
     });

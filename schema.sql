@@ -12,11 +12,19 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS worlds (
   uid TEXT PRIMARY KEY,
   user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+  -- world_id is the canonical worlds-api identifier (w_<uuid>) and the routing
+  -- key for /v1/worlds/{worldId} (wazoo-api#54).
   world_id TEXT NOT NULL,
+  -- slug is the friendly, user-chosen alias. A label, never a routing key.
+  slug TEXT,
+  -- Vestigial: pre-rename holder of the canonical id. The migration backfills
+  -- world_id from it and leaves it in place so the change stays reversible;
+  -- dropping it needs a table rebuild, which cascades into usage_events and
+  -- world_limits (verified destructive on 2026-09-25).
+  worlds_api_uid TEXT,
   display_name TEXT NOT NULL,
   region TEXT NOT NULL DEFAULT 'auto',
   state TEXT NOT NULL DEFAULT 'active',
-  worlds_api_uid TEXT,
   billing_provider TEXT NOT NULL DEFAULT 'STRIPE',
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT,
@@ -46,6 +54,8 @@ CREATE TABLE IF NOT EXISTS platform_api_tokens (
 CREATE TABLE IF NOT EXISTS usage_events (
   uid TEXT PRIMARY KEY,
   user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+  -- world_uid is an internal FK to worlds.uid (the management row id).
+  -- It is deliberately NOT the canonical world_id: see wazoo-api#56/#61.
   world_uid TEXT REFERENCES worlds(uid) ON DELETE SET NULL,
   metric TEXT NOT NULL,
   quantity INTEGER NOT NULL,
@@ -82,6 +92,9 @@ CREATE TABLE IF NOT EXISTS admin_audit_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_worlds_user ON worlds(user_uid);
+-- Slug uniqueness as an index rather than a table constraint: an index needs no
+-- table rebuild, so the migration can never cascade into child tables.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_worlds_user_slug ON worlds(user_uid, slug);
 CREATE INDEX IF NOT EXISTS idx_usage_world_time ON usage_events(world_uid, create_time);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
