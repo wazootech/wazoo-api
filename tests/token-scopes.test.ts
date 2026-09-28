@@ -182,23 +182,33 @@ describe("platform token scopes (wazoo-api#13 / wazoo-api#14)", () => {
     }
   });
 
-  it("lets the console session token revoke an API token", async () => {
-    const created = await api(
-      "/v1/auth/api-tokens",
-      {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${sessionToken}`,
-          "content-type": "application/json",
+  it("lets the console session token revoke an API token by id", async () => {
+    const createToken = async () =>
+      api(
+        "/v1/auth/api-tokens",
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${sessionToken}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            tokenName: "revoke-me",
+            scope: "worlds.read",
+          }),
         },
-        body: JSON.stringify({ tokenName: "revoke-me", scope: "worlds.read" }),
-      },
-      env,
-    );
+        env,
+      );
+    const created = await createToken();
+    const duplicate = await createToken();
     expect(created.status).toBe(201);
+    expect(duplicate.status).toBe(201);
+    const first = (await created.json()) as { id: string };
+    const second = (await duplicate.json()) as { id: string };
+    expect(first.id).not.toBe(second.id);
 
     const del = await api(
-      "/v1/auth/api-tokens/revoke-me",
+      `/v1/auth/api-tokens/${first.id}`,
       {
         method: "DELETE",
         headers: { authorization: `Bearer ${sessionToken}` },
@@ -206,7 +216,19 @@ describe("platform token scopes (wazoo-api#13 / wazoo-api#14)", () => {
       env,
     );
     expect(del.status).toBe(200);
-    expect(((await del.json()) as { token: string }).token).toBe("revoke-me");
+    expect(((await del.json()) as { id: string }).id).toBe(first.id);
+
+    const list = await api(
+      "/v1/auth/api-tokens",
+      { headers: { authorization: `Bearer ${sessionToken}` } },
+      env,
+    );
+    const body = (await list.json()) as {
+      tokens: Array<{ id: string; name: string }>;
+    };
+    expect(body.tokens.filter((token) => token.name === "revoke-me")).toEqual([
+      expect.objectContaining({ id: second.id }),
+    ]);
   });
 
   it("still denies create to tokens without users.write", async () => {
@@ -229,7 +251,7 @@ describe("platform token scopes (wazoo-api#13 / wazoo-api#14)", () => {
 
   it("still denies revoke to tokens without users.write", async () => {
     const res = await api(
-      "/v1/auth/api-tokens/revoke-me",
+      "/v1/auth/api-tokens/token-id-without-write-scope",
       {
         method: "DELETE",
         headers: { authorization: `Bearer ${readOnlyToken}` },

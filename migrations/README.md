@@ -4,7 +4,7 @@ This reset is destructive and does not preserve or translate rows. The SQL file 
 
 ## QA
 
-Before running either command, verify the active Cloudflare account and the exact database name in `wrangler.toml`. Reset and explicitly recreate the Wazoo API schema:
+Before running either command, stop all traffic and writers to the QA APIs, verify the active Cloudflare account and exact database name in `wrangler.toml`, and record explicit approval for the destructive QA reset. Keep traffic stopped through schema verification, compatible deployment, and full QA end-to-end checks; resume it only after those gates pass. Reset and explicitly recreate the Wazoo API schema:
 
 ```bash
 npx wrangler d1 execute wazoo-api-qa --remote --file migrations/2026-09-27-platform-id-clean-reset.sql
@@ -15,4 +15,4 @@ There is no deployment initializer that loads `schema.sql`. Do not deploy the cu
 
 ## Production
 
-Apply the same two commands to `wazoo-api` only after QA passes and Ethan explicitly approves the destructive production reset and deployment. Never run this reset from CI, preview, or an automated release. The local SQLite reset tests do not verify remote D1 or deployed service behavior.
+Apply the same two commands to `wazoo-api` only after QA passes. First stop all production traffic and writers, verify the active Cloudflare account and exact database name in `wrangler.toml`, and obtain Ethan's separate explicit approval for the destructive production reset and deployment. Keep traffic stopped until schema checks and full production end-to-end checks pass. Never run this reset from CI, preview, or an automated release. The local SQLite reset tests do not verify remote D1 or deployed service behavior.

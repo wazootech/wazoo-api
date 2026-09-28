@@ -240,7 +240,6 @@ type UsageEventRow = {
 
 function usageEventResource(row: UsageEventRow) {
   return {
-    name: `usageEvents/${row.event_id}`,
     id: row.event_id,
     metric: row.metric,
     quantity: row.quantity,

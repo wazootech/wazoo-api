@@ -327,7 +327,7 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
     ).toISOString();
     await database
       .prepare(
-        "INSERT INTO deletion_requests (request_id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
+        "INSERT INTO deletion_requests (deletion_request_id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
       )
       .bind(deletionRequestId, userId, tokenHash, expiresAt)
       .run();
@@ -353,10 +353,10 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
     const tokenHash = await sha256Hex(body.confirmationToken);
     const pending = await database
       .prepare(
-        "SELECT request_id, expires_at FROM deletion_requests WHERE user_id = ? AND token_hash = ?",
+        "SELECT deletion_request_id, expires_at FROM deletion_requests WHERE user_id = ? AND token_hash = ?",
       )
       .bind(userId, tokenHash)
-      .first<{ request_id: string; expires_at: string }>();
+      .first<{ deletion_request_id: string; expires_at: string }>();
 
     if (!pending) {
       return respond(
@@ -372,8 +372,8 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
     }
     if (new Date(pending.expires_at).getTime() <= Date.now()) {
       await database
-        .prepare("DELETE FROM deletion_requests WHERE request_id = ?")
-        .bind(pending.request_id)
+        .prepare("DELETE FROM deletion_requests WHERE deletion_request_id = ?")
+        .bind(pending.deletion_request_id)
         .run();
       return respond(
         c,

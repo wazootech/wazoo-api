@@ -27,7 +27,7 @@ const primaryKeysByTable = {
   world_limits: "world_limit_id",
   beta_allowlist: "beta_allowlist_id",
   admin_audit_events: "event_id",
-  deletion_requests: "request_id",
+  deletion_requests: "deletion_request_id",
   rate_limit_entries: "rate_limit_entry_id",
 } as const;
 const databases: DatabaseSync[] = [];
@@ -87,7 +87,7 @@ describe("platform clean reset", () => {
       "SUCCESS",
     );
     db.prepare(
-      "INSERT INTO deletion_requests (request_id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
+      "INSERT INTO deletion_requests (deletion_request_id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
     ).run("deletion-test", "user-test", "hash-deletion", "2030-01-01");
     db.prepare(
       "INSERT INTO rate_limit_entries (key, count, reset_at_ms) VALUES (?, ?, ?)",

@@ -23,7 +23,7 @@ Control-plane API for Wazoo. This repo owns the `api.wazoo.dev` Cloudflare Worke
 
 ## Identity contract
 
-Every public resource exposes `id`. Each D1 table uses an entity-specific key: `users.user_id`, `worlds.world_id`, `platform_api_tokens.token_id`, `usage_events.event_id`, `world_limits.world_limit_id`, `beta_allowlist.beta_allowlist_id`, `admin_audit_events.event_id`, `deletion_requests.request_id`, and `rate_limit_entries.rate_limit_entry_id`. Foreign keys use the referenced entity name, including `user_id`, `world_id`, and `actor_token_id`. `worlds-api` alone mints world IDs (`w_<UUIDv4>`) and exposes the value as `id`. Wazoo API accepts it only as the `worldId` route parameter and stores it in `world_id`. World creation takes a display name only; there is no slug, client-minted ID, or compatibility fallback.
+Every public resource exposes `id`. Each D1 table uses an entity-specific key: `users.user_id`, `worlds.world_id`, `platform_api_tokens.token_id`, `usage_events.event_id`, `world_limits.world_limit_id`, `beta_allowlist.beta_allowlist_id`, `admin_audit_events.event_id`, `deletion_requests.deletion_request_id`, and `rate_limit_entries.rate_limit_entry_id`. Foreign keys use the referenced entity name, including `user_id`, `world_id`, and `actor_token_id`. `worlds-api` alone mints world IDs (`w_<UUIDv4>`) and exposes the value as `id`. Wazoo API accepts it only as the `worldId` route parameter and stores it in `world_id`. World creation takes a display name only; there is no slug, client-minted ID, or compatibility fallback.
 
 - Platform API tokens: `/v1/auth/api-tokens`
 - Health: `/health`
@@ -45,13 +45,16 @@ Required runtime variables:
 D1 provisioning:
 
 - For a new environment, create the database and apply `schema.sql`.
-- The platform-ID cutover intentionally does not preserve existing rows. Its
-  reset script drops every application-owned table; it leaves Cloudflare-managed
-  tables untouched. Recreate the Wazoo API schema from `schema.sql`. The four
-  targets are `worlds-api-qa`, `wazoo-api-qa`, `worlds-api`, and `wazoo-api`.
-  Cut QA first, verify schema and end-to-end behavior, and repeat for production
-  only after explicit approval. Confirm the Cloudflare account and exact database
-  name before every reset. See `migrations/README.md` for the Wazoo API reset and
+- The platform-ID cutover is destructive and preserves no rows. Before each reset,
+  stop traffic and writers to the target APIs, verify the active Cloudflare
+  account and exact database name against `wrangler.toml`, and record explicit
+  approval for that environment's reset. The reset script drops every
+  application-owned table and leaves Cloudflare-managed tables untouched;
+  recreate the Wazoo API schema from `schema.sql`. The four targets are
+  `worlds-api-qa`, `wazoo-api-qa`, `worlds-api`, and `wazoo-api`. Cut QA first;
+  keep traffic stopped until schema checks and full end-to-end tests pass. Reset
+  production only after QA passes and Ethan separately approves the production
+  reset and deployment. See `migrations/README.md` for the Wazoo API reset and
   the separate Worlds API reset file.
 - Generate a fresh global admin token with `npm run launch:seed-admin-d1`.
   The database stores only its SHA-256 hash; save the printed plaintext only in

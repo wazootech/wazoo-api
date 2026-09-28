@@ -3,7 +3,7 @@ import { z } from "@hono/zod-openapi";
 export const resourceId = z
   .string()
   .regex(
-    /^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    /^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
   )
   .openapi({ description: "World ID minted by worlds-api in w_<uuid> form." });
 
@@ -32,8 +32,7 @@ export const UserSchema = z
 
 export const WorldSchema = z
   .object({
-    name: z.string(),
-    id: z.string(),
+    id: resourceId,
     displayName: z.string(),
     region: z.string(),
     state: z.enum(["ACTIVE", "SUSPENDED", "DELETED"]),
@@ -58,10 +57,12 @@ export const CreateWorldBodySchema = z
   .object({
     ownerEmail: email.optional(),
     email: email.optional(),
-    world: z.object({
-      displayName: nonEmptyString,
-      region: z.string().optional().default("auto"),
-    }),
+    world: z
+      .object({
+        displayName: nonEmptyString,
+        region: z.string().optional().default("auto"),
+      })
+      .strict(),
   })
   .strict()
   .openapi("CreateWorldRequest");
@@ -112,7 +113,7 @@ export const PlatformTokenCreateResponseSchema = z
   .openapi("PlatformTokenCreateResponse");
 
 export const PlatformTokenDeleteResponseSchema = z.object({
-  token: z.string(),
+  id: z.string(),
 });
 
 export const PlatformTokenValidateResponseSchema = z.object({
@@ -147,7 +148,6 @@ export const WorldTokenSingleResponseSchema = z.object({
 
 export const UsageEventSchema = z
   .object({
-    name: z.string(),
     id: z.string(),
     metric: z.string(),
     quantity: z.number().int(),
@@ -182,6 +182,7 @@ export const UsageTotalSchema = z.object({
 
 export const LimitSummarySchema = z
   .object({
+    id: z.string(),
     metric: z.string(),
     quantity: z.number(),
     limitQuantity: z.number(),
@@ -222,6 +223,7 @@ export const LimitsListSchema = z.object({
 
 export const BillingSchema = z
   .object({
+    id: z.string(),
     world: z.string(),
     state: z.string(),
     provider: z.string(),
@@ -244,12 +246,6 @@ export const worldIdParam = z.object({
   worldId: resourceId.openapi({
     param: { name: "worldId", in: "path", required: true },
   }),
-});
-
-export const tokenNameParam = z.object({
-  tokenName: z
-    .string()
-    .openapi({ param: { name: "tokenName", in: "path", required: true } }),
 });
 
 export const tokenIdParam = z.object({

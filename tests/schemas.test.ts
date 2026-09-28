@@ -14,6 +14,9 @@ describe("resourceId", () => {
     expect(
       resourceId.safeParse("w_00000000-0000-4000-8000-000000000001").success,
     ).toBe(true);
+    expect(
+      resourceId.safeParse("W_00000000-0000-4000-8000-000000000001").success,
+    ).toBe(false);
   });
 
   it("rejects human-chosen names and malformed UUIDs", () => {
@@ -68,13 +71,23 @@ describe("CreateWorldBodySchema", () => {
     ).toBe(true);
   });
 
-  it("rejects caller-supplied identity fields", () => {
-    expect(
-      CreateWorldBodySchema.safeParse({
-        slug: "my-world",
+  it("rejects caller-supplied identity fields at either request level", () => {
+    for (const input of [
+      { slug: "my-world", world: { displayName: "My World" } },
+      {
+        worldId: "w_00000000-0000-4000-8000-000000000001",
         world: { displayName: "My World" },
-      }).success,
-    ).toBe(false);
+      },
+      {
+        world: {
+          displayName: "My World",
+          id: "w_00000000-0000-4000-8000-000000000001",
+        },
+      },
+      { world: { displayName: "My World", slug: "my-world" } },
+    ]) {
+      expect(CreateWorldBodySchema.safeParse(input).success).toBe(false);
+    }
   });
 
   it("rejects a missing display name", () => {

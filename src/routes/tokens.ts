@@ -12,7 +12,7 @@ import {
   PlatformTokenCreateResponseSchema,
   PlatformTokenDeleteResponseSchema,
   PlatformTokenValidateResponseSchema,
-  tokenNameParam,
+  tokenIdParam,
 } from "../lib/schemas";
 
 const listRoute = createRoute({
@@ -71,41 +71,15 @@ const createRouteDef = createRoute({
   },
 });
 
-const createNamedRoute = createRoute({
-  method: "post",
-  path: "/v1/auth/api-tokens/{tokenName}",
-  tags: ["PlatformTokens"],
-  operationId: "createNamedPlatformToken",
-  summary: "Create named platform token",
-  "x-mint": { metadata: { title: "Create named platform token" } },
-  security: [{ bearerPlatformToken: [] }],
-  request: {
-    params: tokenNameParam,
-    body: {
-      content: {
-        "application/json": { schema: PlatformTokenCreateRequestSchema },
-      },
-    },
-  },
-  responses: {
-    201: {
-      description: "Created platform token",
-      content: {
-        "application/json": { schema: PlatformTokenCreateResponseSchema },
-      },
-    },
-  },
-});
-
 const deleteRoute = createRoute({
   method: "delete",
-  path: "/v1/auth/api-tokens/{tokenName}",
+  path: "/v1/auth/api-tokens/{tokenId}",
   tags: ["PlatformTokens"],
   operationId: "deletePlatformToken",
   summary: "Revoke platform token",
   "x-mint": { metadata: { title: "Revoke platform token" } },
   security: [{ bearerPlatformToken: [] }],
-  request: { params: tokenNameParam },
+  request: { params: tokenIdParam },
   responses: {
     200: {
       description: "Deleted platform token",
@@ -167,32 +141,25 @@ export function registerTokensRoutes(app: OpenAPIHono<AppEnv>) {
     );
   });
 
-  app.openapi(createNamedRoute, async (c) => {
-    requireScope(c, "users.write");
-    const body = c.req.valid("json");
-    const user = await resolveUser(c, body.user ?? body.email ?? undefined);
-    return createPlatformToken(c, user.userId, c.req.param("tokenName"), body);
-  });
-
   app.openapi(deleteRoute, async (c) => {
     requireScope(c, "users.write");
     const auth = c.get("auth");
     if (auth.userId) {
       await db(c.env)
         .prepare(
-          "DELETE FROM platform_api_tokens WHERE user_id = ? AND name = ? AND kind != 'ADMIN'",
+          "DELETE FROM platform_api_tokens WHERE user_id = ? AND token_id = ? AND kind != 'ADMIN'",
         )
-        .bind(auth.userId, c.req.param("tokenName"))
+        .bind(auth.userId, c.req.param("tokenId"))
         .run();
     } else if (isAdmin(c)) {
       await db(c.env)
         .prepare(
-          "DELETE FROM platform_api_tokens WHERE name = ? AND kind != 'ADMIN'",
+          "DELETE FROM platform_api_tokens WHERE token_id = ? AND kind != 'ADMIN'",
         )
-        .bind(c.req.param("tokenName"))
+        .bind(c.req.param("tokenId"))
         .run();
     }
-    return respond(c, { token: c.req.param("tokenName") });
+    return respond(c, { id: c.req.param("tokenId") });
   });
 
   app.openapi(validateRoute, (c) => {

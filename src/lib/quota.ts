@@ -67,6 +67,7 @@ export function quotaError(
 }
 
 export type LimitSummary = {
+  id: string;
   metric: string;
   quantity: number;
   limitQuantity: number;
@@ -102,10 +103,14 @@ export async function worldUsageQuota(
   worldId: string,
   totals: Array<{ metric: string; quantity: number }>,
 ): Promise<QuotaSummary> {
-  const limitRows = await all<{ metric: string; limit_quantity: number }>(
+  const limitRows = await all<{
+    id: string;
+    metric: string;
+    limit_quantity: number;
+  }>(
     db(c.env)
       .prepare(
-        "SELECT metric, limit_quantity FROM world_limits WHERE world_id = ? ORDER BY metric",
+        "SELECT world_limit_id AS id, metric, limit_quantity FROM world_limits WHERE world_id = ? ORDER BY metric",
       )
       .bind(worldId),
   );
@@ -114,6 +119,7 @@ export async function worldUsageQuota(
   );
   return summarizeLimits(
     limitRows.map((limit) => ({
+      id: limit.id,
       metric: limit.metric,
       quantity: totalByMetric.get(limit.metric) ?? 0,
       limitQuantity: limit.limit_quantity,
@@ -139,6 +145,7 @@ export async function worldBillingQuota(
   const perWorld = await worldUsageQuota(c, worldId, totals);
   return summarizeLimits([
     {
+      id: "MAX_WORLDS",
       metric: "MAX_WORLDS",
       quantity: active,
       limitQuantity: privateBetaQuota.maxWorlds,

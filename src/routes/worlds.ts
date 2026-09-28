@@ -73,11 +73,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isCanonicalWorld(value: unknown): value is { world: { id: string } } {
-  if (!isRecord(value) || !isRecord(value.world)) return false;
+function isCanonicalWorld(value: unknown): value is { id: string } {
   return (
-    typeof value.world.id === "string" &&
-    resourceId.safeParse(value.world.id).success
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    resourceId.safeParse(value.id).success
   );
 }
 
@@ -116,7 +116,6 @@ function worldResource(row: WorldRow) {
     row.state === "deleted" &&
     (!row.expire_time || new Date(row.expire_time).getTime() > Date.now());
   return {
-    name: `worlds/${row.world_id}`,
     id: row.world_id,
     displayName: row.display_name,
     region: row.region,
@@ -513,7 +512,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
           "INSERT INTO worlds (world_id, user_id, display_name, region, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?)",
         )
         .bind(
-          createdWorld.world.id,
+          createdWorld.id,
           user.userId,
           world.displayName,
           world.region,
@@ -541,14 +540,14 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     if (isAdmin(c) && quota.state !== "OK" && quota.state !== "WARN") {
       await recordAdminAudit(c, {
         action: "worlds.create_quota_bypass",
-        targetResourceName: `users/${user.userId}/worlds/${createdWorld.world.id}`,
+        targetResourceName: `users/${user.userId}/worlds/${createdWorld.id}`,
       });
     }
 
     const row = await first<WorldRow>(
       database
-        .prepare("SELECT * FROM worlds WHERE world_id = ?")
-        .bind(createdWorld.world.id),
+        .prepare("SELECT * FROM worlds WHERE user_id = ? AND world_id = ?")
+        .bind(user.userId, createdWorld.id),
     );
     return respond(c, { world: row ? worldResource(row) : null }, 201);
   });
@@ -606,13 +605,14 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
 
     await db(c.env)
       .prepare(
-        "UPDATE worlds SET display_name = COALESCE(?, display_name), region = COALESCE(?, region), state = COALESCE(?, state), update_time = ? WHERE world_id = ?",
+        "UPDATE worlds SET display_name = COALESCE(?, display_name), region = COALESCE(?, region), state = COALESCE(?, state), update_time = ? WHERE user_id = ? AND world_id = ?",
       )
       .bind(
         updateMask.includes("displayName") ? (patch.displayName ?? null) : null,
         updateMask.includes("region") ? (patch.region ?? null) : null,
         nextState?.toLowerCase() ?? null,
         now(),
+        user.userId,
         existing.world_id,
       )
       .run();
@@ -621,7 +621,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
       if (existing.world_id) {
         const res = await updateWorld({
           client: worldsAdminClient(c.env),
-          path: { worldId: existing.world_id },
+          path: { id: existing.world_id },
           body: { displayName: patch.displayName },
         });
         if (res.error) {
@@ -641,8 +641,8 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
 
     const row = await first<WorldRow>(
       db(c.env)
-        .prepare("SELECT * FROM worlds WHERE world_id = ?")
-        .bind(existing.world_id),
+        .prepare("SELECT * FROM worlds WHERE user_id = ? AND world_id = ?")
+        .bind(user.userId, existing.world_id),
     );
     return respond(c, { world: row ? worldResource(row) : null });
   });
@@ -658,7 +658,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     if (existing.world_id) {
       const res = await deleteWorld({
         client: worldsAdminClient(c.env),
-        path: { worldId: existing.world_id },
+        path: { id: existing.world_id },
       });
       if (res.error && res.response?.status !== 404) {
         return respond(
@@ -680,14 +680,14 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     ).toISOString();
     await db(c.env)
       .prepare(
-        "UPDATE worlds SET state = 'deleted', purge_status = 'pending', delete_time = ?, expire_time = ?, update_time = ? WHERE world_id = ?",
+        "UPDATE worlds SET state = 'deleted', purge_status = 'pending', delete_time = ?, expire_time = ?, update_time = ? WHERE user_id = ? AND world_id = ?",
       )
-      .bind(deletedAt, expireAt, deletedAt, existing.world_id)
+      .bind(deletedAt, expireAt, deletedAt, user.userId, existing.world_id)
       .run();
     const row = await first<WorldRow>(
       db(c.env)
-        .prepare("SELECT * FROM worlds WHERE world_id = ?")
-        .bind(existing.world_id),
+        .prepare("SELECT * FROM worlds WHERE user_id = ? AND world_id = ?")
+        .bind(user.userId, existing.world_id),
     );
     return respond(c, { world: row ? worldResource(row) : null });
   });
@@ -736,7 +736,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     if (existing.world_id) {
       const res = await undeleteWorld({
         client: worldsAdminClient(c.env),
-        path: { worldId: existing.world_id },
+        path: { id: existing.world_id },
       });
       if (res.error) {
         return respond(
@@ -754,14 +754,14 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
 
     await db(c.env)
       .prepare(
-        "UPDATE worlds SET state = 'active', delete_time = NULL, expire_time = NULL, update_time = ? WHERE world_id = ?",
+        "UPDATE worlds SET state = 'active', delete_time = NULL, expire_time = NULL, update_time = ? WHERE user_id = ? AND world_id = ?",
       )
-      .bind(now(), existing.world_id)
+      .bind(now(), user.userId, existing.world_id)
       .run();
     const row = await first<WorldRow>(
       db(c.env)
-        .prepare("SELECT * FROM worlds WHERE world_id = ?")
-        .bind(existing.world_id),
+        .prepare("SELECT * FROM worlds WHERE user_id = ? AND world_id = ?")
+        .bind(user.userId, existing.world_id),
     );
     return respond(c, { world: row ? worldResource(row) : null });
   });
@@ -846,9 +846,29 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     const user = await currentUser(c, query.email, query.email);
     const existing = await worldForUser(c, user.userId, c.req.param("worldId"));
     if (!existing) return notFound(c);
+    const client = worldsAdminClient(c.env);
+    const keyList = await listApiKeys({
+      client,
+      query: { namespace: user.userId },
+    });
+    if (keyList.error)
+      throw new HTTPException(502, { message: worldsApiError(keyList) });
+    const keyValues = (
+      keyList.data as unknown as { keys?: unknown } | undefined
+    )?.keys;
+    if (!Array.isArray(keyValues) || !keyValues.every(isCanonicalApiKey)) {
+      throw new HTTPException(502, {
+        message: "worlds-api returned API keys without canonical id fields",
+      });
+    }
+    const tokenId = c.req.param("tokenId");
+    const ownedToken = (keyValues as CanonicalApiKey[]).find(
+      (key) => key.id === tokenId && key.worldId === existing.world_id,
+    );
+    if (!ownedToken) return notFound(c);
     const res = await deleteApiKey({
-      client: worldsAdminClient(c.env),
-      path: { apiKeyId: c.req.param("tokenId") },
+      client,
+      path: { keyId: tokenId },
     });
     if (res.error && res.response?.status !== 404)
       throw new HTTPException(502, { message: worldsApiError(res) });

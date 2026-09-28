@@ -63,6 +63,7 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
       );
       return respond(c, {
         billing: {
+          id: world.world_id,
           world: `worlds/${world.world_id}`,
           state: world.billing_state ?? "BETA_FREE",
           provider: world.billing_provider ?? "STRIPE",
@@ -138,6 +139,7 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
             "application/json": {
               schema: z.object({
                 billing: z.object({
+                  id: z.string(),
                   world: z.string(),
                   state: z.string(),
                   provider: z.string(),
@@ -216,9 +218,9 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
 
       await db(c.env)
         .prepare(
-          "UPDATE worlds SET billing_state = 'CANCELLED', stripe_subscription_id = NULL, update_time = ? WHERE world_id = ?",
+          "UPDATE worlds SET billing_state = 'CANCELLED', stripe_subscription_id = NULL, update_time = ? WHERE user_id = ? AND world_id = ?",
         )
-        .bind(new Date().toISOString(), world.world_id)
+        .bind(new Date().toISOString(), user.userId, world.world_id)
         .run();
 
       const updated = await resolveWorldBilling(
@@ -228,6 +230,7 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
       );
       return respond(c, {
         billing: {
+          id: updated.world_id,
           world: `worlds/${updated.world_id}`,
           state: updated.billing_state ?? "BETA_FREE",
           provider: updated.billing_provider ?? "STRIPE",

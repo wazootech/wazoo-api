@@ -44,6 +44,7 @@ function authHeaders(token: string): Record<string, string> {
 }
 
 interface LimitSummary {
+  id: string;
   metric: string;
   quantity: number;
   limitQuantity: number;
@@ -170,6 +171,7 @@ describe("quota payloads on usage and billing surfaces (wazoo-api#34)", () => {
     ]);
     expect(body.quota.limits).toEqual([
       {
+        id: expect.any(String),
         metric: "SPARQL_QUERIES",
         quantity: 9200,
         limitQuantity: 10000,
@@ -219,18 +221,21 @@ describe("quota payloads on usage and billing surfaces (wazoo-api#34)", () => {
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      billing: { paymentRequired: boolean };
+      billing: { id: string; paymentRequired: boolean };
       quota: QuotaSummary;
     };
+    expect(body.billing.id).toBe("w_00000000-0000-4000-8000-000000000004");
     expect(body.billing.paymentRequired).toBe(false);
     // Two active worlds (quota-world + due-world) against the 10-world cap.
     expect(body.quota.limits).toContainEqual({
+      id: "MAX_WORLDS",
       metric: "MAX_WORLDS",
       quantity: 2,
       limitQuantity: 10,
       usagePercent: 20,
     });
     expect(body.quota.limits).toContainEqual({
+      id: expect.any(String),
       metric: "SPARQL_QUERIES",
       quantity: 9200,
       limitQuantity: 10000,

@@ -85,7 +85,7 @@ CREATE INDEX IF NOT EXISTS idx_usage_world_time ON usage_events(world_id, create
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
 CREATE TABLE IF NOT EXISTS deletion_requests (
-  request_id TEXT PRIMARY KEY,
+  deletion_request_id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
   token_hash TEXT NOT NULL UNIQUE,
   expires_at TEXT NOT NULL,

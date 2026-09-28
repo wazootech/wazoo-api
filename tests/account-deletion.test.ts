@@ -184,7 +184,7 @@ describe("account deletion and data export (wazoo-api#26)", () => {
     const ts = new Date(Date.now() + 60_000).toISOString();
     client
       .prepare(
-        "INSERT INTO deletion_requests (request_id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
+        "INSERT INTO deletion_requests (deletion_request_id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
       )
       .run("wzdel_request_2", userId, hash, ts);
     client.close();
@@ -230,7 +230,9 @@ describe("account deletion and data export (wazoo-api#26)", () => {
       .prepare("SELECT token_id FROM platform_api_tokens WHERE user_id = ?")
       .all(userId);
     const reqRows = check
-      .prepare("SELECT request_id FROM deletion_requests WHERE user_id = ?")
+      .prepare(
+        "SELECT deletion_request_id FROM deletion_requests WHERE user_id = ?",
+      )
       .all(userId);
     check.close();
     expect(userRows).toHaveLength(0);

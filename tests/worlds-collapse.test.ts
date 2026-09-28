@@ -64,6 +64,23 @@ function worldsApiMockHandler(input: RequestInfo | URL, init?: RequestInit) {
   if (!url.startsWith(WORLDS_BASE)) {
     throw new Error(`unexpected fetch to ${url}`);
   }
+  if (new URL(url).pathname === "/api-keys" && method === "GET") {
+    return new Response(
+      JSON.stringify({
+        keys: [
+          {
+            id: "key-1",
+            name: "test-key",
+            namespace: "test-namespace",
+            worldId: lastCreatedWorldId,
+            scopes: ["data:read", "data:write"],
+            createTime: new Date().toISOString(),
+          },
+        ],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }
   if (url.endsWith("/api-keys") && method === "POST") {
     return new Response(
       JSON.stringify({
@@ -85,19 +102,16 @@ function worldsApiMockHandler(input: RequestInfo | URL, init?: RequestInit) {
     lastCreatedWorldId = `w_00000000-0000-4000-8000-${String(++createdCounter).padStart(12, "0")}`;
     return new Response(
       JSON.stringify({
-        world: {
-          name: `worlds/${lastCreatedWorldId}`,
-          id: lastCreatedWorldId,
-          displayName: "My World",
-          state: "active",
-          storage: "d1-world",
-          embeddingModel: "tfjs-universal-sentence-encoder",
-          chunkSize: 1000,
-          topK: 20,
-          minScore: 0.0,
-          createTime: new Date().toISOString(),
-          updateTime: new Date().toISOString(),
-        },
+        id: lastCreatedWorldId,
+        displayName: "My World",
+        state: "active",
+        storage: "d1-world",
+        embeddingModel: "tfjs-universal-sentence-encoder",
+        chunkSize: 1000,
+        topK: 20,
+        minScore: 0.0,
+        createTime: new Date().toISOString(),
+        updateTime: new Date().toISOString(),
       }),
       { status: 201, headers: { "content-type": "application/json" } },
     );
@@ -109,15 +123,10 @@ function worldsApiMockHandler(input: RequestInfo | URL, init?: RequestInit) {
     url.endsWith(`/worlds/${lastCreatedWorldId}/undelete`) &&
     method === "POST"
   ) {
-    return new Response(
-      JSON.stringify({
-        world: {
-          name: `worlds/${lastCreatedWorldId}`,
-          id: lastCreatedWorldId,
-        },
-      }),
-      { status: 200, headers: { "content-type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ id: lastCreatedWorldId }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
   }
   return new Response(
     JSON.stringify({ error: { code: "UNEXPECTED", message: url } }),
@@ -199,6 +208,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     };
     expect(body.world.id).toBe(lastCreatedWorldId);
     expect(body.world.displayName).toBe("My World");
+    expect(body.world).not.toHaveProperty("name");
     expect(body.world).not.toHaveProperty("worldId");
     expect(body.world).not.toHaveProperty("slug");
 
@@ -259,6 +269,33 @@ describe("world ownership collapse (wazoo-api#20)", () => {
       env,
     );
     expect(revokeRes.status).toBe(204);
+    const revokeCall = worldsApiMock.mock.calls.find((call) => {
+      const req = requestFromCall(call[0], call[1]);
+      return req.url.endsWith("/api-keys/key-1") && req.method === "DELETE";
+    });
+    expect(revokeCall).toBeTruthy();
+  });
+
+  it("returns 400 when callers supply a world ID or slug", async () => {
+    for (const world of [
+      { displayName: "My World", id: CREATED_WORLD_ID },
+      { displayName: "My World", slug: "my-world" },
+    ]) {
+      const response = await api(
+        "/v1/worlds",
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${sessionToken}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ world }),
+        },
+        env,
+      );
+      expect(response.status).toBe(400);
+    }
+    expect(worldsApiMock).not.toHaveBeenCalled();
   });
 
   it("requires the owning user even for a valid minted world ID", async () => {
@@ -329,7 +366,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ world: { id: existingWorldId } }), {
+        new Response(JSON.stringify({ id: existingWorldId }), {
           status: 201,
           headers: { "content-type": "application/json" },
         }),
@@ -481,6 +518,59 @@ describe("world ownership collapse (wazoo-api#20)", () => {
         message: "worlds-api returned an API key without canonical id fields",
       },
     });
+  });
+
+  it("does not revoke a token scoped to a different world", async () => {
+    const created = await api(
+      "/v1/worlds",
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ world: { displayName: "Owner World" } }),
+      },
+      env,
+    );
+    expect(created.status).toBe(201);
+
+    worldsApiMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          keys: [
+            {
+              id: "other-world-key",
+              name: "other-world-key",
+              namespace: "test-namespace",
+              worldId: "w_00000000-0000-4000-8000-000000000002",
+              scopes: ["data:read"],
+              createTime: new Date().toISOString(),
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const revoke = await api(
+      `/v1/worlds/${lastCreatedWorldId}/auth/tokens/other-world-key`,
+      {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${sessionToken}` },
+      },
+      env,
+    );
+    expect(revoke.status).toBe(404);
+    expect(
+      worldsApiMock.mock.calls.some((call) => {
+        const req = requestFromCall(call[0], call[1]);
+        return (
+          req.method === "DELETE" &&
+          req.url.endsWith("/api-keys/other-world-key")
+        );
+      }),
+    ).toBe(false);
   });
 
   it("returns world-token id and revokes by that ID", async () => {

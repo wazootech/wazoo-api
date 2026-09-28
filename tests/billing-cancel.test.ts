@@ -141,8 +141,9 @@ describe("cancel subscription (wazoo-console#53)", () => {
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      billing: { state: string; subscriptionConfigured: boolean };
+      billing: { id: string; state: string; subscriptionConfigured: boolean };
     };
+    expect(body.billing.id).toBe("w_00000000-0000-4000-8000-000000000002");
     expect(body.billing.state).toBe("CANCELLED");
     expect(body.billing.subscriptionConfigured).toBe(false);
   });
