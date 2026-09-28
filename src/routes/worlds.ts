@@ -621,7 +621,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
       if (existing.world_id) {
         const res = await updateWorld({
           client: worldsAdminClient(c.env),
-          path: { id: existing.world_id },
+          path: { worldId: existing.world_id },
           body: { displayName: patch.displayName },
         });
         if (res.error) {
@@ -658,7 +658,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     if (existing.world_id) {
       const res = await deleteWorld({
         client: worldsAdminClient(c.env),
-        path: { id: existing.world_id },
+        path: { worldId: existing.world_id },
       });
       if (res.error && res.response?.status !== 404) {
         return respond(
@@ -736,7 +736,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     if (existing.world_id) {
       const res = await undeleteWorld({
         client: worldsAdminClient(c.env),
-        path: { id: existing.world_id },
+        path: { worldId: existing.world_id },
       });
       if (res.error) {
         return respond(
@@ -848,7 +848,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     if (!existing) return notFound(c);
     const res = await deleteApiKey({
       client: worldsAdminClient(c.env),
-      path: { keyId: c.req.param("tokenId") },
+      path: { apiKeyId: c.req.param("tokenId") },
     });
     if (res.error && res.response?.status !== 404)
       throw new HTTPException(502, { message: worldsApiError(res) });
