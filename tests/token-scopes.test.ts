@@ -138,12 +138,48 @@ describe("platform token scopes (wazoo-api#13 / wazoo-api#14)", () => {
     );
     expect(res.status).toBe(201);
     const body = (await res.json()) as {
-      uid: string;
+      id: string;
       name: string;
       token: string;
     };
+    expect(body.id).toBeTruthy();
+    expect(body).toHaveProperty("id");
     expect(body.name).toBe("ci-token");
     expect(body.token.startsWith("wzp_")).toBe(true);
+  });
+
+  it("lists token records with id for admins", async () => {
+    const res = await api(
+      "/v1/auth/api-tokens",
+      { headers: { authorization: `Bearer ${ADMIN_TOKEN}` } },
+      env,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      tokens: Array<Record<string, unknown>>;
+    };
+    expect(body.tokens.length).toBeGreaterThan(0);
+    for (const token of body.tokens) {
+      expect(token.id).toBeTruthy();
+      expect(token).not.toHaveProperty("tokenId");
+    }
+  });
+
+  it("exposes canonical id fields on admin-listed platform tokens", async () => {
+    const res = await api(
+      "/v1/auth/api-tokens",
+      { headers: { authorization: `Bearer ${ADMIN_TOKEN}` } },
+      env,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      tokens: Array<{ id: string; tokenId?: string }>;
+    };
+    expect(body.tokens.length).toBeGreaterThan(0);
+    for (const token of body.tokens) {
+      expect(token.id).toBeTruthy();
+      expect(token).not.toHaveProperty("tokenId");
+    }
   });
 
   it("lets the console session token revoke an API token", async () => {

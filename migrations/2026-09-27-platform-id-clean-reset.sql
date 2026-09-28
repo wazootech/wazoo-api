@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS deletion_requests;
+DROP TABLE IF EXISTS world_limits;
+DROP TABLE IF EXISTS usage_events;
+DROP TABLE IF EXISTS platform_api_tokens;
+DROP TABLE IF EXISTS admin_audit_events;
+DROP TABLE IF EXISTS worlds;
+DROP TABLE IF EXISTS beta_allowlist;
+DROP TABLE IF EXISTS rate_limit_entries;
+DROP TABLE IF EXISTS users;

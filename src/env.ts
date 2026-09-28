@@ -18,7 +18,7 @@ export type Bindings = {
 
 export type AuthContext = {
   tokenId: string;
-  userUid: string | null;
+  userId: string | null;
   scope: string;
   kind: "USER" | "ADMIN";
   expiresAt: string | null;

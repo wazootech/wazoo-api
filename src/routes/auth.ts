@@ -38,17 +38,17 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
 
     const database = db(c.env);
     const existing = await database
-      .prepare("SELECT uid FROM users WHERE email = ?")
+      .prepare("SELECT user_id FROM users WHERE email = ?")
       .bind(email)
-      .first<{ uid: string }>();
+      .first<{ user_id: string }>();
 
-    let userUid: string;
+    let userId: string;
     if (existing) {
-      userUid = existing.uid;
+      userId = existing.user_id;
       if (displayName) {
         await database
-          .prepare("UPDATE users SET display_name = ? WHERE uid = ?")
-          .bind(displayName, userUid)
+          .prepare("UPDATE users SET display_name = ? WHERE user_id = ?")
+          .bind(displayName, userId)
           .run();
       }
     } else {
@@ -65,12 +65,12 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
           400,
         );
       }
-      userUid = id();
+      userId = id();
       await database
         .prepare(
-          "INSERT INTO users (uid, email, display_name, age_confirmed_at) VALUES (?, ?, ?, ?)",
+          "INSERT INTO users (user_id, email, display_name, age_confirmed_at) VALUES (?, ?, ?, ?)",
         )
-        .bind(userUid, email, displayName, new Date().toISOString())
+        .bind(userId, email, displayName, new Date().toISOString())
         .run();
     }
 
@@ -81,11 +81,11 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
     ).toISOString();
     await database
       .prepare(
-        "INSERT INTO platform_api_tokens (uid, user_uid, name, token_hash, scope, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO platform_api_tokens (token_id, user_id, name, token_hash, scope, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
       )
       .bind(
         tokenId,
-        userUid,
+        userId,
         `console-session-${Date.now()}`,
         await sha256Hex(token),
         SESSION_DEFAULT_SCOPES,
@@ -245,13 +245,13 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
 
     const database = db(c.env);
     const existing = await database
-      .prepare("SELECT uid FROM users WHERE email = ?")
+      .prepare("SELECT user_id FROM users WHERE email = ?")
       .bind(email)
-      .first<{ uid: string }>();
+      .first<{ user_id: string }>();
 
-    let userUid: string;
+    let userId: string;
     if (existing) {
-      userUid = existing.uid;
+      userId = existing.user_id;
     } else {
       if (!ageConfirmed) {
         return respond(
@@ -266,12 +266,12 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
           400,
         );
       }
-      userUid = id();
+      userId = id();
       await database
         .prepare(
-          "INSERT INTO users (uid, email, age_confirmed_at) VALUES (?, ?, ?)",
+          "INSERT INTO users (user_id, email, age_confirmed_at) VALUES (?, ?, ?)",
         )
-        .bind(userUid, email, new Date().toISOString())
+        .bind(userId, email, new Date().toISOString())
         .run();
     }
 
@@ -279,11 +279,11 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
     const tokenId = id();
     await database
       .prepare(
-        "INSERT INTO platform_api_tokens (uid, user_uid, name, token_hash, scope, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO platform_api_tokens (token_id, user_id, name, token_hash, scope, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
       )
       .bind(
         tokenId,
-        userUid,
+        userId,
         `login-${Date.now()}`,
         await sha256Hex(token),
         SESSION_DEFAULT_SCOPES,

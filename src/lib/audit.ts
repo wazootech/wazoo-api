@@ -13,7 +13,7 @@ export async function recordAdminAudit(
 ) {
   await db(c.env)
     .prepare(
-      "INSERT INTO admin_audit_events (uid, actor_token_uid, action, target_resource_name, outcome, error_code) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO admin_audit_events (event_id, actor_token_id, action, target_resource_name, outcome, error_code) VALUES (?, ?, ?, ?, ?, ?)",
     )
     .bind(
       id(),

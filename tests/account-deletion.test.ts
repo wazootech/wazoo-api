@@ -47,7 +47,7 @@ describe("account deletion and data export (wazoo-api#26)", () => {
   let dir: string;
   let env: Bindings;
   let sessionToken: string;
-  let userUid: string;
+  let userId: string;
   let worldsApiFetch: ReturnType<typeof vi.fn>;
 
   beforeAll(async () => {
@@ -76,27 +76,33 @@ describe("account deletion and data export (wazoo-api#26)", () => {
     sessionToken = ((await sessionRes.json()) as { token: string }).token;
     expect(sessionToken.startsWith("wzp_")).toBe(true);
 
-    // Look up the minted user's uid.
+    // Look up the minted user ID.
     const me = await api(
       "/v1/users/me",
       { headers: authHeaders(sessionToken) },
       env,
     );
-    userUid = ((await me.json()) as { user: { uid: string } }).user.uid;
+    userId = ((await me.json()) as { user: { id: string } }).user.id;
 
     // Seed a world row + usage event so export has data and deletion cascades.
     const seed = new DatabaseSync(dbPath);
     const ts = new Date().toISOString();
     seed
       .prepare(
-        "INSERT INTO worlds (uid, user_uid, world_id, display_name, state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', ?, ?)",
+        "INSERT INTO worlds (world_id, user_id, display_name, state, create_time, update_time) VALUES (?, ?, ?, 'active', ?, ?)",
       )
-      .run("w_del_mirror", userUid, "del-world", "Del World", ts, ts);
+      .run(
+        "w_00000000-0000-4000-8000-000000000001",
+        userId,
+        "Del World",
+        ts,
+        ts,
+      );
     seed
       .prepare(
-        "INSERT INTO usage_events (uid, user_uid, world_uid, metric, quantity, unit, create_time) VALUES (?, ?, ?, 'requests', 5, 'request', ?)",
+        "INSERT INTO usage_events (event_id, user_id, world_id, metric, quantity, unit, create_time) VALUES (?, ?, ?, 'requests', 5, 'request', ?)",
       )
-      .run("u_del_1", userUid, "w_del_mirror", ts);
+      .run("u_del_1", userId, "w_00000000-0000-4000-8000-000000000001", ts);
     seed.close();
 
     // Stub the worlds-api namespace-delete call.
@@ -132,14 +138,15 @@ describe("account deletion and data export (wazoo-api#26)", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       user: { email: string };
-      worlds: Array<{ worldId: string }>;
-      usageEvents: Array<{ metric: string }>;
+      worlds: Array<{ id: string }>;
+      usageEvents: Array<{ id: string; metric: string }>;
       apiTokens: unknown[];
     };
     expect(body.user.email).toBe(TEST_EMAIL);
     expect(body.worlds).toHaveLength(1);
-    expect(body.worlds[0].worldId).toBe("del-world");
+    expect(body.worlds[0].id).toBe("w_00000000-0000-4000-8000-000000000001");
     expect(body.usageEvents).toHaveLength(1);
+    expect(body.usageEvents[0].id).toBe("u_del_1");
     expect(body.usageEvents[0].metric).toBe("requests");
     expect(body.apiTokens.length).toBeGreaterThanOrEqual(1);
   });
@@ -177,9 +184,9 @@ describe("account deletion and data export (wazoo-api#26)", () => {
     const ts = new Date(Date.now() + 60_000).toISOString();
     client
       .prepare(
-        "INSERT INTO deletion_requests (uid, user_uid, token_hash, expires_at) VALUES (?, ?, ?, ?)",
+        "INSERT INTO deletion_requests (request_id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
       )
-      .run("wzdel_request_2", userUid, hash, ts);
+      .run("wzdel_request_2", userId, hash, ts);
     client.close();
 
     const del = await api(
@@ -200,8 +207,7 @@ describe("account deletion and data export (wazoo-api#26)", () => {
           ? call[0]
           : new Request(String(call[0]), call[1]);
       return (
-        req.url ===
-          `http://localhost:9999/admin/namespaces/${userUid}/delete` &&
+        req.url === `http://localhost:9999/admin/namespaces/${userId}/delete` &&
         req.method === "POST"
       );
     });
@@ -210,20 +216,22 @@ describe("account deletion and data export (wazoo-api#26)", () => {
     // The user row is gone; world mirror + usage events cascaded away.
     const check = new DatabaseSync((env.DB as TestD1).path);
     const userRows = check
-      .prepare("SELECT uid FROM users WHERE uid = ?")
-      .all(userUid);
+      .prepare("SELECT user_id FROM users WHERE user_id = ?")
+      .all(userId);
     const worldRows = check
-      .prepare("SELECT uid FROM worlds WHERE uid = 'w_del_mirror'")
+      .prepare(
+        "SELECT world_id FROM worlds WHERE world_id = 'w_00000000-0000-4000-8000-000000000001'",
+      )
       .all();
     const usageRows = check
-      .prepare("SELECT uid FROM usage_events WHERE uid = 'u_del_1'")
+      .prepare("SELECT event_id FROM usage_events WHERE event_id = 'u_del_1'")
       .all();
     const tokenRows = check
-      .prepare("SELECT uid FROM platform_api_tokens WHERE user_uid = ?")
-      .all(userUid);
+      .prepare("SELECT token_id FROM platform_api_tokens WHERE user_id = ?")
+      .all(userId);
     const reqRows = check
-      .prepare("SELECT uid FROM deletion_requests WHERE user_uid = ?")
-      .all(userUid);
+      .prepare("SELECT request_id FROM deletion_requests WHERE user_id = ?")
+      .all(userId);
     check.close();
     expect(userRows).toHaveLength(0);
     expect(worldRows).toHaveLength(0);

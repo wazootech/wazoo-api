@@ -17,10 +17,16 @@ function required(name) {
 
 let passed = 0;
 let failed = 0;
+let skipped = 0;
 
 async function test(name, fn) {
   try {
-    await fn();
+    const result = await fn();
+    if (result === "skip") {
+      skipped++;
+      console.log(`  SKIP  ${name}`);
+      return;
+    }
     passed++;
     console.log(`  PASS  ${name}`);
   } catch (err) {
@@ -119,14 +125,11 @@ await test("POST /v1/worlds without body returns 400", async () => {
   await assertBadRequest(res);
 });
 
-await test("POST /v1/worlds with invalid worldId returns 400", async () => {
+await test("POST /v1/worlds without a display name returns 400", async () => {
   const res = await fetch(`${BASE_URL}/v1/worlds`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({
-      worldId: "",
-      world: { displayName: "Test" },
-    }),
+    body: JSON.stringify({ world: {} }),
   });
   await assertBadRequest(res);
 });
@@ -141,7 +144,8 @@ await test("POST /v1/users/me without email returns 400", async () => {
 // ── Authenticated health flow (requires admin token) ───
 
 const testEmail = `health-${Date.now()}@wazoo.dev`;
-const testWorldId = `health-${Date.now()}`;
+const testRunId = Date.now().toString(36);
+let testWorldId;
 
 await test("GET /v1/users/me?email=... creates/returns user", async () => {
   const res = await fetch(
@@ -152,10 +156,10 @@ await test("GET /v1/users/me?email=... creates/returns user", async () => {
   if (res.status !== 200 && res.status !== 201) {
     throw new Error(`Unexpected status ${res.status}: ${JSON.stringify(body)}`);
   }
-  if (!body.user?.uid) throw new Error("Missing user.uid");
+  if (!body.user?.id) throw new Error("Missing user.id");
   if (body.user.email !== testEmail)
     throw new Error(`Email mismatch: ${body.user.email}`);
-  console.log(`        user uid: ${body.user.uid}`);
+  console.log(`        user ID: ${body.user.id}`);
 });
 
 await test("GET /v1/worlds returns list (may be empty)", async () => {
@@ -174,31 +178,36 @@ await test("POST /v1/worlds creates a World", async () => {
     headers: authHeaders(),
     body: JSON.stringify({
       ownerEmail: testEmail,
-      worldId: testWorldId,
-      world: { displayName: "Health Test World" },
+      world: { displayName: `Health Test World ${testRunId}` },
     }),
   });
   const body = await res.json();
   if (res.status !== 201) {
     if (res.status === 429) {
       console.log(`        SKIP (quota exceeded)`);
-      passed++;
-      return;
+      return "skip";
     }
     if (res.status === 502) {
       console.log(
         `        SKIP (provisioning failed — the data plane may not be configured)`,
       );
-      passed++;
-      return;
+      return "skip";
     }
     throw new Error(`Unexpected status ${res.status}: ${JSON.stringify(body)}`);
   }
-  if (!body.world?.uid) throw new Error("Missing world.uid");
-  console.log(`        world uid: ${body.world.uid}`);
+  if (!body.world?.id) throw new Error("Missing world.id");
+  if (!/^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.world.id)) {
+    throw new Error("world.id is not a canonical Worlds API ID");
+  }
+  testWorldId = body.world.id;
+  console.log(`        world ID: ${testWorldId}`);
 });
 
 await test("GET /v1/worlds/:worldId returns the World", async () => {
+  if (!testWorldId) {
+    console.log(`        SKIP (world was not created)`);
+    return "skip";
+  }
   const res = await fetch(
     `${BASE_URL}/v1/worlds/${testWorldId}?email=${encodeURIComponent(testEmail)}`,
     { headers: authHeaders() },
@@ -207,16 +216,19 @@ await test("GET /v1/worlds/:worldId returns the World", async () => {
   if (res.status !== 200) {
     if (res.status === 404) {
       console.log(`        SKIP (world not found — may not have been created)`);
-      passed++;
-      return;
+      return "skip";
     }
     throw new Error(`Unexpected status ${res.status}: ${JSON.stringify(body)}`);
   }
-  if (body.world?.worldId !== testWorldId)
-    throw new Error(`worldId mismatch: ${body.world?.worldId}`);
+  if (body.world?.id !== testWorldId)
+    throw new Error(`world ID mismatch: ${body.world?.id}`);
 });
 
 await test("PATCH /v1/worlds/:worldId updates displayName", async () => {
+  if (!testWorldId) {
+    console.log(`        SKIP (world was not created)`);
+    return "skip";
+  }
   const res = await fetch(
     `${BASE_URL}/v1/worlds/${testWorldId}?email=${encodeURIComponent(testEmail)}`,
     {
@@ -232,8 +244,7 @@ await test("PATCH /v1/worlds/:worldId updates displayName", async () => {
   if (res.status !== 200) {
     if (res.status === 404) {
       console.log(`        SKIP (world not found)`);
-      passed++;
-      return;
+      return "skip";
     }
     throw new Error(`Unexpected status ${res.status}: ${JSON.stringify(body)}`);
   }
@@ -242,6 +253,10 @@ await test("PATCH /v1/worlds/:worldId updates displayName", async () => {
 });
 
 await test("DELETE /v1/worlds/:worldId deletes the World", async () => {
+  if (!testWorldId) {
+    console.log(`        SKIP (world was not created)`);
+    return "skip";
+  }
   const res = await fetch(
     `${BASE_URL}/v1/worlds/${testWorldId}?email=${encodeURIComponent(testEmail)}`,
     { method: "DELETE", headers: authHeaders() },
@@ -281,5 +296,5 @@ await test("GET /v1/auth/api-tokens/validate returns token expiry", async () => 
 
 // ── Results ───
 
-console.log(`\n${passed} passed, ${failed} failed, ${passed + failed} total\n`);
+console.log(`\n${passed} passed, ${failed} failed, ${skipped} skipped, ${passed + failed + skipped} total\n`);
 process.exit(failed > 0 ? 1 : 0);
