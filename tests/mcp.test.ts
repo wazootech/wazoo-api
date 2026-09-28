@@ -18,6 +18,16 @@ describe("MCP route", () => {
 
   it("returns 405 for GET requests without proper MCP headers", async () => {
     const app = new OpenAPIHono<AppEnv>();
+    app.use("/mcp", async (c, next) => {
+      c.set("auth", {
+        tokenId: "test-token",
+        userId: null,
+        scope: "worlds.read",
+        kind: "ADMIN",
+        expiresAt: null,
+      });
+      await next();
+    });
     registerMcpRoute(app);
 
     const res = await app.request("/mcp", {

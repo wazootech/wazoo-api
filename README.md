@@ -10,7 +10,7 @@ Control-plane API for Wazoo. This repo owns the `api.wazoo.dev` Cloudflare Worke
 - Proxying world data-plane API-key creation to `worlds-api`.
 - Deployment config for this one service: `wrangler.toml`, `Dockerfile`, `docker-compose.yml`, and CI.
 
-`worlds-api` owns data storage/query/import/export/search. This service passes `namespace = user.uid` when calling `worlds-api`; namespaces are an internal data-plane grouping, not a first-class platform resource.
+`worlds-api` owns data storage/query/import/export/search. This service passes `namespace = user.id` when calling `worlds-api`; namespaces are an internal data-plane grouping, not a first-class platform resource.
 
 ## Routes
 
@@ -21,13 +21,9 @@ Control-plane API for Wazoo. This repo owns the `api.wazoo.dev` Cloudflare Worke
 - Limits: `/v1/worlds/:worldId/limits`
 - Billing stubs: `/v1/worlds/:worldId/billing`, `/v1/worlds/:worldId/billing/openPortal`, `/v1/stripe/webhook`
 
-## Vocabulary
+## Identity contract
 
-`worldId` is the canonical worlds-api identifier (`w_<uuid>`) and is the routing
-key for every `/v1/worlds/:worldId` path. `slug` is the friendly, user-chosen
-alias and is never used to route. The `worldUid` contract field is gone;
-internal columns named `world_uid` are foreign keys to `worlds.uid` (the
-management row id) and are not canonical world identifiers.
+Every public resource exposes `id`. Each D1 table uses an entity-specific key: `users.user_id`, `worlds.world_id`, `platform_api_tokens.token_id`, `usage_events.event_id`, `world_limits.world_limit_id`, `beta_allowlist.beta_allowlist_id`, `admin_audit_events.event_id`, `deletion_requests.deletion_request_id`, and `rate_limit_entries.rate_limit_entry_id`. Foreign keys use the referenced entity name, including `user_id`, `world_id`, and `actor_token_id`. `worlds-api` alone mints world IDs (`w_<UUIDv4>`) and exposes the value as `id`. Wazoo API accepts it only as the `worldId` route parameter and stores it in `world_id`. World creation takes a display name only; there is no slug, client-minted ID, or compatibility fallback.
 
 - Platform API tokens: `/v1/auth/api-tokens`
 - Health: `/health`
@@ -48,8 +44,18 @@ Required runtime variables:
 
 D1 provisioning:
 
-- The control-plane D1 database is created and bound by Wrangler configuration.
-- Apply `schema.sql` before deploying a new environment.
+- For a new environment, create the database and apply `schema.sql`.
+- The platform-ID cutover is destructive and preserves no rows. Before each reset,
+  stop traffic and writers to the target APIs, verify the active Cloudflare
+  account and exact database name against `wrangler.toml`, and record explicit
+  approval for that environment's reset. The reset script drops every
+  application-owned table and leaves Cloudflare-managed tables untouched;
+  recreate the Wazoo API schema from `schema.sql`. The four targets are
+  `worlds-api-qa`, `wazoo-api-qa`, `worlds-api`, and `wazoo-api`. Cut QA first;
+  keep traffic stopped until schema checks and full end-to-end tests pass. Reset
+  production only after QA passes and Ethan separately approves the production
+  reset and deployment. See `migrations/README.md` for the Wazoo API reset and
+  the separate Worlds API reset file.
 - Generate a fresh global admin token with `npm run launch:seed-admin-d1`.
   The database stores only its SHA-256 hash; save the printed plaintext only in
   the approved secret store and repository secret managers.
@@ -81,7 +87,7 @@ npm run typecheck
 
 The control plane uses Cloudflare D1. Apply `schema.sql` through the approved D1 deployment/provisioning process before serving traffic.
 
-Platform tokens use the `wzp_` prefix. Global admin tokens must be manually seeded with `kind = 'ADMIN'`, `user_uid = NULL`, and a scope containing `admin`.
+Platform tokens use the `wzp_` prefix. Global admin tokens must be manually seeded with `kind = 'ADMIN'`, `user_id = NULL`, and a scope containing `admin`.
 
 Supported scopes include `users.read`, `users.write`, `worlds.read`, `worlds.write`, `worlds.admin`, `usage.read`, `billing.read`, and `admin`.
 

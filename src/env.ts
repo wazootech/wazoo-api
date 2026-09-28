@@ -14,11 +14,12 @@ export type Bindings = {
   WAZOO_PLATFORM_ADMIN_TOKEN?: string;
   GOOGLE_SERVICE_ACCOUNT_KEY?: string;
   BETA_ALLOWLIST_SHEET_ID?: string;
+  CUTOVER_MAINTENANCE?: string;
 };
 
 export type AuthContext = {
   tokenId: string;
-  userUid: string | null;
+  userId: string | null;
   scope: string;
   kind: "USER" | "ADMIN";
   expiresAt: string | null;
@@ -41,6 +42,7 @@ export function bindingsFromProcessEnv(): Bindings {
     "WAZOO_PLATFORM_ADMIN_TOKEN",
     "GOOGLE_SERVICE_ACCOUNT_KEY",
     "BETA_ALLOWLIST_SHEET_ID",
+    "CUTOVER_MAINTENANCE",
   ];
   const env: Record<string, string | undefined> = {};
   for (const key of keys) {

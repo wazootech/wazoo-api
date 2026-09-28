@@ -56,7 +56,7 @@ const initiateDeletionRoute = createRoute({
         "application/json": {
           schema: z.object({
             deletion: z.object({
-              uid: z.string(),
+              id: z.string(),
               expiresAt: z.string(),
             }),
             // Held by the client for the confirm step; the server stores only
@@ -142,8 +142,7 @@ const exportRoute = createRoute({
             user: UserSchema,
             worlds: z.array(
               z.object({
-                uid: z.string(),
-                worldId: z.string(),
+                id: z.string(),
                 displayName: z.string(),
                 state: z.string(),
                 createTime: z.string().optional(),
@@ -152,7 +151,7 @@ const exportRoute = createRoute({
             ),
             apiTokens: z.array(
               z.object({
-                uid: z.string(),
+                id: z.string(),
                 name: z.string(),
                 scope: z.string(),
                 createTime: z.string().optional(),
@@ -160,6 +159,7 @@ const exportRoute = createRoute({
             ),
             usageEvents: z.array(
               z.object({
+                id: z.string(),
                 metric: z.string(),
                 quantity: z.number(),
                 unit: z.string(),
@@ -184,7 +184,7 @@ const exportRoute = createRoute({
 });
 
 interface UserRow extends Record<string, unknown> {
-  uid: string;
+  user_id: string;
   email: string;
   display_name: string | null;
   state: string;
@@ -193,7 +193,7 @@ interface UserRow extends Record<string, unknown> {
 
 function userResource(row: UserRow) {
   return {
-    uid: row.uid,
+    id: row.user_id,
     email: row.email,
     displayName: row.display_name,
     state: "ACTIVE",
@@ -202,14 +202,14 @@ function userResource(row: UserRow) {
 }
 
 /** Ensures the token belongs to a user (not an env/admin token) and returns it. */
-function requireUserToken(c: Context<AppEnv>): { userUid: string } {
+function requireUserToken(c: Context<AppEnv>): { userId: string } {
   const auth = c.get("auth");
-  if (isAdmin(c) || !auth.userUid) {
+  if (isAdmin(c) || !auth.userId) {
     throw new HTTPException(401, {
       message: "Account deletion and data export require a user token",
     });
   }
-  return { userUid: auth.userUid };
+  return { userId: auth.userId };
 }
 
 export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
@@ -218,7 +218,7 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
     const email = c.req.query("email");
     const auth = c.var.auth;
 
-    if (!auth.userUid && !(isAdmin(c) && email)) {
+    if (!auth.userId && !(isAdmin(c) && email)) {
       return respond(
         c,
         {
@@ -232,14 +232,14 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
     }
 
     const database = db(c.env);
-    const identifier = auth.userUid ?? email;
+    const identifier = auth.userId ?? email;
     const existing = await database
       .prepare(
-        "SELECT uid, email, display_name, create_time FROM users WHERE uid = ? OR email = ?",
+        "SELECT user_id, email, display_name, create_time FROM users WHERE user_id = ? OR email = ?",
       )
       .bind(identifier, identifier?.toLowerCase())
       .first<{
-        uid: string;
+        user_id: string;
         email: string;
         display_name: string | null;
         create_time: string;
@@ -248,7 +248,7 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
     if (existing) {
       return respond(c, {
         user: {
-          uid: existing.uid,
+          id: existing.user_id,
           email: existing.email,
           displayName: existing.display_name,
           state: "ACTIVE",
@@ -258,20 +258,20 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
     }
 
     if (isAdmin(c) && email) {
-      const uid = id();
+      const userId = id();
       const createTime = now();
       const displayName = email.split("@")[0];
       await database
         .prepare(
-          "INSERT INTO users (uid, email, display_name, state, create_time) VALUES (?, ?, ?, ?, ?)",
+          "INSERT INTO users (user_id, email, display_name, state, create_time) VALUES (?, ?, ?, ?, ?)",
         )
-        .bind(uid, email.toLowerCase(), displayName, "active", createTime)
+        .bind(userId, email.toLowerCase(), displayName, "active", createTime)
         .run();
       return respond(
         c,
         {
           user: {
-            uid,
+            id: userId,
             email,
             displayName,
             state: "ACTIVE",
@@ -296,13 +296,15 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
 
   app.openapi(initiateDeletionRoute, async (c) => {
     requireScope(c, "users.write");
-    const { userUid } = requireUserToken(c);
+    const { userId } = requireUserToken(c);
 
     const database = db(c.env);
     const existing = await database
-      .prepare("SELECT uid FROM users WHERE uid = ? AND state = 'active'")
-      .bind(userUid)
-      .first<{ uid: string }>();
+      .prepare(
+        "SELECT user_id FROM users WHERE user_id = ? AND state = 'active'",
+      )
+      .bind(userId)
+      .first<{ user_id: string }>();
     if (!existing) {
       return respond(
         c,
@@ -313,11 +315,11 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
 
     // Invalidate any prior pending request for this user (one active token).
     await database
-      .prepare("DELETE FROM deletion_requests WHERE user_uid = ?")
-      .bind(userUid)
+      .prepare("DELETE FROM deletion_requests WHERE user_id = ?")
+      .bind(userId)
       .run();
 
-    const requestUid = id();
+    const deletionRequestId = id();
     const token = createToken("wzdel");
     const tokenHash = await sha256Hex(token);
     const expiresAt = new Date(
@@ -325,15 +327,15 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
     ).toISOString();
     await database
       .prepare(
-        "INSERT INTO deletion_requests (uid, user_uid, token_hash, expires_at) VALUES (?, ?, ?, ?)",
+        "INSERT INTO deletion_requests (deletion_request_id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
       )
-      .bind(requestUid, userUid, tokenHash, expiresAt)
+      .bind(deletionRequestId, userId, tokenHash, expiresAt)
       .run();
 
     return respond(
       c,
       {
-        deletion: { uid: requestUid, expiresAt },
+        deletion: { id: deletionRequestId, expiresAt },
         confirmationToken: token,
         message:
           "Account deletion requested. Confirm within 15 minutes to permanently delete the account and its data.",
@@ -344,17 +346,17 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
 
   app.openapi(confirmDeletionRoute, async (c) => {
     requireScope(c, "users.write");
-    const { userUid } = requireUserToken(c);
+    const { userId } = requireUserToken(c);
     const body = c.req.valid("json");
     const database = db(c.env);
 
     const tokenHash = await sha256Hex(body.confirmationToken);
     const pending = await database
       .prepare(
-        "SELECT uid, expires_at FROM deletion_requests WHERE user_uid = ? AND token_hash = ?",
+        "SELECT deletion_request_id, expires_at FROM deletion_requests WHERE user_id = ? AND token_hash = ?",
       )
-      .bind(userUid, tokenHash)
-      .first<{ uid: string; expires_at: string }>();
+      .bind(userId, tokenHash)
+      .first<{ deletion_request_id: string; expires_at: string }>();
 
     if (!pending) {
       return respond(
@@ -370,8 +372,8 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
     }
     if (new Date(pending.expires_at).getTime() <= Date.now()) {
       await database
-        .prepare("DELETE FROM deletion_requests WHERE uid = ?")
-        .bind(pending.uid)
+        .prepare("DELETE FROM deletion_requests WHERE deletion_request_id = ?")
+        .bind(pending.deletion_request_id)
         .run();
       return respond(
         c,
@@ -389,7 +391,7 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
     // purge sweep destroys the underlying databases after the grace period.
     const worldsRes = await deleteNamespaceWorlds({
       client: worldsAdminClient(c.env),
-      path: { namespace: userUid },
+      path: { namespace: userId },
     });
     if (worldsRes.error) {
       return respond(
@@ -405,12 +407,12 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
     }
 
     // Hard-delete the user. FK cascades remove their worlds mirror rows
-    // (worlds.user_uid), platform tokens (platform_api_tokens.user_uid), and
-    // usage events (usage_events.user_uid); the per-world databases themselves
+    // (worlds.user_id), platform tokens (platform_api_tokens.user_id), and
+    // usage events (usage_events.user_id); the per-world databases themselves
     // are destroyed by worlds-api's purge sweep after the grace period.
     await database
-      .prepare("DELETE FROM users WHERE uid = ?")
-      .bind(userUid)
+      .prepare("DELETE FROM users WHERE user_id = ?")
+      .bind(userId)
       .run();
 
     return c.body(null, 204) as any;
@@ -418,14 +420,14 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
 
   app.openapi(exportRoute, async (c) => {
     requireScope(c, "users.read");
-    const { userUid } = requireUserToken(c);
+    const { userId } = requireUserToken(c);
     const database = db(c.env);
 
     const user = await database
       .prepare(
-        "SELECT uid, email, display_name, create_time FROM users WHERE uid = ?",
+        "SELECT user_id, email, display_name, create_time FROM users WHERE user_id = ?",
       )
-      .bind(userUid)
+      .bind(userId)
       .first<UserRow>();
     if (!user) {
       return respond(
@@ -437,11 +439,10 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
 
     const worlds = await database
       .prepare(
-        "SELECT uid, world_id, display_name, state, create_time, delete_time FROM worlds WHERE user_uid = ?",
+        "SELECT world_id, display_name, state, create_time, delete_time FROM worlds WHERE user_id = ?",
       )
-      .bind(userUid)
+      .bind(userId)
       .all<{
-        uid: string;
         world_id: string;
         display_name: string;
         state: string;
@@ -451,11 +452,11 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
 
     const apiTokens = await database
       .prepare(
-        "SELECT uid, name, scope, create_time FROM platform_api_tokens WHERE user_uid = ? AND kind != 'ADMIN'",
+        "SELECT token_id, name, scope, create_time FROM platform_api_tokens WHERE user_id = ? AND kind != 'ADMIN'",
       )
-      .bind(userUid)
+      .bind(userId)
       .all<{
-        uid: string;
+        token_id: string;
         name: string;
         scope: string;
         create_time: string;
@@ -463,10 +464,11 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
 
     const usageEvents = await database
       .prepare(
-        "SELECT metric, quantity, unit, create_time FROM usage_events WHERE user_uid = ?",
+        "SELECT event_id, metric, quantity, unit, create_time FROM usage_events WHERE user_id = ?",
       )
-      .bind(userUid)
+      .bind(userId)
       .all<{
+        event_id: string;
         metric: string;
         quantity: number;
         unit: string;
@@ -476,20 +478,20 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
     return respond(c, {
       user: userResource(user),
       worlds: (worlds.results ?? []).map((w) => ({
-        uid: w.uid,
-        worldId: w.world_id,
+        id: w.world_id,
         displayName: w.display_name,
         state: w.state,
         createTime: w.create_time,
         deleteTime: w.delete_time,
       })),
       apiTokens: (apiTokens.results ?? []).map((t) => ({
-        uid: t.uid,
+        id: t.token_id,
         name: t.name,
         scope: t.scope,
         createTime: t.create_time,
       })),
       usageEvents: (usageEvents.results ?? []).map((e) => ({
+        id: e.event_id,
         metric: e.metric,
         quantity: e.quantity,
         unit: e.unit,

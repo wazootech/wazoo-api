@@ -12,7 +12,7 @@ import {
   PlatformTokenCreateResponseSchema,
   PlatformTokenDeleteResponseSchema,
   PlatformTokenValidateResponseSchema,
-  tokenNameParam,
+  tokenIdParam,
 } from "../lib/schemas";
 
 const listRoute = createRoute({
@@ -71,41 +71,15 @@ const createRouteDef = createRoute({
   },
 });
 
-const createNamedRoute = createRoute({
-  method: "post",
-  path: "/v1/auth/api-tokens/{tokenName}",
-  tags: ["PlatformTokens"],
-  operationId: "createNamedPlatformToken",
-  summary: "Create named platform token",
-  "x-mint": { metadata: { title: "Create named platform token" } },
-  security: [{ bearerPlatformToken: [] }],
-  request: {
-    params: tokenNameParam,
-    body: {
-      content: {
-        "application/json": { schema: PlatformTokenCreateRequestSchema },
-      },
-    },
-  },
-  responses: {
-    201: {
-      description: "Created platform token",
-      content: {
-        "application/json": { schema: PlatformTokenCreateResponseSchema },
-      },
-    },
-  },
-});
-
 const deleteRoute = createRoute({
   method: "delete",
-  path: "/v1/auth/api-tokens/{tokenName}",
+  path: "/v1/auth/api-tokens/{tokenId}",
   tags: ["PlatformTokens"],
   operationId: "deletePlatformToken",
   summary: "Revoke platform token",
   "x-mint": { metadata: { title: "Revoke platform token" } },
   security: [{ bearerPlatformToken: [] }],
-  request: { params: tokenNameParam },
+  request: { params: tokenIdParam },
   responses: {
     200: {
       description: "Deleted platform token",
@@ -139,17 +113,17 @@ export function registerTokensRoutes(app: OpenAPIHono<AppEnv>) {
     requireScope(c, "users.read");
     const auth = c.get("auth");
     const database = db(c.env);
-    const rows = auth.userUid
+    const rows = auth.userId
       ? await all(
           database
             .prepare(
-              "SELECT uid, name, scope, last_used_at, expires_at, create_time AS createTime FROM platform_api_tokens WHERE user_uid = ? AND kind != 'ADMIN' ORDER BY create_time DESC",
+              "SELECT token_id AS id, name, scope, last_used_at, expires_at, create_time AS createTime FROM platform_api_tokens WHERE user_id = ? AND kind != 'ADMIN' ORDER BY create_time DESC",
             )
-            .bind(auth.userUid),
+            .bind(auth.userId),
         )
       : await all(
           database.prepare(
-            "SELECT uid, name, scope, last_used_at, expires_at, create_time AS createTime FROM platform_api_tokens WHERE kind != 'ADMIN' ORDER BY create_time DESC",
+            "SELECT token_id AS id, name, scope, last_used_at, expires_at, create_time AS createTime FROM platform_api_tokens WHERE kind != 'ADMIN' ORDER BY create_time DESC",
           ),
         );
     return respond(c, { tokens: rows });
@@ -161,38 +135,31 @@ export function registerTokensRoutes(app: OpenAPIHono<AppEnv>) {
     const user = await resolveUser(c, body.user ?? body.email ?? undefined);
     return createPlatformToken(
       c,
-      user.uid,
+      user.userId,
       body.tokenName ?? body.name ?? "",
       body,
     );
   });
 
-  app.openapi(createNamedRoute, async (c) => {
-    requireScope(c, "users.write");
-    const body = c.req.valid("json");
-    const user = await resolveUser(c, body.user ?? body.email ?? undefined);
-    return createPlatformToken(c, user.uid, c.req.param("tokenName"), body);
-  });
-
   app.openapi(deleteRoute, async (c) => {
     requireScope(c, "users.write");
     const auth = c.get("auth");
-    if (auth.userUid) {
+    if (auth.userId) {
       await db(c.env)
         .prepare(
-          "DELETE FROM platform_api_tokens WHERE user_uid = ? AND name = ? AND kind != 'ADMIN'",
+          "DELETE FROM platform_api_tokens WHERE user_id = ? AND token_id = ? AND kind != 'ADMIN'",
         )
-        .bind(auth.userUid, c.req.param("tokenName"))
+        .bind(auth.userId, c.req.param("tokenId"))
         .run();
     } else if (isAdmin(c)) {
       await db(c.env)
         .prepare(
-          "DELETE FROM platform_api_tokens WHERE name = ? AND kind != 'ADMIN'",
+          "DELETE FROM platform_api_tokens WHERE token_id = ? AND kind != 'ADMIN'",
         )
-        .bind(c.req.param("tokenName"))
+        .bind(c.req.param("tokenId"))
         .run();
     }
-    return respond(c, { token: c.req.param("tokenName") });
+    return respond(c, { id: c.req.param("tokenId") });
   });
 
   app.openapi(validateRoute, (c) => {
@@ -207,7 +174,7 @@ export function registerTokensRoutes(app: OpenAPIHono<AppEnv>) {
 
 async function createPlatformToken(
   c: Context<AppEnv>,
-  userUid: string,
+  userId: string,
   name: string,
   body: { scope?: string; expiresAt?: string },
 ) {
@@ -228,16 +195,16 @@ async function createPlatformToken(
   const tokenId = id();
   await db(c.env)
     .prepare(
-      "INSERT INTO platform_api_tokens (uid, user_uid, name, token_hash, scope, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO platform_api_tokens (token_id, user_id, name, token_hash, scope, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
     )
     .bind(
       tokenId,
-      userUid,
+      userId,
       name,
       await sha256Hex(token),
       scope,
       body.expiresAt ?? null,
     )
     .run();
-  return respond(c, { uid: tokenId, name, token }, 201);
+  return respond(c, { id: tokenId, name, token }, 201);
 }

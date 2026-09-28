@@ -80,7 +80,7 @@ export async function first<T extends Row>(
 }
 
 export type UserRef = {
-  uid: string;
+  userId: string;
   email: string;
   displayName?: string | null;
   state: string;
@@ -99,7 +99,7 @@ export async function userByIdentifier(
   return first<UserRef>(
     db
       .prepare(
-        "SELECT uid, email, display_name AS displayName, state FROM users WHERE uid = ? OR email = ?",
+        "SELECT user_id AS userId, email, display_name AS displayName, state FROM users WHERE user_id = ? OR email = ?",
       )
       .bind(resourceId(identifier, "users"), identifier.toLowerCase()),
   );

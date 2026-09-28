@@ -1,36 +1,18 @@
-# Migrations
+# Wazoo API D1 clean reset
 
-Hand-applied D1 migrations, run with `wrangler d1 execute` against the target
-database (QA first, then prod). There is no migration runner; each file is
-idempotent-safe to re-run and states its own preconditions.
+This reset is destructive and does not preserve or translate rows. The SQL file in this directory applies only to the Wazoo API databases; do not run it against `worlds-api` or `worlds-api-qa`. The Worlds API has a separate reset file and schema initializer in its own repository.
 
-## 2026-09-25-world-id-canonical.sql
+## QA
 
-Makes `world_id` the canonical data-plane identifier (`w_<uuid>`) and moves the
-friendly user-chosen id into `slug`, matching `wazoo-api#54` (canonical-only
-routing) and `wazoo-api#58` (worlds table transition).
+Before running either command, stop all traffic and writers to the QA APIs, verify the active Cloudflare account and exact database name in `wrangler.toml`, and record explicit approval for the destructive QA reset. Keep traffic stopped through schema verification, compatible deployment, and full QA end-to-end checks; resume it only after those gates pass. Reset and explicitly recreate the Wazoo API schema:
 
-**Run this before deploying the code that ships with it.** The new code reads
-`world_id` as canonical, so a deploy without the migration would pass a slug to
-the data plane and 404 every world-scoped call.
+```bash
+npx wrangler d1 execute wazoo-api-qa --remote --file migrations/2026-09-27-platform-id-clean-reset.sql
+npx wrangler d1 execute wazoo-api-qa --remote --file schema.sql
+```
 
-The migration does **not** drop `worlds_api_uid`. It is kept as a vestigial,
-reversible copy of the promotion source:
+There is no deployment initializer that loads `schema.sql`. Do not deploy the cutover until both commands succeed and `PRAGMA table_info` confirms the entity-specific primary keys, `worlds.world_id`, and the absence of a slug column. Confirm `PRAGMA foreign_key_check` returns no rows, then run the QA health and end-to-end checks.
 
-- SQLite performs `ON DELETE CASCADE` actions when a parent table is dropped,
-  even under `PRAGMA defer_foreign_keys`. The textbook table rebuild (which is
-  the only way to drop a column referenced by the table's `UNIQUE` constraint)
-  silently deleted `world_limits` rows and nulled `usage_events.world_uid` in a
-  local rehearsal — live billing data. Rehearsed and rejected.
-- Keeping the column makes rollback a one-liner:
-  `UPDATE worlds SET world_id = slug;`
+## Production
 
-Dropping it later is tracked separately and needs a rebuild that runs with
-foreign keys disabled, which D1 does not currently expose.
-
-### Verified
-
-Rehearsed against the pre-migration schema with child rows present
-(1 `usage_events` row, 1 `world_limits` row): both preserved, zero rows nulled,
-zero `PRAGMA foreign_key_check` violations, and a world with a NULL
-`worlds_api_uid` keeps its existing `world_id` while gaining a matching `slug`.
+Apply the same two commands to `wazoo-api` only after QA passes. First stop all production traffic and writers, verify the active Cloudflare account and exact database name in `wrangler.toml`, and obtain Ethan's separate explicit approval for the destructive production reset and deployment. Keep traffic stopped until schema checks and full production end-to-end checks pass. Never run this reset from CI, preview, or an automated release. The local SQLite reset tests do not verify remote D1 or deployed service behavior.

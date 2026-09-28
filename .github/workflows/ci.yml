@@ -25,6 +25,12 @@ jobs:
       - run: npm run format:check
       - run: npm run typecheck
       - run: npm test
+      - name: Reject legacy platform identity names
+        run: |
+          if grep -R -n -E '\buid\b|world_uid|worldUid|_uid\b' src/ tests/ scripts/ migrations/ schema.sql openapi/openapi.json; then
+            echo "Legacy platform identity found."
+            exit 1
+          fi
 
   publish-image:
     # PAUSED: this container image cannot obtain a Cloudflare D1 binding and has

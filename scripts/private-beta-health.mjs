@@ -9,16 +9,16 @@ const worldsBaseUrl = normalizeBaseUrl(
 const adminToken = required("WAZOO_PLATFORM_ADMIN_TOKEN");
 const runId = process.env.WAZOO_HEALTH_RUN_ID ?? Date.now().toString(36);
 const email = process.env.WAZOO_HEALTH_EMAIL ?? `health+${runId}@wazoo.dev`;
-const worldIds = [
-  process.env.WAZOO_HEALTH_WORLD ?? `health-${runId}`,
-  process.env.WAZOO_HEALTH_WORLD_2 ?? `health-${runId}-b`,
+const worldNames = [
+  process.env.WAZOO_HEALTH_WORLD_NAME ?? `Health World ${runId}`,
+  process.env.WAZOO_HEALTH_WORLD_NAME_2 ?? `Health World ${runId} B`,
 ];
 
 const state = {
-  userUid: null,
+  userId: null,
   worldId: null,
-  canonicalBySlug: {},
-  worldTokenUid: null,
+  worldIdsByName: {},
+  worldTokenId: null,
   worldToken: null,
 };
 
@@ -27,8 +27,8 @@ try {
   await step("worlds health", () => worldsRequest("/health", { auth: false }));
 
   await step("ensure test user", ensureUser);
-  await step("create first world", () => createWorld(worldIds[0]));
-  await step("create second world", () => createWorld(worldIds[1]));
+  await step("create first world", () => createWorld(worldNames[0]));
+  await step("create second world", () => createWorld(worldNames[1]));
   await step("list worlds", () =>
     apiRequest(`/v1/worlds?email=${encodeURIComponent(email)}`),
   );
@@ -70,13 +70,13 @@ try {
     ),
   );
   await step("revoke world token", revokeWorldToken);
-  await step("soft-delete first world", () => deleteWorld(state.canonicalBySlug[worldIds[0]]));
-  await step("undelete first world", () => undeleteWorld(state.canonicalBySlug[worldIds[0]]));
-  await step("final soft-delete first world", () => deleteWorld(state.canonicalBySlug[worldIds[0]]));
-  await step("final soft-delete second world", () => deleteWorld(state.canonicalBySlug[worldIds[1]]));
+  await step("soft-delete first world", () => deleteWorld(state.worldIdsByName[worldNames[0]]));
+  await step("undelete first world", () => undeleteWorld(state.worldIdsByName[worldNames[0]]));
+  await step("final soft-delete first world", () => deleteWorld(state.worldIdsByName[worldNames[0]]));
+  await step("final soft-delete second world", () => deleteWorld(state.worldIdsByName[worldNames[1]]));
 
   console.log(
-    `\nPrivate beta health test passed for user ${email} and worlds ${worldIds.join(", ")}`,
+    `\nPrivate beta health test passed for user ${email} and worlds ${worldNames.join(", ")}`,
   );
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
@@ -87,26 +87,30 @@ async function ensureUser() {
     `/v1/users/me?email=${encodeURIComponent(email)}`,
     { allowStatus: [200, 201] },
   );
-  state.userUid = response.body.user.uid;
+  state.userId = response.body.user.id;
   assert(response.body.user.email === email, "Test user email mismatch");
   return response;
 }
 
-async function createWorld(worldId) {
+async function createWorld(displayName) {
   const response = await apiRequest("/v1/worlds", {
     method: "POST",
     body: {
       ownerEmail: email,
-      slug: worldId,
-      world: { displayName: `Health World ${worldId}` },
+      world: { displayName },
     },
   });
+  const worldId = response.body.world?.id;
   assert(
-    response.body.world.slug === worldId,
-    `World ${worldId} was not created`,
+    typeof worldId === "string" && /^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(worldId),
+    `World ${displayName} did not return a worlds-api-minted id`,
   );
-  state.canonicalBySlug[worldId] = response.body.world.worldId;
-  if (worldId === worldIds[0]) state.worldId = response.body.world.worldId;
+  assert(
+    response.body.world.displayName === displayName,
+    `World ${displayName} was not created`,
+  );
+  state.worldIdsByName[displayName] = worldId;
+  if (displayName === worldNames[0]) state.worldId = worldId;
   return response;
 }
 
@@ -118,7 +122,7 @@ async function createWorldToken() {
       body: { name: `health-${runId}` },
     },
   );
-  state.worldTokenUid = response.body.token.uid;
+  state.worldTokenId = response.body.token.id;
   state.worldToken = response.body.token.token;
   assert(state.worldToken?.startsWith("wzw_"), "World token was not returned");
   return response;
@@ -220,9 +224,9 @@ async function sparqlAsk() {
 }
 
 async function revokeWorldToken() {
-  if (!state.worldTokenUid) throw new Error("Missing world token uid");
+  if (!state.worldTokenId) throw new Error("Missing world token ID");
   return apiRequest(
-    `/v1/worlds/${state.worldId}/auth/tokens/${state.worldTokenUid}?email=${encodeURIComponent(email)}`,
+    `/v1/worlds/${state.worldId}/auth/tokens/${state.worldTokenId}?email=${encodeURIComponent(email)}`,
     { method: "DELETE" },
   );
 }

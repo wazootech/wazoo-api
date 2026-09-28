@@ -28,6 +28,21 @@ app.use(
   }),
 );
 
+app.use("*", async (c, next) => {
+  if (c.env.CUTOVER_MAINTENANCE === "true") {
+    return c.json(
+      {
+        error: {
+          code: "MAINTENANCE",
+          message: "Cutover maintenance in progress",
+        },
+      },
+      503,
+    );
+  }
+  return next();
+});
+
 app.onError(errorHandler);
 app.notFound((c) =>
   c.json({ error: { code: "NOT_FOUND", message: "Not found" } }, 404),
