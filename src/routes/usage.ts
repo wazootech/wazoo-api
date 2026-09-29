@@ -44,18 +44,18 @@ export function registerUsageRoutes(app: OpenAPIHono<AppEnv>) {
       const rows = await all<{ metric: string; quantity: number }>(
         database
           .prepare(
-            `SELECT metric, SUM(quantity) AS quantity FROM usage_events WHERE world_uid = ?${range.where} GROUP BY metric ORDER BY metric`,
+            `SELECT metric, SUM(quantity) AS quantity FROM usage_events WHERE world_id = ?${range.where} GROUP BY metric ORDER BY metric`,
           )
-          .bind(world.uid, ...range.args),
+          .bind(world.world_id, ...range.args),
       );
       const eventRows = await all<UsageEventRow>(
         database
           .prepare(
-            `SELECT uid, metric, quantity, unit, provider_cost_microcents AS providerCostMicrocents, wazoo_markup_microcents AS wazooMarkupMicrocents, estimated_cost_microcents AS estimatedCostMicrocents, billing_source AS billingSource, create_time AS createTime FROM usage_events WHERE world_uid = ?${range.where} ORDER BY create_time DESC LIMIT 100`,
+            `SELECT uid, metric, quantity, unit, provider_cost_microcents AS providerCostMicrocents, wazoo_markup_microcents AS wazooMarkupMicrocents, estimated_cost_microcents AS estimatedCostMicrocents, billing_source AS billingSource, create_time AS createTime FROM usage_events WHERE world_id = ?${range.where} ORDER BY create_time DESC LIMIT 100`,
           )
-          .bind(world.uid, ...range.args),
+          .bind(world.world_id, ...range.args),
       );
-      const quota = await worldUsageQuota(c, world.uid, rows);
+      const quota = await worldUsageQuota(c, world.world_id, rows);
       return respond(c, {
         usage: {
           world: `worlds/${world.world_id}`,
@@ -100,9 +100,9 @@ export function registerUsageRoutes(app: OpenAPIHono<AppEnv>) {
       const limits = await all(
         db(c.env)
           .prepare(
-            "SELECT metric, limit_quantity AS limitQuantity FROM world_limits WHERE world_uid = ? ORDER BY metric",
+            "SELECT metric, limit_quantity AS limitQuantity FROM world_limits WHERE world_id = ? ORDER BY metric",
           )
-          .bind(world.uid),
+          .bind(world.world_id),
       );
       return respond(c, { limits });
     },
@@ -156,17 +156,17 @@ export function registerUsageRoutes(app: OpenAPIHono<AppEnv>) {
       const limit = await first<{ limit_quantity: number }>(
         database
           .prepare(
-            "SELECT limit_quantity FROM world_limits WHERE world_uid = ? AND metric = ?",
+            "SELECT limit_quantity FROM world_limits WHERE world_id = ? AND metric = ?",
           )
-          .bind(world.uid, body.metric),
+          .bind(world.world_id, body.metric),
       );
       if (limit) {
         const current = await first<{ quantity: number }>(
           database
             .prepare(
-              "SELECT COALESCE(SUM(quantity), 0) AS quantity FROM usage_events WHERE world_uid = ? AND metric = ?",
+              "SELECT COALESCE(SUM(quantity), 0) AS quantity FROM usage_events WHERE world_id = ? AND metric = ?",
             )
-            .bind(world.uid, body.metric),
+            .bind(world.world_id, body.metric),
         );
         if ((current?.quantity ?? 0) + body.quantity > limit.limit_quantity) {
           return respond(
@@ -187,12 +187,12 @@ export function registerUsageRoutes(app: OpenAPIHono<AppEnv>) {
       }
       await database
         .prepare(
-          "INSERT INTO usage_events (uid, user_uid, world_uid, metric, quantity, unit, provider_cost_microcents, wazoo_markup_microcents, estimated_cost_microcents, billing_source, create_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO usage_events (uid, user_uid, world_id, metric, quantity, unit, provider_cost_microcents, wazoo_markup_microcents, estimated_cost_microcents, billing_source, create_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(
           id(),
           user.uid,
-          world.uid,
+          world.world_id,
           body.metric,
           body.quantity,
           body.unit,
@@ -216,11 +216,11 @@ async function resolveWorld(
   c: Context<AppEnv>,
   userUid: string,
   worldId: string,
-): Promise<{ uid: string; world_id: string }> {
-  const world = await first<{ uid: string; world_id: string }>(
+): Promise<{ world_id: string }> {
+  const world = await first<{ world_id: string }>(
     db(c.env)
       .prepare(
-        "SELECT uid, world_id FROM worlds WHERE user_uid = ? AND world_id = ?",
+        "SELECT world_id FROM worlds WHERE user_uid = ? AND world_id = ?",
       )
       .bind(userUid, worldId),
   );

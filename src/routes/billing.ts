@@ -51,11 +51,16 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
       const totals = await all<{ metric: string; quantity: number }>(
         db(c.env)
           .prepare(
-            "SELECT metric, SUM(quantity) AS quantity FROM usage_events WHERE world_uid = ? GROUP BY metric",
+            "SELECT metric, SUM(quantity) AS quantity FROM usage_events WHERE world_id = ? GROUP BY metric",
           )
-          .bind(world.uid),
+          .bind(world.world_id),
       );
-      const quota = await worldBillingQuota(c, user.uid, world.uid, totals);
+      const quota = await worldBillingQuota(
+        c,
+        user.uid,
+        world.world_id,
+        totals,
+      );
       return respond(c, {
         billing: {
           world: `worlds/${world.world_id}`,
@@ -211,9 +216,9 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
 
       await db(c.env)
         .prepare(
-          "UPDATE worlds SET billing_state = 'CANCELLED', stripe_subscription_id = NULL, update_time = ? WHERE uid = ?",
+          "UPDATE worlds SET billing_state = 'CANCELLED', stripe_subscription_id = NULL, update_time = ? WHERE world_id = ?",
         )
-        .bind(new Date().toISOString(), world.uid)
+        .bind(new Date().toISOString(), world.world_id)
         .run();
 
       const updated = await resolveWorldBilling(
@@ -320,7 +325,6 @@ async function resolveWorldBilling(
   userUid: string,
   worldId: string,
 ): Promise<{
-  uid: string;
   world_id: string;
   billing_provider: string;
   stripe_customer_id: string | null;
@@ -328,7 +332,6 @@ async function resolveWorldBilling(
   billing_state: string;
 }> {
   const row = await first<{
-    uid: string;
     world_id: string;
     billing_provider: string;
     stripe_customer_id: string | null;
@@ -337,7 +340,7 @@ async function resolveWorldBilling(
   }>(
     db(c.env)
       .prepare(
-        "SELECT uid, world_id, billing_provider, stripe_customer_id, stripe_subscription_id, billing_state FROM worlds WHERE user_uid = ? AND world_id = ?",
+        "SELECT world_id, billing_provider, stripe_customer_id, stripe_subscription_id, billing_state FROM worlds WHERE user_uid = ? AND world_id = ?",
       )
       .bind(userUid, worldId),
   );
