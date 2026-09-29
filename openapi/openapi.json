@@ -528,6 +528,70 @@
         }
       }
     },
+    "/ready": {
+      "get": {
+        "security": [],
+        "tags": [
+          "Health"
+        ],
+        "operationId": "getReadiness",
+        "summary": "Get readiness",
+        "description": "Returns ready only when the management database uses the canonical world-identity schema.",
+        "x-mint": {
+          "metadata": {
+            "title": "Get readiness"
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "World identity schema is ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ready"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "World identity schema is unavailable or incompatible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "not_ready"
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/users/me": {
       "get": {
         "tags": [
