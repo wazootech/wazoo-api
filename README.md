@@ -23,11 +23,11 @@ Control-plane API for Wazoo. This repo owns the `api.wazoo.dev` Cloudflare Worke
 
 ## Vocabulary
 
-`worldId` is the canonical worlds-api identifier (`w_<uuid>`) and is the routing
-key for every `/v1/worlds/:worldId` path. `slug` is the friendly, user-chosen
-alias and is never used to route. The `worldUid` contract field is gone;
-internal columns named `world_uid` are foreign keys to `worlds.uid` (the
-management row id) and are not canonical world identifiers.
+The Worlds API mints each canonical world ID as `w_<UUIDv4>` and currently
+returns that value in its `uid` field. Wazoo stores it in `worlds.world_id` and
+exposes it as `world.id`. World creation accepts a display name, not a
+caller-chosen slug or ID. Every world-scoped route uses the canonical value as
+its `:worldId` parameter. `worlds.uid` remains the internal management-row key.
 
 - Platform API tokens: `/v1/auth/api-tokens`
 - Health: `/health`

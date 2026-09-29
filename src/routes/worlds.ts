@@ -28,12 +28,14 @@ import {
 } from "../lib/worlds-client";
 import {
   CreateWorldBodySchema,
+  ErrorResponseSchema,
   UpdateWorldBodySchema,
   WorldListSchema,
   WorldSingleSchema,
   WorldTokenListSchema,
   WorldTokenCreateRequestSchema,
   WorldTokenSingleResponseSchema,
+  worldId as worldIdSchema,
   worldIdParam,
   emailQuery,
 } from "../lib/schemas";
@@ -57,10 +59,7 @@ function worldResource(row: WorldRow) {
     row.state === "deleted" &&
     (!row.expire_time || new Date(row.expire_time).getTime() > Date.now());
   return {
-    name: `worlds/${row.world_id}`,
-    uid: row.uid,
-    worldId: row.world_id,
-    slug: row.slug ?? undefined,
+    id: row.world_id,
     displayName: row.display_name,
     region: row.region,
     state: row.state.toUpperCase(),
@@ -71,6 +70,13 @@ function worldResource(row: WorldRow) {
     deleteTime: row.delete_time ?? undefined,
     expireTime: row.expire_time ?? undefined,
   };
+}
+
+function isDuplicateWorldIdError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : "";
+  return /UNIQUE constraint failed: (?:worlds\.world_id|worlds\.user_uid, worlds\.world_id)/.test(
+    message,
+  );
 }
 
 async function currentUser(
@@ -146,6 +152,14 @@ const createRouteDef = createRoute({
           }),
         },
       },
+    },
+    409: {
+      description: "World ID already exists",
+      content: { "application/json": { schema: ErrorResponseSchema } },
+    },
+    502: {
+      description: "World provisioning failed",
+      content: { "application/json": { schema: ErrorResponseSchema } },
     },
     429: {
       description: "Quota exceeded",
@@ -401,8 +415,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     const mintedKey = keyRes.data;
 
     const world = {
-      id: `w_${id()}`,
-      slug: body.slug,
+      uid: id(),
       displayName: body.world.displayName,
       region: body.world.region,
       now: now(),
@@ -428,33 +441,52 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
         502,
       );
     }
-    const createdWorld = res.data;
+    const worldIdResult = worldIdSchema.safeParse(res.data.uid);
+    if (!worldIdResult.success) {
+      return respond(
+        c,
+        {
+          error: {
+            code: "WORLD_PROVISIONING_FAILED",
+            message: "worlds-api did not return a canonical world ID",
+          },
+        },
+        502,
+      );
+    }
+    const canonicalWorldId = worldIdResult.data;
 
-    await database
-      .prepare(
-        "INSERT INTO worlds (uid, user_uid, world_id, slug, display_name, region, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .bind(
-        world.id,
-        user.uid,
-        createdWorld.uid,
-        world.slug,
-        world.displayName,
-        world.region,
-        world.now,
-        world.now,
-      )
-      .run();
+    try {
+      await database
+        .prepare(
+          "INSERT INTO worlds (uid, user_uid, world_id, display_name, region, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(
+          world.uid,
+          user.uid,
+          canonicalWorldId,
+          world.displayName,
+          world.region,
+          world.now,
+          world.now,
+        )
+        .run();
+    } catch (error) {
+      if (isDuplicateWorldIdError(error)) {
+        throw new HTTPException(409, { message: "World ID already exists" });
+      }
+      throw error;
+    }
 
     if (isAdmin(c) && quota.state !== "OK" && quota.state !== "WARN") {
       await recordAdminAudit(c, {
         action: "worlds.create_quota_bypass",
-        targetResourceName: `users/${user.uid}/worlds/${world.slug}`,
+        targetResourceName: `worlds/${canonicalWorldId}`,
       });
     }
 
     const row = await first<WorldRow>(
-      database.prepare("SELECT * FROM worlds WHERE uid = ?").bind(world.id),
+      database.prepare("SELECT * FROM worlds WHERE uid = ?").bind(world.uid),
     );
     return respond(c, { world: row ? worldResource(row) : null }, 201);
   });

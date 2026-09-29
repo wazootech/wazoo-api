@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS admin_audit_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_worlds_user ON worlds(user_uid);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_worlds_world_id ON worlds(world_id);
 -- Slug uniqueness as an index rather than a table constraint: an index needs no
 -- table rebuild, so the migration can never cascade into child tables.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_worlds_user_slug ON worlds(user_uid, slug);

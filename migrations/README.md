@@ -4,6 +4,18 @@ Hand-applied D1 migrations, run with `wrangler d1 execute` against the target
 database (QA first, then prod). There is no migration runner; each file is
 idempotent-safe to re-run and states its own preconditions.
 
+## 2026-09-29-world-id-global-unique.sql
+
+Ensures canonical Worlds API IDs are globally unique in the Wazoo control-plane
+table so duplicate IDs return HTTP 409, regardless of owner. Before applying,
+verify the existing data has no collisions:
+
+```sql
+SELECT world_id, COUNT(*) FROM worlds GROUP BY world_id HAVING COUNT(*) > 1;
+```
+
+**Run this before deploying code that relies on global uniqueness.**
+
 ## 2026-09-25-world-id-canonical.sql
 
 Makes `world_id` the canonical data-plane identifier (`w_<uuid>`) and moves the

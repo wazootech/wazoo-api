@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   resourceId,
+  worldId,
   email,
   nonEmptyString,
   CreateWorldBodySchema,
@@ -64,60 +65,67 @@ describe("nonEmptyString", () => {
   });
 });
 
+describe("worldId", () => {
+  it("accepts only canonical Worlds API UUIDv4 identifiers", () => {
+    expect(
+      worldId.safeParse("w_00000000-0000-4000-8000-000000000001").success,
+    ).toBe(true);
+    expect(worldId.safeParse("w_created-123").success).toBe(false);
+    expect(
+      worldId.safeParse("w_00000000-0000-3000-8000-000000000001").success,
+    ).toBe(false);
+  });
+});
+
 describe("CreateWorldBodySchema", () => {
-  it("accepts a valid create world request", () => {
-    const result = CreateWorldBodySchema.safeParse({
-      slug: "my-world",
-      world: { displayName: "My World" },
-    });
-    expect(result.success).toBe(true);
+  it("accepts a display-name-only world request", () => {
+    expect(
+      CreateWorldBodySchema.safeParse({
+        world: { displayName: "My World" },
+      }).success,
+    ).toBe(true);
   });
 
-  it("accepts with optional fields", () => {
-    const result = CreateWorldBodySchema.safeParse({
-      slug: "my-world",
-      world: { displayName: "My World", region: "us-east" },
-      ownerEmail: "user@example.com",
-    });
-    expect(result.success).toBe(true);
+  it("accepts optional owner and region fields", () => {
+    expect(
+      CreateWorldBodySchema.safeParse({
+        world: { displayName: "My World", region: "us-east" },
+        ownerEmail: "user@example.com",
+      }).success,
+    ).toBe(true);
   });
 
-  it("rejects missing slug", () => {
-    const result = CreateWorldBodySchema.safeParse({
-      world: { displayName: "My World" },
-    });
-    expect(result.success).toBe(false);
+  it("rejects caller-supplied slugs and IDs", () => {
+    expect(
+      CreateWorldBodySchema.safeParse({
+        slug: "my-world",
+        world: { displayName: "My World" },
+      }).success,
+    ).toBe(false);
+    expect(
+      CreateWorldBodySchema.safeParse({
+        world: {
+          displayName: "My World",
+          id: "w_00000000-0000-4000-8000-000000000001",
+        },
+      }).success,
+    ).toBe(false);
   });
 
   it("rejects missing world.displayName", () => {
-    const result = CreateWorldBodySchema.safeParse({
-      slug: "my-world",
-      world: { region: "us-east" },
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects invalid slug format", () => {
-    const result = CreateWorldBodySchema.safeParse({
-      slug: "",
-      world: { displayName: "My World" },
-    });
-    expect(result.success).toBe(false);
+    expect(
+      CreateWorldBodySchema.safeParse({ world: { region: "us-east" } }).success,
+    ).toBe(false);
   });
 
   it("rejects missing world object", () => {
-    const result = CreateWorldBodySchema.safeParse({
-      slug: "my-world",
-    });
-    expect(result.success).toBe(false);
+    expect(CreateWorldBodySchema.safeParse({}).success).toBe(false);
   });
 
   it("rejects when world is not an object", () => {
-    const result = CreateWorldBodySchema.safeParse({
-      slug: "my-world",
-      world: "not-an-object",
-    });
-    expect(result.success).toBe(false);
+    expect(
+      CreateWorldBodySchema.safeParse({ world: "not-an-object" }).success,
+    ).toBe(false);
   });
 });
 

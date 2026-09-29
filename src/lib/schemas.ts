@@ -5,6 +5,15 @@ export const resourceId = z
   .regex(/^[a-z][a-z0-9-]{2,62}$/)
   .openapi({ description: "Resource ID matching ^[a-z][a-z0-9-]{2,62}$" });
 
+export const worldId = z
+  .string()
+  .regex(
+    /^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+  )
+  .openapi({
+    description: "World ID minted by worlds-api in w_<UUIDv4> form.",
+  });
+
 export const email = z.string().email();
 
 export const nonEmptyString = z.string().min(1);
@@ -30,10 +39,7 @@ export const UserSchema = z
 
 export const WorldSchema = z
   .object({
-    name: z.string(),
-    uid: z.string(),
-    worldId: z.string(),
-    slug: z.string().optional(),
+    id: worldId,
     displayName: z.string(),
     region: z.string(),
     state: z.enum(["ACTIVE", "SUSPENDED", "DELETED"]),
@@ -58,12 +64,14 @@ export const CreateWorldBodySchema = z
   .object({
     ownerEmail: email.optional(),
     email: email.optional(),
-    slug: resourceId,
-    world: z.object({
-      displayName: nonEmptyString,
-      region: z.string().optional().default("auto"),
-    }),
+    world: z
+      .object({
+        displayName: nonEmptyString,
+        region: z.string().optional().default("auto"),
+      })
+      .strict(),
   })
+  .strict()
   .openapi("CreateWorldRequest");
 
 export const UpdateWorldBodySchema = z
