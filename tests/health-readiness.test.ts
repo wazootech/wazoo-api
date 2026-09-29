@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import app from "../src/index";
 import type { Bindings } from "../src/env";
 
-type Column = { name: string; pk: number };
+type Column = { name: string; pk: number; notnull?: number };
 type ForeignKey = {
   table: string;
   from: string;
@@ -19,14 +19,14 @@ type Schema = {
 const canonicalSchema: Schema = {
   columns: {
     worlds: [
-      { name: "world_id", pk: 1 },
-      { name: "user_uid", pk: 0 },
-      { name: "display_name", pk: 0 },
+      { name: "world_id", pk: 1, notnull: 1 },
+      { name: "user_uid", pk: 0, notnull: 1 },
+      { name: "display_name", pk: 0, notnull: 1 },
     ],
-    usage_events: [{ name: "world_id", pk: 0 }],
+    usage_events: [{ name: "world_id", pk: 0, notnull: 0 }],
     world_limits: [
-      { name: "world_id", pk: 1 },
-      { name: "metric", pk: 2 },
+      { name: "world_id", pk: 1, notnull: 1 },
+      { name: "metric", pk: 2, notnull: 1 },
     ],
   },
   foreignKeys: {
@@ -240,5 +240,50 @@ describe("Wazoo API readiness", () => {
     expect(healthRes.status).toBe(200);
     await expect(healthRes.json()).resolves.toEqual({ status: "ok" });
     expect(log).toHaveBeenCalledOnce();
+  });
+
+  it("rejects nullable worlds.world_id", async () => {
+    const nullableSchema: Schema = {
+      ...canonicalSchema,
+      columns: {
+        ...canonicalSchema.columns,
+        worlds: [{ name: "world_id", pk: 1, notnull: 0 }],
+      },
+    };
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await request("/ready", nullableSchema);
+
+    expect(res.status).toBe(503);
+  });
+
+  it("rejects non-null usage_events.world_id", async () => {
+    const nonNullSchema: Schema = {
+      ...canonicalSchema,
+      columns: {
+        ...canonicalSchema.columns,
+        usage_events: [{ name: "world_id", pk: 0, notnull: 1 }],
+      },
+    };
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await request("/ready", nonNullSchema);
+
+    expect(res.status).toBe(503);
+  });
+
+  it("rejects world_limits lacking composite primary key", async () => {
+    const compositeSchema: Schema = {
+      ...canonicalSchema,
+      columns: {
+        ...canonicalSchema.columns,
+        world_limits: [
+          { name: "world_id", pk: 1, notnull: 1 },
+          { name: "metric", pk: 0, notnull: 1 },
+        ],
+      },
+    };
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await request("/ready", compositeSchema);
+
+    expect(res.status).toBe(503);
   });
 });

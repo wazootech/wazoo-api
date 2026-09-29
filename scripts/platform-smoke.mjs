@@ -20,6 +20,17 @@ const WORLDS_API_URL = process.env.WORLDS_API_URL ?? "https://data-qa.wazoo.dev"
 const CONSOLE_URL = process.env.CONSOLE_URL;
 const ADMIN_TOKEN = process.env.WAZOO_PLATFORM_ADMIN_TOKEN;
 
+function assertSmokeTarget(name, value, qaHostname) {
+  const url = new URL(value);
+  const isLocalHttp = url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1");
+  const isQaHttps = url.protocol === "https:" && url.hostname === qaHostname;
+  if (!isLocalHttp && !isQaHttps) {
+    throw new Error(
+      `Smoke target ${name} must be over HTTPS to ${qaHostname} or local HTTP, got ${value}`,
+    );
+  }
+}
+
 if (!ADMIN_TOKEN) {
   console.error(
     "WAZOO_PLATFORM_ADMIN_TOKEN is required. Generate one via " +
@@ -28,6 +39,10 @@ if (!ADMIN_TOKEN) {
   );
   process.exit(1);
 }
+
+assertSmokeTarget("API_BASE_URL", API_BASE_URL, "api-qa.wazoo.dev");
+assertSmokeTarget("WORLDS_API_URL", WORLDS_API_URL, "data-qa.wazoo.dev");
+if (CONSOLE_URL) assertSmokeTarget("CONSOLE_URL", CONSOLE_URL, "console-qa.wazoo.dev");
 
 const runId = Date.now().toString();
 const ownerEmail = `e2e+${runId}@wazoo.dev`;
@@ -42,6 +57,23 @@ async function jsonOrNull(response) {
     return await response.json();
   } catch {
     return null;
+  }
+}
+
+async function requireReadiness() {
+  const targets = [
+    { name: "API_BASE_URL", url: `${API_BASE_URL}/ready` },
+    { name: "WORLDS_API_URL", url: `${WORLDS_API_URL}/ready` },
+  ];
+  for (const { name, url } of targets) {
+    const response = await fetch(url);
+    const body = await jsonOrNull(response);
+    if (response.status !== 200 || body?.status !== "ready") {
+      console.error(
+        `Smoke run aborted before writes: readiness failed for ${name}`,
+      );
+      process.exit(1);
+    }
   }
 }
 
@@ -370,6 +402,7 @@ async function cleanupWorld(worldId) {
 }
 
 const results = [];
+await requireReadiness();
 if (CONSOLE_URL) results.push(await testUnauthenticatedAppRedirect());
 results.push(
   await testApiHealth(),

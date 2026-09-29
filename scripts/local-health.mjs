@@ -6,6 +6,21 @@ import { randomUUID } from "node:crypto";
 //   Set WAZOO_PLATFORM_ADMIN_TOKEN env var for authenticated tests
 
 const BASE_URL = process.argv[2] ?? "http://localhost:8787";
+try {
+  const url = new URL(BASE_URL);
+  if (
+    !(url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1")) &&
+    !(url.protocol === "https:" && url.hostname === "api-qa.wazoo.dev")
+  ) {
+    throw new Error(
+      `BASE_URL must be http://localhost, http://127.0.0.1, or https://api-qa.wazoo.dev`,
+    );
+  }
+} catch (err) {
+  throw new Error(
+    `BASE_URL must be http://localhost, http://127.0.0.1, or https://api-qa.wazoo.dev`,
+  );
+}
 const ADMIN_TOKEN = required("WAZOO_PLATFORM_ADMIN_TOKEN");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -76,6 +91,14 @@ console.log(
   `  Admin token: ${ADMIN_TOKEN ? "set" : "NOT SET (auth tests skipped)"}\n`,
 );
 
+const readyResponse = await fetch(`${BASE_URL}/ready`);
+await assertOk(readyResponse);
+const readyBody = await readyResponse.json();
+if (readyBody.status !== "ready") {
+  throw new Error(`Readiness preflight failed: status is ${readyBody.status}`);
+}
+console.log(`  PASS  GET /ready confirms canonical world identity schema`);
+
 // ── Health ───
 
 await test("GET /health returns ok", async () => {
@@ -83,13 +106,6 @@ await test("GET /health returns ok", async () => {
   await assertOk(res);
   const body = await res.json();
   if (body.status !== "ok") throw new Error(`status is ${body.status}`);
-});
-
-await test("GET /ready confirms canonical world identity schema", async () => {
-  const res = await fetch(`${BASE_URL}/ready`);
-  await assertOk(res);
-  const body = await res.json();
-  if (body.status !== "ready") throw new Error(`status is ${body.status}`);
 });
 
 await test("GET /openapi.json returns OpenAPI spec", async () => {
