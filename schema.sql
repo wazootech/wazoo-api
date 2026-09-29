@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS worlds (
-  world_id TEXT PRIMARY KEY,
+  world_id TEXT NOT NULL PRIMARY KEY,
   user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
   display_name TEXT NOT NULL,
   region TEXT NOT NULL DEFAULT 'auto',
