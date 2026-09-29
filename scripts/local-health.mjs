@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 // Local health test for wazoo-api
 // Usage: node scripts/local-health.mjs [baseUrl]
 //   Defaults to http://localhost:8787 for wrangler dev
@@ -119,7 +121,7 @@ await test("POST /v1/worlds without body returns 400", async () => {
   await assertBadRequest(res);
 });
 
-await test("POST /v1/worlds with invalid worldId returns 400", async () => {
+await test("POST /v1/worlds rejects a client-supplied worldId", async () => {
   const res = await fetch(`${BASE_URL}/v1/worlds`, {
     method: "POST",
     headers: authHeaders(),
@@ -141,7 +143,7 @@ await test("POST /v1/users/me without email returns 400", async () => {
 // ── Authenticated health flow (requires admin token) ───
 
 const testEmail = `health-${Date.now()}@wazoo.dev`;
-const testWorldId = `health-${Date.now()}`;
+let testWorldId = `w_${randomUUID()}`;
 
 await test("GET /v1/users/me?email=... creates/returns user", async () => {
   const res = await fetch(
@@ -174,7 +176,6 @@ await test("POST /v1/worlds creates a World", async () => {
     headers: authHeaders(),
     body: JSON.stringify({
       ownerEmail: testEmail,
-      worldId: testWorldId,
       world: { displayName: "Health Test World" },
     }),
   });
@@ -194,8 +195,12 @@ await test("POST /v1/worlds creates a World", async () => {
     }
     throw new Error(`Unexpected status ${res.status}: ${JSON.stringify(body)}`);
   }
-  if (!body.world?.uid) throw new Error("Missing world.uid");
-  console.log(`        world uid: ${body.world.uid}`);
+  const worldId = body.world?.id;
+  if (typeof worldId !== "string" || !/^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(worldId)) {
+    throw new Error("Missing canonical world.id");
+  }
+  testWorldId = worldId;
+  console.log(`        world id: ${worldId}`);
 });
 
 await test("GET /v1/worlds/:worldId returns the World", async () => {
@@ -212,8 +217,8 @@ await test("GET /v1/worlds/:worldId returns the World", async () => {
     }
     throw new Error(`Unexpected status ${res.status}: ${JSON.stringify(body)}`);
   }
-  if (body.world?.worldId !== testWorldId)
-    throw new Error(`worldId mismatch: ${body.world?.worldId}`);
+  if (body.world?.id !== testWorldId)
+    throw new Error(`world id mismatch: ${body.world?.id}`);
 });
 
 await test("PATCH /v1/worlds/:worldId updates displayName", async () => {
@@ -252,9 +257,9 @@ await test("DELETE /v1/worlds/:worldId deletes the World", async () => {
   }
 });
 
-await test("DELETE /v1/worlds/nonexistent returns 404", async () => {
+await test("DELETE /v1/worlds/:worldId returns 404 for an unknown canonical ID", async () => {
   const res = await fetch(
-    `${BASE_URL}/v1/worlds/nonexistent-zzz?email=${encodeURIComponent(testEmail)}`,
+    `${BASE_URL}/v1/worlds/w_${randomUUID()}?email=${encodeURIComponent(testEmail)}`,
     { method: "DELETE", headers: authHeaders() },
   );
   await assertNotFound(res);

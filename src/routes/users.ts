@@ -437,11 +437,10 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
 
     const worlds = await database
       .prepare(
-        "SELECT uid, world_id, display_name, state, create_time, delete_time FROM worlds WHERE user_uid = ?",
+        "SELECT world_id, display_name, state, create_time, delete_time FROM worlds WHERE user_uid = ?",
       )
       .bind(userUid)
       .all<{
-        uid: string;
         world_id: string;
         display_name: string;
         state: string;
@@ -476,8 +475,7 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
     return respond(c, {
       user: userResource(user),
       worlds: (worlds.results ?? []).map((w) => ({
-        uid: w.uid,
-        worldId: w.world_id,
+        id: w.world_id,
         displayName: w.display_name,
         state: w.state,
         createTime: w.create_time,

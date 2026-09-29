@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { AppEnv } from "../env";
 import { recordAdminAudit } from "../lib/audit";
-import { all, db, first, id, now, type UserRef } from "../lib/db";
+import { all, db, first, now, type UserRef } from "../lib/db";
 import { isAdmin, requireScope, resolveUser, respond } from "../lib/http";
 import {
   activeWorldCount,
@@ -28,24 +28,24 @@ import {
 } from "../lib/worlds-client";
 import {
   CreateWorldBodySchema,
+  ErrorResponseSchema,
   UpdateWorldBodySchema,
   WorldListSchema,
   WorldSingleSchema,
   WorldTokenListSchema,
   WorldTokenCreateRequestSchema,
   WorldTokenSingleResponseSchema,
+  worldId as worldIdSchema,
   worldIdParam,
   emailQuery,
 } from "../lib/schemas";
 
 interface WorldRow extends Record<string, unknown> {
-  uid: string;
   user_uid: string;
   world_id: string;
   display_name: string;
   region: string;
   state: string;
-  slug: string | null;
   create_time?: string;
   update_time?: string;
   delete_time?: string | null;
@@ -57,10 +57,7 @@ function worldResource(row: WorldRow) {
     row.state === "deleted" &&
     (!row.expire_time || new Date(row.expire_time).getTime() > Date.now());
   return {
-    name: `worlds/${row.world_id}`,
-    uid: row.uid,
-    worldId: row.world_id,
-    slug: row.slug ?? undefined,
+    id: row.world_id,
     displayName: row.display_name,
     region: row.region,
     state: row.state.toUpperCase(),
@@ -71,6 +68,13 @@ function worldResource(row: WorldRow) {
     deleteTime: row.delete_time ?? undefined,
     expireTime: row.expire_time ?? undefined,
   };
+}
+
+function isDuplicateWorldIdError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : "";
+  return /UNIQUE constraint failed: (?:worlds\.world_id|worlds\.user_uid, worlds\.world_id)/i.test(
+    message,
+  );
 }
 
 async function currentUser(
@@ -147,6 +151,15 @@ const createRouteDef = createRoute({
         },
       },
     },
+    409: {
+      description: "World ID already exists",
+      content: { "application/json": { schema: ErrorResponseSchema } },
+    },
+    502: {
+      description: "World provisioning failed",
+      content: { "application/json": { schema: ErrorResponseSchema } },
+    },
+
     429: {
       description: "Quota exceeded",
       content: {
@@ -401,8 +414,6 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     const mintedKey = keyRes.data;
 
     const world = {
-      id: `w_${id()}`,
-      slug: body.slug,
       displayName: body.world.displayName,
       region: body.world.region,
       now: now(),
@@ -428,33 +439,56 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
         502,
       );
     }
-    const createdWorld = res.data;
+    const parsedWorld = z
+      .object({ id: worldIdSchema })
+      .passthrough()
+      .safeParse(res.data as unknown);
+    if (!parsedWorld.success) {
+      return respond(
+        c,
+        {
+          error: {
+            code: "WORLD_PROVISIONING_FAILED",
+            message: "worlds-api did not return a canonical world ID",
+          },
+        },
+        502,
+      );
+    }
+    const canonicalWorldId = parsedWorld.data.id;
 
-    await database
-      .prepare(
-        "INSERT INTO worlds (uid, user_uid, world_id, slug, display_name, region, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .bind(
-        world.id,
-        user.uid,
-        createdWorld.uid,
-        world.slug,
-        world.displayName,
-        world.region,
-        world.now,
-        world.now,
-      )
-      .run();
+    try {
+      await database
+        .prepare(
+          "INSERT INTO worlds (world_id, user_uid, display_name, region, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(
+          canonicalWorldId,
+          user.uid,
+          world.displayName,
+          world.region,
+          world.now,
+          world.now,
+        )
+        .run();
+    } catch (error) {
+      if (isDuplicateWorldIdError(error)) {
+        throw new HTTPException(409, { message: "World ID already exists" });
+      }
+      throw error;
+    }
 
     if (isAdmin(c) && quota.state !== "OK" && quota.state !== "WARN") {
       await recordAdminAudit(c, {
         action: "worlds.create_quota_bypass",
-        targetResourceName: `users/${user.uid}/worlds/${world.slug}`,
+        targetResourceName: `users/${user.uid}/worlds/${canonicalWorldId}`,
       });
     }
 
     const row = await first<WorldRow>(
-      database.prepare("SELECT * FROM worlds WHERE uid = ?").bind(world.id),
+      database
+        .prepare("SELECT * FROM worlds WHERE world_id = ?")
+        .bind(canonicalWorldId),
     );
     return respond(c, { world: row ? worldResource(row) : null }, 201);
   });
@@ -512,14 +546,15 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
 
     await db(c.env)
       .prepare(
-        "UPDATE worlds SET display_name = COALESCE(?, display_name), region = COALESCE(?, region), state = COALESCE(?, state), update_time = ? WHERE uid = ?",
+        "UPDATE worlds SET display_name = COALESCE(?, display_name), region = COALESCE(?, region), state = COALESCE(?, state), update_time = ? WHERE user_uid = ? AND world_id = ?",
       )
       .bind(
         updateMask.includes("displayName") ? (patch.displayName ?? null) : null,
         updateMask.includes("region") ? (patch.region ?? null) : null,
         nextState?.toLowerCase() ?? null,
         now(),
-        existing.uid,
+        user.uid,
+        existing.world_id,
       )
       .run();
 
@@ -547,8 +582,8 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
 
     const row = await first<WorldRow>(
       db(c.env)
-        .prepare("SELECT * FROM worlds WHERE uid = ?")
-        .bind(existing.uid),
+        .prepare("SELECT * FROM worlds WHERE user_uid = ? AND world_id = ?")
+        .bind(user.uid, existing.world_id),
     );
     return respond(c, { world: row ? worldResource(row) : null });
   });
@@ -586,14 +621,14 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     ).toISOString();
     await db(c.env)
       .prepare(
-        "UPDATE worlds SET state = 'deleted', purge_status = 'pending', delete_time = ?, expire_time = ?, update_time = ? WHERE uid = ?",
+        "UPDATE worlds SET state = 'deleted', purge_status = 'pending', delete_time = ?, expire_time = ?, update_time = ? WHERE user_uid = ? AND world_id = ?",
       )
-      .bind(deletedAt, expireAt, deletedAt, existing.uid)
+      .bind(deletedAt, expireAt, deletedAt, user.uid, existing.world_id)
       .run();
     const row = await first<WorldRow>(
       db(c.env)
-        .prepare("SELECT * FROM worlds WHERE uid = ?")
-        .bind(existing.uid),
+        .prepare("SELECT * FROM worlds WHERE user_uid = ? AND world_id = ?")
+        .bind(user.uid, existing.world_id),
     );
     return respond(c, { world: row ? worldResource(row) : null });
   });
@@ -660,14 +695,14 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
 
     await db(c.env)
       .prepare(
-        "UPDATE worlds SET state = 'active', delete_time = NULL, expire_time = NULL, update_time = ? WHERE uid = ?",
+        "UPDATE worlds SET state = 'active', delete_time = NULL, expire_time = NULL, update_time = ? WHERE user_uid = ? AND world_id = ?",
       )
-      .bind(now(), existing.uid)
+      .bind(now(), user.uid, existing.world_id)
       .run();
     const row = await first<WorldRow>(
       db(c.env)
-        .prepare("SELECT * FROM worlds WHERE uid = ?")
-        .bind(existing.uid),
+        .prepare("SELECT * FROM worlds WHERE user_uid = ? AND world_id = ?")
+        .bind(user.uid, existing.world_id),
     );
     return respond(c, { world: row ? worldResource(row) : null });
   });

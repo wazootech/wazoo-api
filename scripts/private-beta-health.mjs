@@ -9,7 +9,7 @@ const worldsBaseUrl = normalizeBaseUrl(
 const adminToken = required("WAZOO_PLATFORM_ADMIN_TOKEN");
 const runId = process.env.WAZOO_HEALTH_RUN_ID ?? Date.now().toString(36);
 const email = process.env.WAZOO_HEALTH_EMAIL ?? `health+${runId}@wazoo.dev`;
-const worldIds = [
+const worldNames = [
   process.env.WAZOO_HEALTH_WORLD ?? `health-${runId}`,
   process.env.WAZOO_HEALTH_WORLD_2 ?? `health-${runId}-b`,
 ];
@@ -17,7 +17,7 @@ const worldIds = [
 const state = {
   userUid: null,
   worldId: null,
-  canonicalBySlug: {},
+  worldByName: {},
   worldTokenUid: null,
   worldToken: null,
 };
@@ -27,8 +27,8 @@ try {
   await step("worlds health", () => worldsRequest("/health", { auth: false }));
 
   await step("ensure test user", ensureUser);
-  await step("create first world", () => createWorld(worldIds[0]));
-  await step("create second world", () => createWorld(worldIds[1]));
+  await step("create first world", () => createWorld(worldNames[0]));
+  await step("create second world", () => createWorld(worldNames[1]));
   await step("list worlds", () =>
     apiRequest(`/v1/worlds?email=${encodeURIComponent(email)}`),
   );
@@ -70,13 +70,13 @@ try {
     ),
   );
   await step("revoke world token", revokeWorldToken);
-  await step("soft-delete first world", () => deleteWorld(state.canonicalBySlug[worldIds[0]]));
-  await step("undelete first world", () => undeleteWorld(state.canonicalBySlug[worldIds[0]]));
-  await step("final soft-delete first world", () => deleteWorld(state.canonicalBySlug[worldIds[0]]));
-  await step("final soft-delete second world", () => deleteWorld(state.canonicalBySlug[worldIds[1]]));
+  await step("soft-delete first world", () => deleteWorld(state.worldByName[worldNames[0]]));
+  await step("undelete first world", () => undeleteWorld(state.worldByName[worldNames[0]]));
+  await step("final soft-delete first world", () => deleteWorld(state.worldByName[worldNames[0]]));
+  await step("final soft-delete second world", () => deleteWorld(state.worldByName[worldNames[1]]));
 
   console.log(
-    `\nPrivate beta health test passed for user ${email} and worlds ${worldIds.join(", ")}`,
+    `\nPrivate beta health test passed for user ${email} and worlds ${worldNames.join(", ")}`,
   );
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
@@ -92,21 +92,21 @@ async function ensureUser() {
   return response;
 }
 
-async function createWorld(worldId) {
+async function createWorld(worldName) {
   const response = await apiRequest("/v1/worlds", {
     method: "POST",
     body: {
       ownerEmail: email,
-      slug: worldId,
-      world: { displayName: `Health World ${worldId}` },
+      world: { displayName: `Health World ${worldName}` },
     },
   });
+  const id = response.body.world?.id;
   assert(
-    response.body.world.slug === worldId,
-    `World ${worldId} was not created`,
+    typeof id === "string" && /^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id),
+    `World ${worldName} did not return a canonical ID`,
   );
-  state.canonicalBySlug[worldId] = response.body.world.worldId;
-  if (worldId === worldIds[0]) state.worldId = response.body.world.worldId;
+  state.worldByName[worldName] = id;
+  if (worldName === worldNames[0]) state.worldId = id;
   return response;
 }
 

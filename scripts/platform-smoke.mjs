@@ -30,7 +30,6 @@ if (!ADMIN_TOKEN) {
 }
 
 const runId = Date.now().toString();
-const slug = `e2e-${runId}`;
 const ownerEmail = `e2e+${runId}@wazoo.dev`;
 
 console.log(
@@ -174,9 +173,8 @@ async function testWorldLifecycle() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        slug,
         ownerEmail,
-        world: { displayName: "E2E Test", region: "auto" },
+        world: { displayName: `E2E Test ${runId}`, region: "auto" },
       }),
     });
     if (createResponse.status !== 201) {
@@ -194,10 +192,18 @@ async function testWorldLifecycle() {
         detail: `create world: expected state ACTIVE, got ${created?.world?.state}`,
       };
     }
-    const worldId = created.world?.worldId;
-    const detail = worldId
-      ? `world ${slug} created, ACTIVE, id ${worldId}`
-      : `world ${slug} created and ACTIVE (no worldId in response)`;
+    const worldId = created.world?.id;
+    if (
+      typeof worldId !== "string" ||
+      !/^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(worldId)
+    ) {
+      return {
+        name: "testWorldLifecycle",
+        passed: false,
+        detail: "create world: response did not include a canonical world.id",
+      };
+    }
+    const detail = `world created, ACTIVE, id ${worldId}`;
     return { name: "testWorldLifecycle", passed: true, detail, worldId };
   });
 }
@@ -250,7 +256,14 @@ async function testSparqlQuery(worldToken, canonicalId) {
         detail: "no world token on context; run testTokenManagement first",
       };
     }
-    const worldId = canonicalId ?? slug;
+    const worldId = canonicalId;
+    if (!worldId) {
+      return {
+        name: "testSparqlQuery",
+        passed: false,
+        detail: "no canonical world ID on context",
+      };
+    }
     const headers = {
       Authorization: `Bearer ${worldToken}`,
       "Content-Type": "application/json",
@@ -332,6 +345,13 @@ SELECT ?name ?age ?city WHERE {
 
 async function cleanupWorld(worldId) {
   return check("cleanupWorld", async () => {
+    if (!worldId) {
+      return {
+        name: "cleanupWorld",
+        passed: true,
+        detail: "no canonical world ID was created; cleanup skipped",
+      };
+    }
     const response = await fetch(
       `${API_BASE_URL}/v1/worlds/${worldId}?email=${encodeURIComponent(ownerEmail)}`,
       { method: "DELETE", headers: { Authorization: `Bearer ${ADMIN_TOKEN}` } },
@@ -377,7 +397,7 @@ if (lifecycle.passed) {
     },
   );
 }
-results.push(await cleanupWorld(lifecycle.worldId ?? slug));
+results.push(await cleanupWorld(lifecycle.worldId));
 
 let failed = false;
 for (const result of results) {

@@ -10,6 +10,7 @@ import { createTestD1, type TestD1 } from "./helpers/d1-test-adapter";
 
 const ADMIN_TOKEN = "wzp_test-admin-token";
 const TEST_EMAIL = "delete-me@example.com";
+const TEST_WORLD_ID = "w_00000000-0000-4000-8000-000000000030";
 
 type TestBindings = Bindings & { DB: TestD1 };
 
@@ -89,14 +90,14 @@ describe("account deletion and data export (wazoo-api#26)", () => {
     const ts = new Date().toISOString();
     seed
       .prepare(
-        "INSERT INTO worlds (uid, user_uid, world_id, display_name, state, create_time, update_time) VALUES (?, ?, ?, ?, 'active', ?, ?)",
+        "INSERT INTO worlds (world_id, user_uid, display_name, state, create_time, update_time) VALUES (?, ?, ?, 'active', ?, ?)",
       )
-      .run("w_del_mirror", userUid, "del-world", "Del World", ts, ts);
+      .run(TEST_WORLD_ID, userUid, "Del World", ts, ts);
     seed
       .prepare(
-        "INSERT INTO usage_events (uid, user_uid, world_uid, metric, quantity, unit, create_time) VALUES (?, ?, ?, 'requests', 5, 'request', ?)",
+        "INSERT INTO usage_events (uid, user_uid, world_id, metric, quantity, unit, create_time) VALUES (?, ?, ?, 'requests', 5, 'request', ?)",
       )
-      .run("u_del_1", userUid, "w_del_mirror", ts);
+      .run("u_del_1", userUid, TEST_WORLD_ID, ts);
     seed.close();
 
     // Stub the worlds-api namespace-delete call.
@@ -132,13 +133,13 @@ describe("account deletion and data export (wazoo-api#26)", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       user: { email: string };
-      worlds: Array<{ worldId: string }>;
+      worlds: Array<{ id: string }>;
       usageEvents: Array<{ metric: string }>;
       apiTokens: unknown[];
     };
     expect(body.user.email).toBe(TEST_EMAIL);
     expect(body.worlds).toHaveLength(1);
-    expect(body.worlds[0].worldId).toBe("del-world");
+    expect(body.worlds[0].id).toBe(TEST_WORLD_ID);
     expect(body.usageEvents).toHaveLength(1);
     expect(body.usageEvents[0].metric).toBe("requests");
     expect(body.apiTokens.length).toBeGreaterThanOrEqual(1);
@@ -213,8 +214,8 @@ describe("account deletion and data export (wazoo-api#26)", () => {
       .prepare("SELECT uid FROM users WHERE uid = ?")
       .all(userUid);
     const worldRows = check
-      .prepare("SELECT uid FROM worlds WHERE uid = 'w_del_mirror'")
-      .all();
+      .prepare("SELECT world_id FROM worlds WHERE world_id = ?")
+      .all(TEST_WORLD_ID);
     const usageRows = check
       .prepare("SELECT uid FROM usage_events WHERE uid = 'u_del_1'")
       .all();
