@@ -24,7 +24,11 @@ const state = {
 
 try {
   await step("platform health", () => apiRequest("/health", { auth: false }));
+  await step("platform readiness", () => apiRequest("/ready", { auth: false }));
   await step("worlds health", () => worldsRequest("/health", { auth: false }));
+  await step("worlds readiness", () =>
+    worldsRequest("/ready", { auth: false }),
+  );
 
   await step("ensure test user", ensureUser);
   await step("create first world", () => createWorld(worldNames[0]));
@@ -33,7 +37,9 @@ try {
     apiRequest(`/v1/worlds?email=${encodeURIComponent(email)}`),
   );
   await step("get world", () =>
-    apiRequest(`/v1/worlds/${state.worldId}?email=${encodeURIComponent(email)}`),
+    apiRequest(
+      `/v1/worlds/${state.worldId}?email=${encodeURIComponent(email)}`,
+    ),
   );
   await step("create world token", createWorldToken);
   await step("import chunks", importChunks);
@@ -70,10 +76,18 @@ try {
     ),
   );
   await step("revoke world token", revokeWorldToken);
-  await step("soft-delete first world", () => deleteWorld(state.worldByName[worldNames[0]]));
-  await step("undelete first world", () => undeleteWorld(state.worldByName[worldNames[0]]));
-  await step("final soft-delete first world", () => deleteWorld(state.worldByName[worldNames[0]]));
-  await step("final soft-delete second world", () => deleteWorld(state.worldByName[worldNames[1]]));
+  await step("soft-delete first world", () =>
+    deleteWorld(state.worldByName[worldNames[0]]),
+  );
+  await step("undelete first world", () =>
+    undeleteWorld(state.worldByName[worldNames[0]]),
+  );
+  await step("final soft-delete first world", () =>
+    deleteWorld(state.worldByName[worldNames[0]]),
+  );
+  await step("final soft-delete second world", () =>
+    deleteWorld(state.worldByName[worldNames[1]]),
+  );
 
   console.log(
     `\nPrivate beta health test passed for user ${email} and worlds ${worldNames.join(", ")}`,
@@ -102,7 +116,10 @@ async function createWorld(worldName) {
   });
   const id = response.body.world?.id;
   assert(
-    typeof id === "string" && /^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id),
+    typeof id === "string" &&
+      /^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+        id,
+      ),
     `World ${worldName} did not return a canonical ID`,
   );
   state.worldByName[worldName] = id;

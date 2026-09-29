@@ -31,7 +31,8 @@ route. The `worlds` table is keyed by `world_id`; its `user_uid` owner reference
 continues to scope authorization.
 
 - Platform API tokens: `/v1/auth/api-tokens`
-- Health: `/health`
+- Liveness: `GET /health`
+- World-schema readiness: `GET /ready`
 - OpenAPI-ish route list: `/openapi.json`
 
 ## Configuration
@@ -66,10 +67,12 @@ Optional Stripe variables:
 - Local: `npm run health:local`
 - QA: `npm run health:beta`
 
-Both require `WAZOO_PLATFORM_ADMIN_TOKEN` to be set. The scripts exercise the
-full private-beta flow: user provisioning, world CRUD, token lifecycle, chunk
-and quad import, search, SPARQL, usage/billing/limits, and soft delete. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions.
+Both require `WAZOO_PLATFORM_ADMIN_TOKEN` to be set. They check `/ready` before
+any world writes; the QA script checks readiness on both API services. `/health`
+remains a liveness check and does not certify the schema. The scripts then
+exercise the full private-beta flow: user provisioning, world CRUD, token
+lifecycle, chunk and quad import, search, SPARQL, usage/billing/limits, and soft
+delete. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions.
 
 ## Development
 

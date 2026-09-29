@@ -85,6 +85,13 @@ await test("GET /health returns ok", async () => {
   if (body.status !== "ok") throw new Error(`status is ${body.status}`);
 });
 
+await test("GET /ready confirms canonical world identity schema", async () => {
+  const res = await fetch(`${BASE_URL}/ready`);
+  await assertOk(res);
+  const body = await res.json();
+  if (body.status !== "ready") throw new Error(`status is ${body.status}`);
+});
+
 await test("GET /openapi.json returns OpenAPI spec", async () => {
   const res = await fetch(`${BASE_URL}/openapi.json`);
   await assertOk(res);
@@ -196,7 +203,12 @@ await test("POST /v1/worlds creates a World", async () => {
     throw new Error(`Unexpected status ${res.status}: ${JSON.stringify(body)}`);
   }
   const worldId = body.world?.id;
-  if (typeof worldId !== "string" || !/^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(worldId)) {
+  if (
+    typeof worldId !== "string" ||
+    !/^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      worldId,
+    )
+  ) {
     throw new Error("Missing canonical world.id");
   }
   testWorldId = worldId;
