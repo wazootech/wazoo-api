@@ -16,3 +16,17 @@ This repository contains the Wazoo API service.
   changes. Health checks require `WAZOO_PLATFORM_ADMIN_TOKEN`.
 - Treat schema, auth, and launch-control changes as high impact; document the
   verification path before finishing.
+
+## Cross-repo impact
+
+- `deploy-qa` and `health-qa` run **only** on push to `main`, so a green
+  `verify` here is not evidence that the change works in a live environment.
+  Say so explicitly in the PR body when you could not observe it.
+- `/health` is liveness only. Schema correctness is asserted by `/ready` via
+  `src/lib/world-readiness.ts`; use `/ready`, never `/health`, to judge whether
+  a world-identity change is live.
+- A world-contract change requires follow-ups in `wazoo-client-ts`, then
+  `wazoo-console` / `wazoo-cli`. Name the required merge order in the PR.
+- Never weaken the owner predicate to accommodate an identifier change. Every
+  `worlds` query must carry `user_uid`; a valid `worldId` must never by itself
+  grant access.
