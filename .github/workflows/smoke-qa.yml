@@ -40,6 +40,7 @@ jobs:
           identity-id: ${{ vars.INFISICAL_MACHINE_ID }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
           env-slug: "qa"
+          secret-name: WAZOO_PLATFORM_ADMIN_TOKEN
       - name: Run platform smoke gate
         run: npm run smoke:qa
         env:
