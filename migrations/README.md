@@ -34,3 +34,15 @@ Rehearsed against the pre-migration schema with child rows present
 (1 `usage_events` row, 1 `world_limits` row): both preserved, zero rows nulled,
 zero `PRAGMA foreign_key_check` violations, and a world with a NULL
 `worlds_api_uid` keeps its existing `world_id` while gaining a matching `slug`.
+
+## 2026-09-28-world-id-global-unique.sql
+
+Adds a unique index on `worlds.world_id`. Worlds API IDs are minted globally;
+this lets the API return HTTP 409 if a duplicate ID is ever returned, even
+when the existing row belongs to a different user. The migration only adds an
+index and does not rebuild tables or alter child-row references. Check for
+pre-existing duplicates before applying with:
+
+```sql
+SELECT world_id, COUNT(*) FROM worlds GROUP BY world_id HAVING COUNT(*) > 1;
+```

@@ -99,15 +99,15 @@ export function summarizeLimits(limits: LimitSummary[]): QuotaSummary {
  */
 export async function worldUsageQuota(
   c: Context<AppEnv>,
-  worldRowUid: string,
+  worldId: string,
   totals: Array<{ metric: string; quantity: number }>,
 ): Promise<QuotaSummary> {
   const limitRows = await all<{ metric: string; limit_quantity: number }>(
     db(c.env)
       .prepare(
-        "SELECT metric, limit_quantity FROM world_limits WHERE world_uid = ? ORDER BY metric",
+        "SELECT metric, limit_quantity FROM world_limits WHERE world_id = ? ORDER BY metric",
       )
-      .bind(worldRowUid),
+      .bind(worldId),
   );
   const totalByMetric = new Map(
     totals.map((total) => [total.metric, total.quantity]),
@@ -132,11 +132,11 @@ export async function worldUsageQuota(
 export async function worldBillingQuota(
   c: Context<AppEnv>,
   userUid: string,
-  worldRowUid: string,
+  worldId: string,
   totals: Array<{ metric: string; quantity: number }>,
 ): Promise<QuotaSummary> {
   const active = await activeWorldCount(c, userUid);
-  const perWorld = await worldUsageQuota(c, worldRowUid, totals);
+  const perWorld = await worldUsageQuota(c, worldId, totals);
   return summarizeLimits([
     {
       metric: "MAX_WORLDS",

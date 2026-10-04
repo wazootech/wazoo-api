@@ -54,9 +54,7 @@ CREATE TABLE IF NOT EXISTS platform_api_tokens (
 CREATE TABLE IF NOT EXISTS usage_events (
   uid TEXT PRIMARY KEY,
   user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
-  -- world_uid is an internal FK to worlds.uid (the management row id).
-  -- It is deliberately NOT the canonical world_id: see wazoo-api#56/#61.
-  world_uid TEXT REFERENCES worlds(uid) ON DELETE SET NULL,
+  world_id TEXT REFERENCES worlds(world_id) ON DELETE SET NULL,
   metric TEXT NOT NULL,
   quantity INTEGER NOT NULL,
   unit TEXT NOT NULL DEFAULT 'count',
@@ -68,12 +66,12 @@ CREATE TABLE IF NOT EXISTS usage_events (
 );
 
 CREATE TABLE IF NOT EXISTS world_limits (
-  world_uid TEXT NOT NULL REFERENCES worlds(uid) ON DELETE CASCADE,
+  world_id TEXT NOT NULL REFERENCES worlds(world_id) ON DELETE CASCADE,
   metric TEXT NOT NULL,
   limit_quantity INTEGER NOT NULL,
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   update_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  PRIMARY KEY (world_uid, metric)
+  PRIMARY KEY (world_id, metric)
 );
 
 CREATE TABLE IF NOT EXISTS beta_allowlist (
@@ -95,7 +93,8 @@ CREATE INDEX IF NOT EXISTS idx_worlds_user ON worlds(user_uid);
 -- Slug uniqueness as an index rather than a table constraint: an index needs no
 -- table rebuild, so the migration can never cascade into child tables.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_worlds_user_slug ON worlds(user_uid, slug);
-CREATE INDEX IF NOT EXISTS idx_usage_world_time ON usage_events(world_uid, create_time);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_worlds_world_id ON worlds(world_id);
+CREATE INDEX IF NOT EXISTS idx_usage_world_time ON usage_events(world_id, create_time);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
 -- One row per pending account-deletion request. The confirmation token is
