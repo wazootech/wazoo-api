@@ -86,6 +86,7 @@ jobs:
           identity-id: ${{ vars.INFISICAL_MACHINE_ID }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
           env-slug: "qa"
+          secret-name: WAZOO_PLATFORM_ADMIN_TOKEN
       - run: npm run health:beta
         env:
           API_BASE_URL: https://api-qa.wazoo.dev
