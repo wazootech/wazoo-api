@@ -294,28 +294,40 @@ export function registerBillingRoutes(app: OpenAPIHono<AppEnv>) {
 export const stripeWebhook = new Hono<AppEnv>().post(
   "/v1/stripe/webhook",
   async (c) => {
-    if (c.env.STRIPE_WEBHOOK_SECRET) {
-      const body = await c.req.text();
-      const signature = c.req.header("stripe-signature");
-      if (
-        !signature ||
-        !(await verifyStripeSignature(
-          body,
-          signature,
-          c.env.STRIPE_WEBHOOK_SECRET,
-        ))
-      ) {
-        return c.json(
-          {
-            error: {
-              code: "UNAUTHENTICATED",
-              message: "Invalid Stripe webhook signature",
-            },
+    // Fail closed. An unset signing secret means we cannot authenticate the
+    // caller, and an unauthenticated webhook is an unauthenticated write.
+    // Returning 503 tells Stripe to retry rather than silently dropping
+    // events, so provisioning the secret is a deploy, not a backfill.
+    const secret = c.env.STRIPE_WEBHOOK_SECRET;
+    if (!secret) {
+      console.error(
+        "[stripe-webhook] STRIPE_WEBHOOK_SECRET is not configured; rejecting",
+      );
+      return c.json(
+        {
+          error: {
+            code: "SERVICE_UNAVAILABLE",
+            message: "Stripe webhook is not configured",
           },
-          401,
-        );
-      }
+        },
+        503,
+      );
     }
+
+    const body = await c.req.text();
+    const signature = c.req.header("stripe-signature");
+    if (!signature || !(await verifyStripeSignature(body, signature, secret))) {
+      return c.json(
+        {
+          error: {
+            code: "UNAUTHENTICATED",
+            message: "Invalid Stripe webhook signature",
+          },
+        },
+        401,
+      );
+    }
+
     return c.json({ received: true });
   },
 );
