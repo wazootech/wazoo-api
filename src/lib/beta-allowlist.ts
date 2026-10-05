@@ -45,7 +45,9 @@ export async function getApprovedEmails(
   const targetSheetId = sheetId || DEFAULT_SHEET_ID;
 
   if (!serviceAccountKey) {
-    return new Set(["ethan.r.davidson@gmail.com"]);
+    throw new Error(
+      "GOOGLE_SERVICE_ACCOUNT_KEY is not configured; cannot verify the beta allowlist",
+    );
   }
 
   if (cache && cache.expiresAt > Date.now()) {
@@ -56,9 +58,21 @@ export async function getApprovedEmails(
     const emails = await fetchAllowlist(serviceAccountKey, targetSheetId);
     cache = { emails, expiresAt: Date.now() + TTL_MS };
     return emails;
-  } catch {
-    if (cache) return cache.emails;
-    return new Set(["ethan.r.davidson@gmail.com"]);
+  } catch (error) {
+    // A stale allowlist is still a real allowlist, so serve it rather than
+    // locking every beta user out over a transient Sheets error.
+    if (cache) {
+      console.error(
+        "[beta-allowlist] Sheets fetch failed; serving stale allowlist",
+        error,
+      );
+      return cache.emails;
+    }
+    // Never fall back to a hardcoded identity here. Denying everyone is
+    // recoverable; quietly granting one account is not, because it reads as
+    // "not approved for the beta" to every other user while looking healthy.
+    console.error("[beta-allowlist] Sheets fetch failed with no cache", error);
+    throw error;
   }
 }
 
