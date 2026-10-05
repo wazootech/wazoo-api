@@ -475,7 +475,8 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
     return respond(c, {
       user: userResource(user),
       worlds: (worlds.results ?? []).map((w) => ({
-        id: w.world_id,
+        uid: w.world_id,
+        worldId: w.world_id,
         displayName: w.display_name,
         state: w.state,
         createTime: w.create_time,
