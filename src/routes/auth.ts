@@ -119,7 +119,16 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
     try {
       approved = await getApprovedEmails(key ?? "", sheetId);
     } catch {
-      return c.json({ ok: true });
+      return respond(
+        c,
+        {
+          error: {
+            code: "BETA_ALLOWLIST_UNAVAILABLE",
+            message: "Beta allowlist is unavailable.",
+          },
+        },
+        503,
+      );
     }
 
     if (!approved.has(email)) {
@@ -145,7 +154,16 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
     try {
       await workos.userManagement.createMagicAuth({ email });
     } catch {
-      return c.json({ ok: true });
+      return respond(
+        c,
+        {
+          error: {
+            code: "BETA_ALLOWLIST_UNAVAILABLE",
+            message: "Beta allowlist is unavailable.",
+          },
+        },
+        503,
+      );
     }
 
     return c.json({ ok: true });

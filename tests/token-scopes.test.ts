@@ -205,7 +205,7 @@ describe("platform token scopes (wazoo-api#13 / wazoo-api#14)", () => {
     expect(body.error.code).toBe("PERMISSION_DENIED");
   });
 
-  it("returns 403 NOT_ALLOWLISTED for non-approved email on login", async () => {
+  it("returns 503 when beta allowlist is unavailable", async () => {
     const res = await api(
       "/v1/auth/login",
       {
@@ -215,10 +215,10 @@ describe("platform token scopes (wazoo-api#13 / wazoo-api#14)", () => {
       },
       env,
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(503);
     const body = (await res.json()) as {
       error: { code: string; message: string };
     };
-    expect(body.error.code).toBe("NOT_ALLOWLISTED");
+    expect(body.error.code).toBe("BETA_ALLOWLIST_UNAVAILABLE");
   });
 });

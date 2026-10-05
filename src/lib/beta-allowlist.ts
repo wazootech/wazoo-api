@@ -45,7 +45,7 @@ export async function getApprovedEmails(
   const targetSheetId = sheetId || DEFAULT_SHEET_ID;
 
   if (!serviceAccountKey) {
-    return new Set(["ethan.r.davidson@gmail.com"]);
+    throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY is not configured");
   }
 
   if (cache && cache.expiresAt > Date.now()) {
@@ -56,9 +56,9 @@ export async function getApprovedEmails(
     const emails = await fetchAllowlist(serviceAccountKey, targetSheetId);
     cache = { emails, expiresAt: Date.now() + TTL_MS };
     return emails;
-  } catch {
+  } catch (err) {
     if (cache) return cache.emails;
-    return new Set(["ethan.r.davidson@gmail.com"]);
+    throw err;
   }
 }
 
