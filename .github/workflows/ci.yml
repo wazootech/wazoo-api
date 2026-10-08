@@ -13,6 +13,16 @@ permissions:
   id-token: write
 
 jobs:
+  contract-lint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Credential-free contract lint (R1-R5)
+        uses: wazootech/workspace-cli/skills/contract-lint@9841b8de3539b5350ec85b527018afb256480b16
+
   verify:
     runs-on: ubuntu-latest
     steps:
