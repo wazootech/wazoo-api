@@ -46,13 +46,13 @@ Required runtime variables:
 - `WAZOO_ENV`: deployment environment label.
 - `WAZOO_PLATFORM_ADMIN_TOKEN`: global admin token used by health checks and
   server-to-server admin calls. Must be seeded in the control-plane database.
-  See [CONTRIBUTING.md](CONTRIBUTING.md) for how to generate and seed it. For D1, use `npm run launch:seed-admin-d1` with the Cloudflare credentials and target database ID.
+  See [CONTRIBUTING.md](CONTRIBUTING.md) for how to generate and seed it. For D1, use `pnpm run launch:seed-admin-d1` with the Cloudflare credentials and target database ID.
 
 D1 provisioning:
 
 - The control-plane D1 database is created and bound by Wrangler configuration.
 - Apply `schema.sql` before deploying a new environment.
-- Generate a fresh global admin token with `npm run launch:seed-admin-d1`.
+- Generate a fresh global admin token with `pnpm run launch:seed-admin-d1`.
   The database stores only its SHA-256 hash; save the printed plaintext only in
   the approved secret store and repository secret managers.
 
@@ -64,8 +64,8 @@ Optional Stripe variables:
 
 ## Health checks
 
-- Local: `npm run health:local`
-- QA: `npm run health:beta`
+- Local: `pnpm run health:local`
+- QA: `pnpm run health:beta`
 
 Both require `WAZOO_PLATFORM_ADMIN_TOKEN` to be set. They check `/ready` before
 any world writes; the QA script checks readiness on both API services. `/health`
@@ -77,10 +77,10 @@ delete. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions.
 ## Development
 
 ```sh
-npm install
+pnpm install
 cp .dev.vars.example .dev.vars
-npm run dev
-npm run typecheck
+pnpm run dev
+pnpm run typecheck
 ```
 
 The control plane uses Cloudflare D1. Apply `schema.sql` through the approved D1 deployment/provisioning process before serving traffic.
@@ -94,8 +94,8 @@ Supported scopes include `users.read`, `users.write`, `worlds.read`, `worlds.wri
 Cloudflare Worker:
 
 ```sh
-npm run deploy:dry
-npm run deploy
+pnpm run deploy:dry
+pnpm run deploy
 ```
 
 GitHub Actions validates formatting, typechecking, Worker dry deploy, Docker build, publishes the GHCR image on `main`, and deploys the configured Cloudflare Worker on `main`.

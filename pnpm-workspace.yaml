@@ -1,0 +1,11 @@
+# pnpm 12 blocks dependency build scripts unless listed here.
+allowBuilds:
+  esbuild: true
+  workerd: true
+  # Prebuilt @img/sharp-* binaries cover every platform we run on; the
+  # install script only matters for building libvips from source.
+  sharp: false
+# pnpm 12 skips releases younger than a day. Our own JSR packages are
+# consumed right after they publish, so they bypass that delay.
+minimumReleaseAgeExclude:
+  - '@jsr/wazoo__*'
