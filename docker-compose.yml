@@ -2,7 +2,7 @@
 # a supported runtime because D1 is a Cloudflare-managed database binding.
 #
 # Start the control-plane Worker with:
-#   npm run dev
+#   pnpm run dev
 #
 # Apply the local schema with:
-#   npx wrangler d1 migrations apply wazoo-api --local
+#   pnpm exec wrangler d1 migrations apply wazoo-api --local

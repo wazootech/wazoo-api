@@ -17,14 +17,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run format:check
-      - run: npm run typecheck
-      - run: npm test
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run format:check
+      - run: pnpm run typecheck
+      - run: pnpm test
 
   publish-image:
     # PAUSED: this container image cannot obtain a Cloudflare D1 binding and has
@@ -51,11 +52,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: Fetch secrets from Infisical (qa)
         uses: Infisical/secrets-action@v1.0.17
         with:
@@ -63,7 +65,7 @@ jobs:
           identity-id: ${{ vars.INFISICAL_MACHINE_ID }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
           env-slug: "qa"
-      - run: npm run deploy -- --env qa
+      - run: pnpm run deploy --env qa
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -74,11 +76,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: Fetch secrets from Infisical (qa)
         uses: Infisical/secrets-action@v1.0.17
         with:
@@ -87,7 +90,7 @@ jobs:
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
           env-slug: "qa"
           secret-name: WAZOO_PLATFORM_ADMIN_TOKEN
-      - run: npm run health:beta
+      - run: pnpm run health:beta
         env:
           API_BASE_URL: https://api-qa.wazoo.dev
           WORLDS_API_URL: https://data-qa.wazoo.dev
@@ -98,11 +101,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: Fetch secrets from Infisical (prod)
         uses: Infisical/secrets-action@v1.0.17
         with:
@@ -110,7 +114,7 @@ jobs:
           identity-id: ${{ vars.INFISICAL_MACHINE_ID }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
           env-slug: "prod"
-      - run: npm run deploy
+      - run: pnpm run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

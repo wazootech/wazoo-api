@@ -34,7 +34,7 @@ function assertSmokeTarget(name, value, qaHostname) {
 if (!ADMIN_TOKEN) {
   console.error(
     "WAZOO_PLATFORM_ADMIN_TOKEN is required. Generate one via " +
-      "`CLOUDFLARE_D1_DATABASE=wazoo-api-qa npm run launch:seed-admin-d1` " +
+      "`CLOUDFLARE_D1_DATABASE=wazoo-api-qa pnpm run launch:seed-admin-d1` " +
       "and export it before running the smoke gate.",
   );
   process.exit(1);

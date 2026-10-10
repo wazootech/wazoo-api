@@ -1,5 +1,5 @@
 // QA world-identity round trip (wazoo-api#72; #63 criterion 6).
-// Run: infisical run --env=qa -- npm run roundtrip:qa -- [evidence.json]
+// Run: infisical run --env=qa -- pnpm run roundtrip:qa [evidence.json]
 // QA hosts only; never prints token values. Writes evidence JSON to argv[2].
 import { writeFileSync } from "node:fs";
 
