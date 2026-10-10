@@ -10,7 +10,7 @@ import { createTestD1, type TestD1 } from "./helpers/d1-test-adapter";
 
 const ADMIN_TOKEN = "wzp_test-admin-token";
 const TEST_EMAIL = "delete-me@example.com";
-const TEST_WORLD_ID = "w_00000000-0000-4000-8000-000000000030";
+const TEST_WORLD_ID = "w_00000000000000000000000030";
 
 type TestBindings = Bindings & { DB: TestD1 };
 

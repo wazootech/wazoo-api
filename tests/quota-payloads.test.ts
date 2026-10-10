@@ -98,45 +98,22 @@ describe("quota payloads on usage and billing surfaces (wazoo-api#34)", () => {
       .prepare(
         "INSERT INTO worlds (world_id, user_uid, display_name, state, billing_state, create_time, update_time) VALUES (?, ?, ?, 'active', 'BETA_FREE', ?, ?)",
       )
-      .run(
-        "w_00000000-0000-4000-8000-000000000010",
-        userUid,
-        "Quota World",
-        ts,
-        ts,
-      );
+      .run("w_00000000000000000000000010", userUid, "Quota World", ts, ts);
     seed
       .prepare(
         "INSERT INTO worlds (world_id, user_uid, display_name, state, billing_state, create_time, update_time) VALUES (?, ?, ?, 'active', 'PAST_DUE', ?, ?)",
       )
-      .run(
-        "w_00000000-0000-4000-8000-000000000011",
-        userUid,
-        "Due World",
-        ts,
-        ts,
-      );
+      .run("w_00000000000000000000000011", userUid, "Due World", ts, ts);
     seed
       .prepare(
         "INSERT INTO world_limits (world_id, metric, limit_quantity, create_time, update_time) VALUES (?, ?, ?, ?, ?)",
       )
-      .run(
-        "w_00000000-0000-4000-8000-000000000010",
-        "SPARQL_QUERIES",
-        10000,
-        ts,
-        ts,
-      );
+      .run("w_00000000000000000000000010", "SPARQL_QUERIES", 10000, ts, ts);
     const usage = seed.prepare(
       "INSERT INTO usage_events (uid, user_uid, world_id, metric, quantity, unit, create_time) VALUES (?, ?, ?, 'SPARQL_QUERIES', 100, 'count', ?)",
     );
     for (let i = 0; i < 92; i++)
-      usage.run(
-        `usage_${i}`,
-        userUid,
-        "w_00000000-0000-4000-8000-000000000010",
-        ts,
-      );
+      usage.run(`usage_${i}`, userUid, "w_00000000000000000000000010", ts);
     seed.close();
   });
 
@@ -156,7 +133,7 @@ describe("quota payloads on usage and billing surfaces (wazoo-api#34)", () => {
 
   it("usage response includes per-metric limits with real usage percent", async () => {
     const res = await api(
-      "/v1/worlds/w_00000000-0000-4000-8000-000000000010/usage",
+      "/v1/worlds/w_00000000000000000000000010/usage",
       { headers: authHeaders(sessionToken) },
       env,
     );
@@ -182,7 +159,7 @@ describe("quota payloads on usage and billing surfaces (wazoo-api#34)", () => {
 
   it("usage response without limits reports an empty, OK quota", async () => {
     const res = await api(
-      "/v1/worlds/w_00000000-0000-4000-8000-000000000011/usage",
+      "/v1/worlds/w_00000000000000000000000011/usage",
       { headers: authHeaders(sessionToken) },
       env,
     );
@@ -195,7 +172,7 @@ describe("quota payloads on usage and billing surfaces (wazoo-api#34)", () => {
 
   it("billing response includes plan caps and derives paymentRequired from state", async () => {
     const res = await api(
-      "/v1/worlds/w_00000000-0000-4000-8000-000000000010/billing",
+      "/v1/worlds/w_00000000000000000000000010/billing",
       { headers: authHeaders(sessionToken) },
       env,
     );
@@ -205,7 +182,7 @@ describe("quota payloads on usage and billing surfaces (wazoo-api#34)", () => {
       quota: QuotaSummary;
     };
     expect(body.billing.paymentRequired).toBe(false);
-    // Two active worlds (w_00000000-0000-4000-8000-000000000010 + w_00000000-0000-4000-8000-000000000011) against the 10-world cap.
+    // Two active worlds (w_00000000000000000000000010 + w_00000000000000000000000011) against the 10-world cap.
     expect(body.quota.limits).toContainEqual({
       metric: "MAX_WORLDS",
       quantity: 2,
@@ -225,7 +202,7 @@ describe("quota payloads on usage and billing surfaces (wazoo-api#34)", () => {
 
   it("billing paymentRequired is true for a past-due world", async () => {
     const res = await api(
-      "/v1/worlds/w_00000000-0000-4000-8000-000000000011/billing",
+      "/v1/worlds/w_00000000000000000000000011/billing",
       { headers: authHeaders(sessionToken) },
       env,
     );

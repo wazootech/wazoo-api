@@ -66,14 +66,30 @@ describe("nonEmptyString", () => {
 });
 
 describe("worldId", () => {
-  it("accepts only canonical Worlds API UUIDv4 identifiers", () => {
+  it("accepts only canonical Worlds API lowercase ULID identifiers", () => {
+    expect(worldId.safeParse("w_00000000000000000000000001").success).toBe(
+      true,
+    );
+    expect(worldId.safeParse("w_01jbz3k9x7c4m2q8r5t6v0w1yz").success).toBe(
+      true,
+    );
+    expect(worldId.safeParse("w_created-123").success).toBe(false);
+    // Uppercase, legacy UUIDv4, excluded letters, timestamp overflow, length.
+    expect(worldId.safeParse("w_01JBZ3K9X7C4M2Q8R5T6V0W1YZ").success).toBe(
+      false,
+    );
     expect(
       worldId.safeParse("w_00000000-0000-4000-8000-000000000001").success,
-    ).toBe(true);
-    expect(worldId.safeParse("w_created-123").success).toBe(false);
-    expect(
-      worldId.safeParse("w_00000000-0000-3000-8000-000000000001").success,
     ).toBe(false);
+    expect(worldId.safeParse("w_01jbz3k9x7c4m2q8r5t6v0w1yu").success).toBe(
+      false,
+    );
+    expect(worldId.safeParse("w_81jbz3k9x7c4m2q8r5t6v0w1yz").success).toBe(
+      false,
+    );
+    expect(worldId.safeParse("w_01jbz3k9x7c4m2q8r5t6v0w1y").success).toBe(
+      false,
+    );
   });
 });
 
@@ -106,13 +122,13 @@ describe("CreateWorldBodySchema", () => {
       CreateWorldBodySchema.safeParse({
         world: {
           displayName: "My World",
-          id: "w_00000000-0000-4000-8000-000000000001",
+          id: "w_00000000000000000000000001",
         },
       }).success,
     ).toBe(false);
     expect(
       CreateWorldBodySchema.safeParse({
-        id: "w_00000000-0000-4000-8000-000000000001",
+        id: "w_00000000000000000000000001",
         world: { displayName: "My World" },
       }).success,
     ).toBe(false);
