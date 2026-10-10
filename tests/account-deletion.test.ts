@@ -133,15 +133,15 @@ describe("account deletion and data export (wazoo-api#26)", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       user: { email: string };
-      worlds: Array<{ uid?: string; worldId?: string; id?: string }>;
+      worlds: Array<{ id: string; uid?: unknown; worldId?: unknown }>;
       usageEvents: Array<{ metric: string }>;
       apiTokens: unknown[];
     };
     expect(body.user.email).toBe(TEST_EMAIL);
     expect(body.worlds).toHaveLength(1);
-    expect(
-      body.worlds[0].uid ?? body.worlds[0].worldId ?? body.worlds[0].id,
-    ).toBe(TEST_WORLD_ID);
+    expect(body.worlds[0].id).toBe(TEST_WORLD_ID);
+    expect(body.worlds[0].uid).toBeUndefined();
+    expect(body.worlds[0].worldId).toBeUndefined();
     expect(body.usageEvents).toHaveLength(1);
     expect(body.usageEvents[0].metric).toBe("requests");
     expect(body.apiTokens.length).toBeGreaterThanOrEqual(1);

@@ -142,8 +142,7 @@ const exportRoute = createRoute({
             user: UserSchema,
             worlds: z.array(
               z.object({
-                uid: z.string(),
-                worldId: z.string(),
+                id: z.string(),
                 displayName: z.string(),
                 state: z.string(),
                 createTime: z.string().optional(),
@@ -475,8 +474,7 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
     return respond(c, {
       user: userResource(user),
       worlds: (worlds.results ?? []).map((w) => ({
-        uid: w.world_id,
-        worldId: w.world_id,
+        id: w.world_id,
         displayName: w.display_name,
         state: w.state,
         createTime: w.create_time,
