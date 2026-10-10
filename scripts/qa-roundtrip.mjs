@@ -109,18 +109,14 @@ try {
   if (worldToken) secrets.add(worldToken);
   record("issue world token (user A)", wt.status === 201 && typeof worldToken === "string", "minted", wt);
 
-  // text/turtle is the documented default but the route rejects it
-  // (UNSUPPORTED_CONTENT_TYPE); application/json quad rows are what it accepts.
-  const ex = "http://example.org/";
-  const rows = [
-    { subject: `${ex}Doc1`, predicate: `${ex}title`, object: `Round trip ${MARKER} document` },
-    { subject: `${ex}Doc1`, predicate: `${ex}body`, object: `The ${MARKER} keyword proves search after reindex.` },
-    { subject: `${ex}Doc2`, predicate: `${ex}title`, object: "Second document" },
-    { subject: `${ex}Doc2`, predicate: `${ex}ref`, object: `${ex}Doc1` },
-  ];
-  const imp = await call("POST", `${DATA}/worlds/${worldId}/import`, worldToken,
-    { data: JSON.stringify(rows), contentType: "application/json" });
-  record("data-plane import (JSON quad rows, 4 triples)",
+  // Turtle with no contentType: exercises the documented default
+  // (rejected before worlds-api#115).
+  const turtle = `@prefix ex: <http://example.org/> .
+ex:Doc1 ex:title "Round trip ${MARKER} document" ;
+  ex:body "The ${MARKER} keyword proves search after reindex." .
+ex:Doc2 ex:title "Second document" ; ex:ref ex:Doc1 .`;
+  const imp = await call("POST", `${DATA}/worlds/${worldId}/import`, worldToken, { data: turtle });
+  record("data-plane import (Turtle, default contentType, 4 triples)",
     imp.status === 200 && imp.json?.imported?.quads === 4, "imported 4 quads", imp);
 
   const count = await call("POST", `${DATA}/worlds/${worldId}/sparql`, worldToken,
