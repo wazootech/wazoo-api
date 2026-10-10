@@ -1,8 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { generateKeyPairSync } from "node:crypto";
 import app from "../src/index";
 import type { Bindings } from "../src/env";
 
@@ -17,6 +18,45 @@ import {
 const ADMIN_TOKEN = "wzp_test-admin-token";
 const TEST_EMAIL = "beta-user@example.com";
 
+// The beta allowlist now fails closed rather than falling back to a hardcoded
+// identity, so exercising a real 403 requires a real (stubbed) allowlist
+// rather than an unconfigured one.
+const { privateKey: SA_PRIVATE_KEY } = generateKeyPairSync("rsa", {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: "spki", format: "pem" },
+  privateKeyEncoding: { type: "pkcs8", format: "pem" },
+});
+const SERVICE_ACCOUNT_KEY = JSON.stringify({
+  client_email: "token-scopes@test.iam.gserviceaccount.com",
+  private_key: SA_PRIVATE_KEY,
+  project_id: "wazoo-test",
+  type: "service_account",
+});
+
+function stubAllowlistFetch(): void {
+  const impl = (url: string): Promise<Response> => {
+    if (url.startsWith("https://oauth2.googleapis.com/token")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ access_token: "t", expires_in: 3600 }), {
+          status: 200,
+        }),
+      );
+    }
+    if (url.startsWith("https://sheets.googleapis.com/")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            values: [[TEST_EMAIL, "", "", "TRUE"]],
+          }),
+          { status: 200 },
+        ),
+      );
+    }
+    return Promise.reject(new Error(`unexpected fetch: ${url}`));
+  };
+  vi.stubGlobal("fetch", vi.fn(impl));
+}
+
 type TestBindings = Bindings & { DB: TestD1 };
 
 function makeBindings(dbPath: string): TestBindings {
@@ -26,6 +66,7 @@ function makeBindings(dbPath: string): TestBindings {
     WORLDS_API_ADMIN_KEY: "test",
     WAZOO_PLATFORM_ADMIN_TOKEN: ADMIN_TOKEN,
     WAZOO_ENV: "test",
+    GOOGLE_SERVICE_ACCOUNT_KEY: SERVICE_ACCOUNT_KEY,
   };
 }
 
@@ -206,6 +247,7 @@ describe("platform token scopes (wazoo-api#13 / wazoo-api#14)", () => {
   });
 
   it("returns 403 NOT_ALLOWLISTED for non-approved email on login", async () => {
+    stubAllowlistFetch();
     const res = await api(
       "/v1/auth/login",
       {

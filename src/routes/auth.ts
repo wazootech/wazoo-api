@@ -118,7 +118,14 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
     let approved: Set<string>;
     try {
       approved = await getApprovedEmails(key ?? "", sheetId);
-    } catch {
+    } catch (error) {
+      // Fail closed: the allowlist could not be read, so nobody is approved.
+      // `{ ok: true }` rather than an error keeps this endpoint from becoming
+      // an oracle for which emails are on the beta list.
+      console.error(
+        "[beta-allowlist] could not load allowlist; denying",
+        error,
+      );
       return c.json({ ok: true });
     }
 
