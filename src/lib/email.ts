@@ -12,7 +12,7 @@ export async function sendOtpEmail(
   }
 
   const resend = new Resend(env.RESEND_API_KEY);
-  const from = env.OTP_FROM_ADDRESS ?? "Wazoo <noreply@wazoo.dev>";
+  const from = env.OTP_FROM_ADDRESS ?? "Wazoo <noreply@mail.wazoo.dev>";
 
   await resend.emails.send({
     from,
