@@ -11,6 +11,7 @@
     "health:beta": "node scripts/private-beta-health.mjs",
     "health:local": "node scripts/local-health.mjs",
     "smoke:qa": "node scripts/platform-smoke.mjs",
+    "roundtrip:qa": "node scripts/qa-roundtrip.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
