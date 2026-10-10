@@ -139,7 +139,9 @@ describe("account deletion and data export (wazoo-api#26)", () => {
     };
     expect(body.user.email).toBe(TEST_EMAIL);
     expect(body.worlds).toHaveLength(1);
-    expect(body.worlds[0].uid ?? body.worlds[0].worldId ?? body.worlds[0].id).toBe(TEST_WORLD_ID);
+    expect(
+      body.worlds[0].uid ?? body.worlds[0].worldId ?? body.worlds[0].id,
+    ).toBe(TEST_WORLD_ID);
     expect(body.usageEvents).toHaveLength(1);
     expect(body.usageEvents[0].metric).toBe("requests");
     expect(body.apiTokens.length).toBeGreaterThanOrEqual(1);
