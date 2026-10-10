@@ -5,4 +5,4 @@
 #   pnpm run dev
 #
 # Apply the local schema with:
-#   pnpm exec wrangler d1 migrations apply wazoo-api --local
+#   pnpm exec wrangler d1 execute wazoo-api --local --file schema.sql
