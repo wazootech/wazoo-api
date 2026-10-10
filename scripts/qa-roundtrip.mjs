@@ -13,7 +13,7 @@ const run = `rt${Date.now()}`;
 const emailA = `e2e+${run}-a@wazoo.dev`;
 const emailB = `e2e+${run}-b@wazoo.dev`;
 const WORLD_ID_RE =
-  /^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  /^w_[0-7][0-9a-hjkmnp-tv-z]{25}$/;
 const MARKER = `zephyrquokka${run}`;
 
 const evidence = { startedAt: new Date().toISOString(), run, steps: [] };
@@ -139,7 +139,7 @@ ex:Doc2 ex:title "Second document" ; ex:ref ex:Doc1 .`;
     hits.some((h) => JSON.stringify(h).includes(MARKER)),
     `${hits.length} hit(s), mode=${search.json?.mode}`, search);
 
-  // Cross-user denial: B holds a valid w_<UUIDv4> that belongs to A.
+  // Cross-user denial: B holds a valid w_<ULID> that belongs to A.
   const bRead = await call("GET", `${API}/v1/worlds/${worldId}`, tokenB);
   record("cross-user read denied (B -> A's world)", bRead.status === 404 || bRead.status === 403,
     "owner predicate refuses a valid foreign ID", bRead);
@@ -166,7 +166,7 @@ ex:Doc2 ex:title "Second document" ; ex:ref ex:Doc1 .`;
     [401, 403, 404].includes(crossData.status), "world token scoped to its own world", crossData);
 
   // A well-formed but nonexistent ID is not found (validity is not authorization).
-  const ghost = "w_00000000-0000-4000-8000-000000000000";
+  const ghost = "w_00000000000000000000000000";
   const ghostRead = await call("GET", `${API}/v1/worlds/${ghost}`, tokenA);
   record("well-formed unknown ID -> 404", ghostRead.status === 404, "no existence leak", ghostRead);
 

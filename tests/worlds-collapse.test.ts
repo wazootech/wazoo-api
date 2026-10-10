@@ -19,7 +19,7 @@ import { createTestD1, type TestD1 } from "./helpers/d1-test-adapter";
 const ADMIN_TOKEN = "wzp_test-admin-token";
 const TEST_EMAIL = "worlds-user@example.com";
 const WORLDS_BASE = "http://localhost:9999";
-const CREATED_WORLD_ID = "w_00000000-0000-4000-8000-000000000001";
+const CREATED_WORLD_ID = "w_00000000000000000000000001";
 
 type TestBindings = Bindings & { DB: TestD1 };
 
@@ -72,7 +72,7 @@ function worldsApiMockHandler(input: RequestInfo | URL, init?: RequestInit) {
   }
   if (url.endsWith("/worlds") && method === "POST") {
     // Canonical ids are minted by the data plane and unique per world.
-    lastCreatedWorldId = `w_00000000-0000-4000-8000-${String(++createdCounter).padStart(12, "0")}`;
+    lastCreatedWorldId = `w_00000000000000${String(++createdCounter).padStart(12, "0")}`;
     return new Response(
       JSON.stringify({
         id: lastCreatedWorldId,
@@ -232,7 +232,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            uid: "w_00000000-0000-4000-8000-000000000002",
+            uid: "w_00000000000000000000000002",
           }),
           { status: 201, headers: { "content-type": "application/json" } },
         ),

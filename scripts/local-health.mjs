@@ -1,4 +1,12 @@
-import { randomUUID } from "node:crypto";
+import { randomInt } from "node:crypto";
+
+// A random, well-formed world ID (w_<lowercase ULID>) that no world holds.
+const CROCKFORD = "0123456789abcdefghjkmnpqrstvwxyz";
+function randomWorldId() {
+  let id = "w_0";
+  for (let i = 0; i < 25; i++) id += CROCKFORD[randomInt(32)];
+  return id;
+}
 
 // Local health test for wazoo-api
 // Usage: node scripts/local-health.mjs [baseUrl]
@@ -166,7 +174,7 @@ await test("POST /v1/users/me without email returns 400", async () => {
 // ── Authenticated health flow (requires admin token) ───
 
 const testEmail = `health-${Date.now()}@wazoo.dev`;
-let testWorldId = `w_${randomUUID()}`;
+let testWorldId = randomWorldId();
 
 await test("GET /v1/users/me?email=... creates/returns user", async () => {
   const res = await fetch(
@@ -221,7 +229,7 @@ await test("POST /v1/worlds creates a World", async () => {
   const worldId = body.world?.id;
   if (
     typeof worldId !== "string" ||
-    !/^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+    !/^w_[0-7][0-9a-hjkmnp-tv-z]{25}$/.test(
       worldId,
     )
   ) {
@@ -287,7 +295,7 @@ await test("DELETE /v1/worlds/:worldId deletes the World", async () => {
 
 await test("DELETE /v1/worlds/:worldId returns 404 for an unknown canonical ID", async () => {
   const res = await fetch(
-    `${BASE_URL}/v1/worlds/w_${randomUUID()}?email=${encodeURIComponent(testEmail)}`,
+    `${BASE_URL}/v1/worlds/${randomWorldId()}?email=${encodeURIComponent(testEmail)}`,
     { method: "DELETE", headers: authHeaders() },
   );
   await assertNotFound(res);

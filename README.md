@@ -23,7 +23,7 @@ Control-plane API for Wazoo. This repo owns the `api.wazoo.dev` Cloudflare Worke
 
 ## World identity
 
-`worlds-api` mints canonical world IDs in `w_<UUIDv4>` form and returns each as
+`worlds-api` mints canonical world IDs in `w_<ULID>` form and returns each as
 `id`. World creation accepts a display name, not a client-supplied ID or slug;
 Wazoo API stores the returned ID in `worlds.world_id`, exposes it as
 `world.id`, and uses it as the `worldId` path parameter for every world-scoped
