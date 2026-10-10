@@ -18,14 +18,12 @@
 
 3. Fill in `.dev.vars` with real values.
 
-4. Create a local control-plane database and seed a global admin token:
+4. Create the local D1 control-plane database and seed a global admin token.
+   Both commands write only to Wrangler's local state in `.wrangler/`:
 
    ```sh
-   pnpm run launch:create-control-db
-   pnpm run launch:apply-schema
-   WAZOO_PLATFORM_ADMIN_TOKEN_NAME="local-admin" \
-   WAZOO_PLATFORM_ADMIN_TOKEN_SCOPE="admin users.read users.write worlds.read worlds.write worlds.admin usage.read billing.read" \
-   pnpm run launch:seed-admin
+   pnpm exec wrangler d1 execute wazoo-api --local --file schema.sql
+   CLOUDFLARE_D1_DATABASE=wazoo-api    WAZOO_PLATFORM_ADMIN_TOKEN_NAME="local-admin"    pnpm run launch:seed-admin-d1 --local
    ```
 
 5. Save the printed `wzp_...` token into `.dev.vars` as `WAZOO_PLATFORM_ADMIN_TOKEN`.

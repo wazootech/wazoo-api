@@ -10,6 +10,8 @@ import { promisify } from "node:util";
 const exec = promisify(execFile);
 const npx = process.platform === "win32" ? "npx.cmd" : "npx";
 const database = required("CLOUDFLARE_D1_DATABASE");
+// `--local` seeds the Wrangler dev database instead of the remote one.
+const target = process.argv.includes("--local") ? "--local" : "--remote";
 const token =
   process.env.WAZOO_PLATFORM_ADMIN_TOKEN ??
   `wzp_${randomBytes(32).toString("base64url")}`;
@@ -35,9 +37,9 @@ try {
           "/d",
           "/s",
           "/c",
-          `${npx} wrangler d1 execute ${database} --remote --file ${sqlPath}`,
+          `${npx} wrangler d1 execute ${database} ${target} --file ${sqlPath}`,
         ]
-      : ["wrangler", "d1", "execute", database, "--remote", "--file", sqlPath];
+      : ["wrangler", "d1", "execute", database, target, "--file", sqlPath];
   await exec(command, args, { cwd: process.cwd(), env: process.env });
 } finally {
   await rm(directory, { recursive: true, force: true });
