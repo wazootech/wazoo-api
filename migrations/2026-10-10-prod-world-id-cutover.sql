@@ -1,0 +1,78 @@
+-- Production wazoo-api D1: move worlds, usage_events and world_limits to the
+-- canonical world-ID schema (wazoo-api#63). users, platform_api_tokens and all
+-- other tables are untouched. Preconditions checked read-only on 2026-10-10:
+-- 12 worlds rows with 12 distinct non-null w_<UUIDv4> world_id values;
+-- usage_events and world_limits empty. Restore point: D1 Time Travel bookmark
+-- 0000003c-00000000-00005100-deb1eb4da104f3ec6ba6498abd6cb336.
+PRAGMA defer_foreign_keys = true;
+
+-- Empty in production; recreated below against worlds(world_id).
+DROP INDEX IF EXISTS idx_usage_world_time;
+DROP TABLE usage_events;
+DROP TABLE world_limits;
+
+-- Carry every world row across, dropping uid, worlds_api_uid and slug.
+CREATE TABLE worlds_cutover_copy AS
+  SELECT world_id, user_uid, display_name, region, state, billing_provider,
+         stripe_customer_id, stripe_subscription_id, billing_state,
+         delete_time, expire_time, purge_status, create_time, update_time
+  FROM worlds;
+
+DROP TABLE worlds;
+
+CREATE TABLE worlds (
+  world_id TEXT NOT NULL PRIMARY KEY,
+  user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+  display_name TEXT NOT NULL,
+  region TEXT NOT NULL DEFAULT 'auto',
+  state TEXT NOT NULL DEFAULT 'active',
+  billing_provider TEXT NOT NULL DEFAULT 'STRIPE',
+  stripe_customer_id TEXT,
+  stripe_subscription_id TEXT,
+  billing_state TEXT NOT NULL DEFAULT 'BETA_FREE',
+  delete_time TEXT,
+  expire_time TEXT,
+  purge_status TEXT NOT NULL DEFAULT 'none',
+  create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  update_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+INSERT INTO worlds (
+  world_id, user_uid, display_name, region, state, billing_provider,
+  stripe_customer_id, stripe_subscription_id, billing_state, delete_time,
+  expire_time, purge_status, create_time, update_time
+)
+SELECT world_id, user_uid, display_name, region, state, billing_provider,
+       stripe_customer_id, stripe_subscription_id, billing_state, delete_time,
+       expire_time, purge_status, create_time, update_time
+FROM worlds_cutover_copy;
+
+DROP TABLE worlds_cutover_copy;
+
+CREATE INDEX idx_worlds_user ON worlds(user_uid);
+CREATE UNIQUE INDEX idx_worlds_world_id ON worlds(world_id);
+
+CREATE TABLE usage_events (
+  uid TEXT PRIMARY KEY,
+  user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+  world_id TEXT REFERENCES worlds(world_id) ON DELETE SET NULL,
+  metric TEXT NOT NULL,
+  quantity INTEGER NOT NULL,
+  unit TEXT NOT NULL DEFAULT 'count',
+  provider_cost_microcents INTEGER,
+  wazoo_markup_microcents INTEGER NOT NULL DEFAULT 0,
+  estimated_cost_microcents INTEGER,
+  billing_source TEXT NOT NULL DEFAULT 'BETA_FREE',
+  create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX idx_usage_world_time ON usage_events(world_id, create_time);
+
+CREATE TABLE world_limits (
+  world_id TEXT NOT NULL REFERENCES worlds(world_id) ON DELETE CASCADE,
+  metric TEXT NOT NULL,
+  limit_quantity INTEGER NOT NULL,
+  create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  update_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  PRIMARY KEY (world_id, metric)
+);
