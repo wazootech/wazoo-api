@@ -117,7 +117,7 @@ async function createWorld(worldName) {
   const id = response.body.world?.id;
   assert(
     typeof id === "string" &&
-      /^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      /^w_[0-7][0-9a-hjkmnp-tv-z]{25}$/.test(
         id,
       ),
     `World ${worldName} did not return a canonical ID`,

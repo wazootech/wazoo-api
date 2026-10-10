@@ -227,7 +227,7 @@ async function testWorldLifecycle() {
     const worldId = created.world?.id;
     if (
       typeof worldId !== "string" ||
-      !/^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(worldId)
+      !/^w_[0-7][0-9a-hjkmnp-tv-z]{25}$/.test(worldId)
     ) {
       return {
         name: "testWorldLifecycle",

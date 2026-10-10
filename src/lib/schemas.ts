@@ -7,11 +7,9 @@ export const resourceId = z
 
 export const worldId = z
   .string()
-  .regex(
-    /^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
-  )
+  .regex(/^w_[0-7][0-9a-hjkmnp-tv-z]{25}$/)
   .openapi({
-    description: "World ID minted by worlds-api in w_<UUIDv4> form.",
+    description: "World ID minted by worlds-api in w_<ULID> form.",
   });
 
 export const email = z.string().email();
