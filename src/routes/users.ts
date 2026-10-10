@@ -142,8 +142,7 @@ const exportRoute = createRoute({
             user: UserSchema,
             worlds: z.array(
               z.object({
-                uid: z.string(),
-                worldId: z.string(),
+                id: z.string(),
                 displayName: z.string(),
                 state: z.string(),
                 createTime: z.string().optional(),

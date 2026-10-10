@@ -883,10 +883,7 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "uid": {
-                            "type": "string"
-                          },
-                          "worldId": {
+                          "id": {
                             "type": "string"
                           },
                           "displayName": {
@@ -904,8 +901,7 @@
                           }
                         },
                         "required": [
-                          "uid",
-                          "worldId",
+                          "id",
                           "displayName",
                           "state"
                         ]
