@@ -87,7 +87,7 @@ The control plane uses Cloudflare D1. Apply `schema.sql` through the approved D1
 
 Platform tokens use the `wzp_` prefix. Global admin tokens must be manually seeded with `kind = 'ADMIN'`, `user_uid = NULL`, and a scope containing `admin`.
 
-Supported scopes include `users.read`, `users.write`, `worlds.read`, `worlds.write`, `worlds.admin`, `usage.read`, `billing.read`, and `admin`.
+Supported scopes include `users.read`, `users.write`, `worlds.read`, `worlds.write`, `usage.read`, `billing.read`, and `admin`.
 
 ## Deployment
 

@@ -18,7 +18,7 @@ const token =
 const name = process.env.WAZOO_PLATFORM_ADMIN_TOKEN_NAME ?? "bootstrap-admin";
 const scope =
   process.env.WAZOO_PLATFORM_ADMIN_TOKEN_SCOPE ??
-  "admin users.read users.write worlds.read worlds.write worlds.admin usage.read billing.read";
+  "admin users.read users.write worlds.read worlds.write usage.read billing.read";
 const hash = createHash("sha256").update(token).digest("hex");
 const uid = `admin_${randomUUID()}`;
 const directory = await mkdtemp(join(tmpdir(), "wazoo-admin-seed-"));
