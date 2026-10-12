@@ -30,3 +30,24 @@ This repository contains the Wazoo API service.
 - Never weaken the owner predicate to accommodate an identifier change. Every
   `worlds` query must carry `user_uid`; a valid `worldId` must never by itself
   grant access.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues for `wazootech/wazoo-api`, driven through the
+`gh` CLI. PRs are not treated as a request surface. See
+`docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles use their default label strings
+(`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`),
+alongside the `bug` / `enhancement` categories. See
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. Both are
+optional — the `/domain-modeling` skill creates them lazily. See
+`docs/agents/domain.md`.

@@ -9,6 +9,7 @@ import { registerUsageRoutes } from "./routes/usage";
 import { registerUsersRoutes } from "./routes/users";
 import { registerWorldsRoutes } from "./routes/worlds";
 import { registerMcpRoute } from "./routes/mcp";
+import { registerAdminRoutes } from "./routes/admin";
 import { errorHandler, requireAuth } from "./lib/http";
 
 const app = new OpenAPIHono<AppEnv>();
@@ -54,6 +55,7 @@ registerWorldsRoutes(app);
 registerTokensRoutes(app);
 registerUsageRoutes(app);
 registerBillingRoutes(app);
+registerAdminRoutes(app);
 
 app.use("/mcp", requireAuth);
 registerMcpRoute(app);

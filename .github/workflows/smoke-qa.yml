@@ -28,11 +28,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: Fetch secrets from Infisical (qa)
         uses: Infisical/secrets-action@v1.0.17
         with:
@@ -42,7 +43,7 @@ jobs:
           env-slug: "qa"
           secret-name: WAZOO_PLATFORM_ADMIN_TOKEN
       - name: Run platform smoke gate
-        run: npm run smoke:qa
+        run: pnpm run smoke:qa
         env:
           API_BASE_URL: ${{ inputs.apiBaseUrl || 'https://api-qa.wazoo.dev' }}
           WORLDS_API_URL: ${{ inputs.worldsApiUrl || 'https://data-qa.wazoo.dev' }}

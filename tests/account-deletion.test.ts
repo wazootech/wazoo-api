@@ -10,7 +10,7 @@ import { createTestD1, type TestD1 } from "./helpers/d1-test-adapter";
 
 const ADMIN_TOKEN = "wzp_test-admin-token";
 const TEST_EMAIL = "delete-me@example.com";
-const TEST_WORLD_ID = "w_00000000-0000-4000-8000-000000000030";
+const TEST_WORLD_ID = "w_00000000000000000000000030";
 
 type TestBindings = Bindings & { DB: TestD1 };
 
@@ -133,13 +133,15 @@ describe("account deletion and data export (wazoo-api#26)", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       user: { email: string };
-      worlds: Array<{ id: string }>;
+      worlds: Array<{ id: string; uid?: unknown; worldId?: unknown }>;
       usageEvents: Array<{ metric: string }>;
       apiTokens: unknown[];
     };
     expect(body.user.email).toBe(TEST_EMAIL);
     expect(body.worlds).toHaveLength(1);
     expect(body.worlds[0].id).toBe(TEST_WORLD_ID);
+    expect(body.worlds[0].uid).toBeUndefined();
+    expect(body.worlds[0].worldId).toBeUndefined();
     expect(body.usageEvents).toHaveLength(1);
     expect(body.usageEvents[0].metric).toBe("requests");
     expect(body.apiTokens.length).toBeGreaterThanOrEqual(1);

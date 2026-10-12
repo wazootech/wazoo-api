@@ -2,45 +2,49 @@
 
 ## Local development setup
 
-1. Install dependencies:
+1. Install dependencies with [pnpm](https://pnpm.io) (version pinned by
+   `packageManager`; install it with `npm install -g pnpm`, since Corepack
+   cannot run pnpm 12 yet):
+
    ```sh
-   npm install
+   pnpm install
    ```
 
 2. Copy the local dev vars template:
+
    ```sh
    cp .dev.vars.example .dev.vars
    ```
 
 3. Fill in `.dev.vars` with real values.
 
-4. Create a local control-plane database and seed a global admin token:
+4. Create the local D1 control-plane database and seed a global admin token.
+   Both commands write only to Wrangler's local state in `.wrangler/`:
+
    ```sh
-   npm run launch:create-control-db
-   npm run launch:apply-schema
-   WAZOO_PLATFORM_ADMIN_TOKEN_NAME="local-admin" \
-   WAZOO_PLATFORM_ADMIN_TOKEN_SCOPE="admin users.read users.write worlds.read worlds.write worlds.admin usage.read billing.read" \
-   npm run launch:seed-admin
+   pnpm exec wrangler d1 execute wazoo-api --local --file schema.sql
+   CLOUDFLARE_D1_DATABASE=wazoo-api    WAZOO_PLATFORM_ADMIN_TOKEN_NAME="local-admin"    pnpm run launch:seed-admin-d1 --local
    ```
 
 5. Save the printed `wzp_...` token into `.dev.vars` as `WAZOO_PLATFORM_ADMIN_TOKEN`.
 
 6. Start the local dev server:
+
    ```sh
-   npm run dev
+   pnpm run dev
    ```
 
 7. Run checks:
    ```sh
-   npm run typecheck
-   npm run test
-   npm run format:check
+   pnpm run typecheck
+   pnpm run test
+   pnpm run format:check
    ```
 
 ## Health checks
 
-- Local: `npm run health:local`
-- QA: `npm run health:beta`
+- Local: `pnpm run health:local`
+- QA: `pnpm run health:beta`
 
 Both require `WAZOO_PLATFORM_ADMIN_TOKEN` to be set.
 
@@ -55,5 +59,5 @@ Both require `WAZOO_PLATFORM_ADMIN_TOKEN` to be set.
 
 1. Create a feature worktree from a clean `main` baseline.
 2. Make focused, atomic commits.
-3. Run `npm run format:check`, `npm run typecheck`, and `npm test` before pushing.
+3. Run `pnpm run format:check`, `pnpm run typecheck`, and `pnpm test` before pushing.
 4. Open a PR and wait for CI to pass.

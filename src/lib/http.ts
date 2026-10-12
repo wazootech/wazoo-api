@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { AppEnv } from "../env";
 import { db, userByIdentifier } from "./db";
+import { ENV_ADMIN_TOKEN_SCOPES } from "./scopes";
 
 export function respond(
   c: Context<AppEnv>,
@@ -78,8 +79,7 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
     c.set("auth", {
       tokenId: "env_admin",
       userUid: null,
-      scope:
-        "admin users.read users.write worlds.read worlds.write worlds.admin usage.read billing.read",
+      scope: ENV_ADMIN_TOKEN_SCOPES,
       kind: "ADMIN",
       expiresAt: null,
     });

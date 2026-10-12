@@ -26,6 +26,122 @@
       }
     },
     "schemas": {
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "description": "Always `{ ok: true }` for accepted, rate-limited, unconfigured, or empty requests, so the endpoint is not an oracle for allowlist membership."
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email address to send the magic-link code to. Matched case-insensitively."
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "VerifyResponse": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Platform session token (wzp_)."
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "VerifyRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "WorkOS magic-auth code."
+          },
+          "ageConfirmed": {
+            "type": "boolean",
+            "description": "Required `true` when the email does not yet have an account (13+ age gate)."
+          }
+        },
+        "required": [
+          "email",
+          "code"
+        ]
+      },
+      "WorkosSessionResponse": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "token",
+          "expiresAt"
+        ]
+      },
+      "WorkosSessionRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "ageConfirmed": {
+            "type": "boolean",
+            "description": "Required `true` when the email does not yet have an account (13+ age gate)."
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
       "User": {
         "type": "object",
         "properties": {
@@ -64,8 +180,8 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-            "description": "World ID minted by worlds-api in w_<UUIDv4> form."
+            "pattern": "^w_[0-7][0-9a-hjkmnp-tv-z]{25}$",
+            "description": "World ID minted by worlds-api in w_<ULID> form."
           },
           "displayName": {
             "type": "string"
@@ -114,29 +230,6 @@
           "state",
           "restorable",
           "backend"
-        ]
-      },
-      "ErrorResponse": {
-        "type": "object",
-        "properties": {
-          "error": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "string"
-              },
-              "message": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "code",
-              "message"
-            ]
-          }
-        },
-        "required": [
-          "error"
         ]
       },
       "CreateWorldRequest": {
@@ -592,6 +685,201 @@
         }
       }
     },
+    "/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "login",
+        "summary": "Start magic-link login",
+        "description": "Sends a one-time code to an allowlisted email. Unauthenticated; limited to 5 requests per minute per IP. Missing, rate-limited, and unconfigured cases return 200 `{ ok: true }` so the endpoint does not reveal which emails exist.",
+        "x-mint": {
+          "metadata": {
+            "title": "Start magic-link login"
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Request accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Email is not on the private beta allowlist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/verify": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "verifyLogin",
+        "summary": "Redeem login code for a session token",
+        "description": "Redeems the WorkOS magic-auth code and mints a `wzp_` session token. Unauthenticated; limited to 10 requests per minute per IP.",
+        "x-mint": {
+          "metadata": {
+            "title": "Redeem login code"
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Session token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_ARGUMENT, INVALID_CODE, EXPIRED, or AGE_GATE_REQUIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Auth is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/workos-session": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "createWorkosSession",
+        "summary": "Mint a console session token (admin)",
+        "description": "Admin-only. Mints a 30-day console session token for an arbitrary email, creating the user when needed. Requires the `admin` scope.",
+        "x-mint": {
+          "metadata": {
+            "title": "Mint console session token"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkosSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Console session token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkosSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_ARGUMENT or AGE_GATE_REQUIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin scope required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/users/me": {
       "get": {
         "tags": [
@@ -883,10 +1171,7 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "uid": {
-                            "type": "string"
-                          },
-                          "worldId": {
+                          "id": {
                             "type": "string"
                           },
                           "displayName": {
@@ -904,8 +1189,7 @@
                           }
                         },
                         "required": [
-                          "uid",
-                          "worldId",
+                          "id",
                           "displayName",
                           "state"
                         ]
@@ -1226,11 +1510,11 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-              "description": "World ID minted by worlds-api in w_<UUIDv4> form."
+              "pattern": "^w_[0-7][0-9a-hjkmnp-tv-z]{25}$",
+              "description": "World ID minted by worlds-api in w_<ULID> form."
             },
             "required": true,
-            "description": "World ID minted by worlds-api in w_<UUIDv4> form.",
+            "description": "World ID minted by worlds-api in w_<ULID> form.",
             "name": "worldId",
             "in": "path"
           },
@@ -1316,11 +1600,11 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-              "description": "World ID minted by worlds-api in w_<UUIDv4> form."
+              "pattern": "^w_[0-7][0-9a-hjkmnp-tv-z]{25}$",
+              "description": "World ID minted by worlds-api in w_<ULID> form."
             },
             "required": true,
-            "description": "World ID minted by worlds-api in w_<UUIDv4> form.",
+            "description": "World ID minted by worlds-api in w_<ULID> form.",
             "name": "worldId",
             "in": "path"
           },
@@ -1416,11 +1700,11 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-              "description": "World ID minted by worlds-api in w_<UUIDv4> form."
+              "pattern": "^w_[0-7][0-9a-hjkmnp-tv-z]{25}$",
+              "description": "World ID minted by worlds-api in w_<ULID> form."
             },
             "required": true,
-            "description": "World ID minted by worlds-api in w_<UUIDv4> form.",
+            "description": "World ID minted by worlds-api in w_<ULID> form.",
             "name": "worldId",
             "in": "path"
           },
@@ -1508,11 +1792,11 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-              "description": "World ID minted by worlds-api in w_<UUIDv4> form."
+              "pattern": "^w_[0-7][0-9a-hjkmnp-tv-z]{25}$",
+              "description": "World ID minted by worlds-api in w_<ULID> form."
             },
             "required": true,
-            "description": "World ID minted by worlds-api in w_<UUIDv4> form.",
+            "description": "World ID minted by worlds-api in w_<ULID> form.",
             "name": "worldId",
             "in": "path"
           },
@@ -1600,11 +1884,11 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-              "description": "World ID minted by worlds-api in w_<UUIDv4> form."
+              "pattern": "^w_[0-7][0-9a-hjkmnp-tv-z]{25}$",
+              "description": "World ID minted by worlds-api in w_<ULID> form."
             },
             "required": true,
-            "description": "World ID minted by worlds-api in w_<UUIDv4> form.",
+            "description": "World ID minted by worlds-api in w_<ULID> form.",
             "name": "worldId",
             "in": "path"
           },
@@ -1663,11 +1947,11 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-              "description": "World ID minted by worlds-api in w_<UUIDv4> form."
+              "pattern": "^w_[0-7][0-9a-hjkmnp-tv-z]{25}$",
+              "description": "World ID minted by worlds-api in w_<ULID> form."
             },
             "required": true,
-            "description": "World ID minted by worlds-api in w_<UUIDv4> form.",
+            "description": "World ID minted by worlds-api in w_<ULID> form.",
             "name": "worldId",
             "in": "path"
           },
@@ -1734,11 +2018,11 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-              "description": "World ID minted by worlds-api in w_<UUIDv4> form."
+              "pattern": "^w_[0-7][0-9a-hjkmnp-tv-z]{25}$",
+              "description": "World ID minted by worlds-api in w_<ULID> form."
             },
             "required": true,
-            "description": "World ID minted by worlds-api in w_<UUIDv4> form.",
+            "description": "World ID minted by worlds-api in w_<ULID> form.",
             "name": "worldId",
             "in": "path"
           },
@@ -2036,11 +2320,11 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-              "description": "World ID minted by worlds-api in w_<UUIDv4> form."
+              "pattern": "^w_[0-7][0-9a-hjkmnp-tv-z]{25}$",
+              "description": "World ID minted by worlds-api in w_<ULID> form."
             },
             "required": true,
-            "description": "World ID minted by worlds-api in w_<UUIDv4> form.",
+            "description": "World ID minted by worlds-api in w_<ULID> form.",
             "name": "worldId",
             "in": "path"
           },
@@ -2149,11 +2433,11 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-              "description": "World ID minted by worlds-api in w_<UUIDv4> form."
+              "pattern": "^w_[0-7][0-9a-hjkmnp-tv-z]{25}$",
+              "description": "World ID minted by worlds-api in w_<ULID> form."
             },
             "required": true,
-            "description": "World ID minted by worlds-api in w_<UUIDv4> form.",
+            "description": "World ID minted by worlds-api in w_<ULID> form.",
             "name": "worldId",
             "in": "path"
           }
@@ -2256,11 +2540,11 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-              "description": "World ID minted by worlds-api in w_<UUIDv4> form."
+              "pattern": "^w_[0-7][0-9a-hjkmnp-tv-z]{25}$",
+              "description": "World ID minted by worlds-api in w_<ULID> form."
             },
             "required": true,
-            "description": "World ID minted by worlds-api in w_<UUIDv4> form.",
+            "description": "World ID minted by worlds-api in w_<ULID> form.",
             "name": "worldId",
             "in": "path"
           },
@@ -2331,11 +2615,11 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-              "description": "World ID minted by worlds-api in w_<UUIDv4> form."
+              "pattern": "^w_[0-7][0-9a-hjkmnp-tv-z]{25}$",
+              "description": "World ID minted by worlds-api in w_<ULID> form."
             },
             "required": true,
-            "description": "World ID minted by worlds-api in w_<UUIDv4> form.",
+            "description": "World ID minted by worlds-api in w_<ULID> form.",
             "name": "worldId",
             "in": "path"
           },
@@ -2395,11 +2679,11 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-              "description": "World ID minted by worlds-api in w_<UUIDv4> form."
+              "pattern": "^w_[0-7][0-9a-hjkmnp-tv-z]{25}$",
+              "description": "World ID minted by worlds-api in w_<ULID> form."
             },
             "required": true,
-            "description": "World ID minted by worlds-api in w_<UUIDv4> form.",
+            "description": "World ID minted by worlds-api in w_<ULID> form.",
             "name": "worldId",
             "in": "path"
           },
@@ -2458,11 +2742,11 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-              "description": "World ID minted by worlds-api in w_<UUIDv4> form."
+              "pattern": "^w_[0-7][0-9a-hjkmnp-tv-z]{25}$",
+              "description": "World ID minted by worlds-api in w_<ULID> form."
             },
             "required": true,
-            "description": "World ID minted by worlds-api in w_<UUIDv4> form.",
+            "description": "World ID minted by worlds-api in w_<ULID> form.",
             "name": "worldId",
             "in": "path"
           },
@@ -2576,11 +2860,11 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^w_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-              "description": "World ID minted by worlds-api in w_<UUIDv4> form."
+              "pattern": "^w_[0-7][0-9a-hjkmnp-tv-z]{25}$",
+              "description": "World ID minted by worlds-api in w_<ULID> form."
             },
             "required": true,
-            "description": "World ID minted by worlds-api in w_<UUIDv4> form.",
+            "description": "World ID minted by worlds-api in w_<ULID> form.",
             "name": "worldId",
             "in": "path"
           },
@@ -2596,6 +2880,167 @@
         "responses": {
           "400": {
             "description": "Not available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/audit-events": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "operationId": "listAdminAuditEvents",
+        "summary": "List admin audit events",
+        "x-mint": {
+          "metadata": {
+            "title": "List admin audit events"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0,
+              "default": 0
+            },
+            "required": false,
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of admin audit events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "auditEvents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "uid": {
+                            "type": "string"
+                          },
+                          "actorTokenUid": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "action": {
+                            "type": "string"
+                          },
+                          "targetResourceName": {
+                            "type": "string"
+                          },
+                          "outcome": {
+                            "type": "string"
+                          },
+                          "errorCode": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createTime": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "uid",
+                          "action",
+                          "targetResourceName",
+                          "outcome",
+                          "createTime"
+                        ]
+                      }
+                    },
+                    "total": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "auditEvents"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient scope",
             "content": {
               "application/json": {
                 "schema": {
