@@ -30,7 +30,7 @@ const loginRoute = createRoute({
   operationId: "login",
   summary: "Start magic-link login",
   description:
-    "Sends a one-time code to an allowlisted email. Unauthenticated; limited to 5 requests per minute per IP. Missing, rate-limited, and unconfigured cases return 200 `{ ok: true }` so the endpoint does not reveal which emails exist.",
+    "Sends a one-time code to an allowlisted email. Unauthenticated; limited to 5 requests per minute per IP. Every outcome (missing email, rate-limited, not allowlisted, unconfigured) returns 200 `{ ok: true }` so the endpoint does not reveal which emails are on the beta list; no code is sent to an email that is not allowlisted.",
   "x-mint": { metadata: { title: "Start magic-link login" } },
   security: [],
   request: {
@@ -43,7 +43,6 @@ const loginRoute = createRoute({
       description: "Request accepted",
       content: { "application/json": { schema: LoginResponseSchema } },
     },
-    403: jsonError("Email is not on the private beta allowlist"),
   },
 });
 
@@ -232,17 +231,9 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
     }
 
     if (!approved.has(email)) {
-      return respond(
-        c,
-        {
-          error: {
-            code: "NOT_ALLOWLISTED",
-            message:
-              "Email is not approved for the Wazoo Private Beta. Please request access to join.",
-          },
-        },
-        403,
-      );
+      // Same response as an approved email: a distinct status or body here
+      // would let anyone enumerate the beta list. No email is sent.
+      return c.json({ ok: true });
     }
 
     const apiKey = c.env.WORKOS_API_KEY;
