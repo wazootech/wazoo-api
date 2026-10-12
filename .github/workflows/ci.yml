@@ -13,6 +13,16 @@ permissions:
   id-token: write
 
 jobs:
+  contract-lint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Credential-free contract lint (R1-R5)
+        uses: wazootech/workspace-cli/skills/contract-lint@9841b8de3539b5350ec85b527018afb256480b16
+
   verify:
     runs-on: ubuntu-latest
     steps:
@@ -58,17 +68,17 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Fetch secrets from Infisical (qa)
+      - name: Fetch Cloudflare deploy token from Infisical (qa)
         uses: Infisical/secrets-action@v1.0.17
         with:
           method: oidc
           identity-id: ${{ vars.INFISICAL_MACHINE_ID }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
           env-slug: "qa"
+          secret-name: CLOUDFLARE_API_TOKEN
       - run: pnpm run deploy --env qa
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
   health-qa:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -107,14 +117,14 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Fetch secrets from Infisical (prod)
+      - name: Fetch Cloudflare deploy token from Infisical (prod)
         uses: Infisical/secrets-action@v1.0.17
         with:
           method: oidc
           identity-id: ${{ vars.INFISICAL_MACHINE_ID }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
           env-slug: "prod"
+          secret-name: CLOUDFLARE_API_TOKEN
       - run: pnpm run deploy
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
