@@ -41,29 +41,6 @@
         ],
         "description": "Always `{ ok: true }` for accepted, rate-limited, unconfigured, or empty requests, so the endpoint is not an oracle for allowlist membership."
       },
-      "ErrorResponse": {
-        "type": "object",
-        "properties": {
-          "error": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "string"
-              },
-              "message": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "code",
-              "message"
-            ]
-          }
-        },
-        "required": [
-          "error"
-        ]
-      },
       "LoginRequest": {
         "type": "object",
         "properties": {
@@ -86,6 +63,29 @@
         },
         "required": [
           "token"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "error"
         ]
       },
       "VerifyRequest": {
@@ -692,7 +692,7 @@
         ],
         "operationId": "login",
         "summary": "Start magic-link login",
-        "description": "Sends a one-time code to an allowlisted email. Unauthenticated; limited to 5 requests per minute per IP. Missing, rate-limited, and unconfigured cases return 200 `{ ok: true }` so the endpoint does not reveal which emails exist.",
+        "description": "Sends a one-time code to an allowlisted email. Unauthenticated; limited to 5 requests per minute per IP. Every outcome (missing email, rate-limited, not allowlisted, unconfigured) returns 200 `{ ok: true }` so the endpoint does not reveal which emails are on the beta list; no code is sent to an email that is not allowlisted.",
         "x-mint": {
           "metadata": {
             "title": "Start magic-link login"
@@ -715,16 +715,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LoginResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Email is not on the private beta allowlist",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
