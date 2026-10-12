@@ -303,21 +303,25 @@ describe("platform token scopes (wazoo-api#13 / wazoo-api#14)", () => {
     expect((await attempt(ADMIN_TOKEN)).status).toBe(201);
   });
 
-  it("returns 403 NOT_ALLOWLISTED for non-approved email on login", async () => {
+  it("gives non-approved and unconfigured emails the same login response", async () => {
     stubAllowlistFetch();
-    const res = await api(
-      "/v1/auth/login",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: "unapproved-user@example.com" }),
-      },
-      env,
-    );
-    expect(res.status).toBe(403);
-    const body = (await res.json()) as {
-      error: { code: string; message: string };
+    const attempt = async (email: string) => {
+      const res = await api(
+        "/v1/auth/login",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email }),
+        },
+        env,
+      );
+      return { status: res.status, body: await res.json() };
     };
-    expect(body.error.code).toBe("NOT_ALLOWLISTED");
+    const unapproved = await attempt("unapproved-user@example.com");
+    const approved = await attempt(TEST_EMAIL);
+    // The endpoint must not be an oracle for the beta list.
+    expect(unapproved.status).toBe(200);
+    expect(unapproved.body).toEqual({ ok: true });
+    expect(unapproved).toEqual(approved);
   });
 });
