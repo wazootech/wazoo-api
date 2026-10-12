@@ -9,6 +9,7 @@ import type { Bindings } from "../src/env";
 
 import { createTestD1, type TestD1 } from "./helpers/d1-test-adapter";
 import {
+  ENV_ADMIN_TOKEN_SCOPES,
   SESSION_DEFAULT_SCOPES,
   TOKEN_DEFAULT_SCOPES,
 } from "../src/lib/scopes";
@@ -244,6 +245,62 @@ describe("platform token scopes (wazoo-api#13 / wazoo-api#14)", () => {
     expect(res.status).toBe(403);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("PERMISSION_DENIED");
+  });
+
+  // wazoo-api#78: worlds.admin was granted but never enforced. It is removed;
+  // these assertions keep it from becoming decorative again.
+  it("no granted scope set includes the retired worlds.admin scope", () => {
+    for (const set of [
+      ENV_ADMIN_TOKEN_SCOPES,
+      SESSION_DEFAULT_SCOPES,
+      TOKEN_DEFAULT_SCOPES,
+    ]) {
+      expect(set.split(/\s+/)).not.toContain("worlds.admin");
+    }
+    expect(ENV_ADMIN_TOKEN_SCOPES.split(/\s+/)).toContain("admin");
+  });
+
+  it("a token carrying worlds.admin gains no admin privilege", async () => {
+    const minted = await api(
+      "/v1/auth/api-tokens",
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${ADMIN_TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: TEST_EMAIL,
+          tokenName: "worlds-admin-legacy",
+          scope: "worlds.read worlds.write worlds.admin",
+        }),
+      },
+      env,
+    );
+    expect(minted.status).toBe(201);
+    const legacy = ((await minted.json()) as { token: string }).token;
+
+    const attempt = (token: string) =>
+      api(
+        "/v1/auth/workos-session",
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            email: TEST_EMAIL,
+            displayName: "Beta User",
+            ageConfirmed: true,
+          }),
+        },
+        env,
+      );
+
+    expect((await attempt(legacy)).status).toBe(403);
+    // The real admin token is unaffected by the scope-string change.
+    expect((await attempt(ADMIN_TOKEN)).status).toBe(201);
   });
 
   it("returns 403 NOT_ALLOWLISTED for non-approved email on login", async () => {

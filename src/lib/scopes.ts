@@ -25,3 +25,14 @@ export const SESSION_DEFAULT_SCOPES =
  */
 export const TOKEN_DEFAULT_SCOPES =
   "users.read worlds.read worlds.write usage.read billing.read";
+
+/**
+ * Scope string attached to the env-configured `WAZOO_PLATFORM_ADMIN_TOKEN`.
+ *
+ * There is intentionally no `worlds.admin` scope: it was granted here and in
+ * docs but never enforced by any route (wazoo-api#78). World privileges are
+ * `worlds.read` / `worlds.write`; platform-wide privilege is `admin`, which
+ * `isAdmin()` additionally binds to an ADMIN-kind, user-less token.
+ */
+export const ENV_ADMIN_TOKEN_SCOPES =
+  "admin users.read users.write worlds.read worlds.write usage.read billing.read";
