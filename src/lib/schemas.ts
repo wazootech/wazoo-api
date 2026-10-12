@@ -298,3 +298,56 @@ export const usageRangeQuery = z.object({
       param: { name: "to", in: "query" },
     }),
 });
+
+export const LoginRequestSchema = z
+  .object({
+    email: z.string().openapi({
+      description:
+        "Email address to send the magic-link code to. Matched case-insensitively.",
+    }),
+  })
+  .openapi("LoginRequest");
+
+export const LoginResponseSchema = z
+  .object({ ok: z.literal(true) })
+  .openapi("LoginResponse", {
+    description:
+      "Always `{ ok: true }` for accepted, rate-limited, unconfigured, or empty requests, so the endpoint is not an oracle for allowlist membership.",
+  });
+
+export const VerifyRequestSchema = z
+  .object({
+    email: z.string(),
+    code: z.string().openapi({ description: "WorkOS magic-auth code." }),
+    ageConfirmed: z.boolean().optional().openapi({
+      description:
+        "Required `true` when the email does not yet have an account (13+ age gate).",
+    }),
+  })
+  .openapi("VerifyRequest");
+
+export const VerifyResponseSchema = z
+  .object({
+    token: z
+      .string()
+      .openapi({ description: "Platform session token (wzp_)." }),
+  })
+  .openapi("VerifyResponse");
+
+export const WorkosSessionRequestSchema = z
+  .object({
+    email: z.string(),
+    displayName: z.string().optional(),
+    ageConfirmed: z.boolean().optional().openapi({
+      description:
+        "Required `true` when the email does not yet have an account (13+ age gate).",
+    }),
+  })
+  .openapi("WorkosSessionRequest");
+
+export const WorkosSessionResponseSchema = z
+  .object({
+    token: z.string(),
+    expiresAt: z.string().datetime(),
+  })
+  .openapi("WorkosSessionResponse");
