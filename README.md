@@ -74,6 +74,19 @@ exercise the full private-beta flow: user provisioning, world CRUD, token
 lifecycle, chunk and quad import, search, SPARQL, usage/billing/limits, and soft
 delete. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions.
 
+### World-identity round trip
+
+`pnpm run roundtrip:qa` (`scripts/qa-roundtrip.mjs`) exercises the world
+lifecycle end to end against `api-qa` / `data-qa` and writes evidence JSON to an
+optional path argument. It requires `WAZOO_PLATFORM_ADMIN_TOKEN`.
+
+Set `WAZOO_EMBEDDINGS_ACCEPTANCE=1` to additionally run the bring-your-own-key
+embeddings acceptance (worlds-api#1): it also needs `WORLDS_API_ADMIN_KEY` and
+`WAZOO_EMBEDDINGS_PROVIDER_KEY` (a capped QA-only provider key). It sets and then
+revokes a namespace embedding credential and asserts hybrid search, paraphrase
+retrieval, and cross-world vector isolation. It is skipped by default because
+until QA sets `EMBEDDING_PROVIDER=byok` hosted search is keyword-only.
+
 ## Development
 
 ```sh

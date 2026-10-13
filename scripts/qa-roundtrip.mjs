@@ -9,6 +9,23 @@ const ADMIN = process.env.WAZOO_PLATFORM_ADMIN_TOKEN;
 if (!ADMIN) throw new Error("WAZOO_PLATFORM_ADMIN_TOKEN missing");
 const evidencePath = process.argv[2];
 
+// BYOK embeddings acceptance (worlds-api#1, design section 6). Off unless
+// explicitly requested: until QA sets EMBEDDING_PROVIDER=byok and a capped QA
+// provider key exists, search is keyword-only, so the hybrid assertions below
+// would fail by design. The default round trip is unchanged.
+//   WAZOO_EMBEDDINGS_ACCEPTANCE=1  run the hybrid acceptance block
+//   WAZOO_EMBEDDINGS_PROVIDER_KEY  the QA-only capped OpenAI key (decision D8)
+//   WORLDS_API_ADMIN_KEY           data-plane admin key (Infisical qa)
+const HYBRID = process.env.WAZOO_EMBEDDINGS_ACCEPTANCE === "1";
+const DATA_ADMIN = process.env.WORLDS_API_ADMIN_KEY;
+const PROVIDER_KEY = process.env.WAZOO_EMBEDDINGS_PROVIDER_KEY;
+const EMBEDDING_MODEL = "openai/text-embedding-3-small";
+if (HYBRID && (!DATA_ADMIN || !PROVIDER_KEY)) {
+  throw new Error(
+    "WAZOO_EMBEDDINGS_ACCEPTANCE=1 needs WORLDS_API_ADMIN_KEY and WAZOO_EMBEDDINGS_PROVIDER_KEY",
+  );
+}
+
 const run = `rt${Date.now()}`;
 const emailA = `e2e+${run}-a@wazoo.dev`;
 const emailB = `e2e+${run}-b@wazoo.dev`;
@@ -17,7 +34,7 @@ const WORLD_ID_RE =
 const MARKER = `zephyrquokka${run}`;
 
 const evidence = { startedAt: new Date().toISOString(), run, steps: [] };
-const secrets = new Set([ADMIN]);
+const secrets = new Set([ADMIN, DATA_ADMIN, PROVIDER_KEY].filter(Boolean));
 let failed = false;
 
 function redact(value) {
@@ -55,7 +72,10 @@ function record(name, pass, detail, response) {
 }
 
 async function mintPlatformToken(email, label) {
-  await call("GET", `${API}/v1/users/me?email=${encodeURIComponent(email)}`, ADMIN);
+  // The user's uid is the worlds-api namespace (wazoo-api derives tenancy from
+  // the token, never a body field), which the credential endpoints key on.
+  const me = await call("GET", `${API}/v1/users/me?email=${encodeURIComponent(email)}`, ADMIN);
+  const uid = me.json?.user?.uid;
   const res = await call("POST", `${API}/v1/auth/api-tokens`, ADMIN, {
     email,
     tokenName: `${run}-${label}`,
@@ -65,7 +85,7 @@ async function mintPlatformToken(email, label) {
   if (typeof token === "string") secrets.add(token);
   record(`mint platform token (${label})`, res.status === 201 && typeof token === "string",
     "non-admin user token minted", res);
-  return token;
+  return { token, uid };
 }
 
 const cleanup = [];
@@ -75,8 +95,8 @@ try {
     record(`readiness ${new URL(url).host}`, res.status === 200, "full /ready body recorded", res);
   }
 
-  const tokenA = await mintPlatformToken(emailA, "a");
-  const tokenB = await mintPlatformToken(emailB, "b");
+  const { token: tokenA, uid: uidA } = await mintPlatformToken(emailA, "a");
+  const { token: tokenB } = await mintPlatformToken(emailB, "b");
   cleanup.push(async () => {
     for (const [email, label] of [[emailA, "a"], [emailB, "b"]]) {
       const res = await call("DELETE",
@@ -99,6 +119,27 @@ try {
   const read = await call("GET", `${API}/v1/worlds/${worldId}`, tokenA);
   record("read (user A)", read.status === 200 && read.json?.world?.id === worldId,
     "same id returned", read);
+
+  // BYOK embeddings setup (worlds-api#1, design 6). The credential is
+  // namespace-scoped and the world must opt into an allowlisted model, which
+  // requires an active credential, before import can build vectors.
+  let hybridReady = false;
+  if (HYBRID) {
+    const cred = await call("PUT", `${DATA}/namespaces/${uidA}/embedding-credential`, DATA_ADMIN,
+      { provider: "openai", apiKey: PROVIDER_KEY });
+    hybridReady = record("embeddings: set namespace credential",
+      cred.status === 200 && cred.json?.status === "active",
+      `status=${cred.json?.status} last4=${cred.json?.last4}`, cred);
+    cleanup.push(async () => {
+      await call("DELETE", `${DATA}/namespaces/${uidA}/embedding-credential`, DATA_ADMIN);
+    });
+    const patch = await call("PATCH", `${DATA}/worlds/${worldId}`, DATA_ADMIN,
+      { embeddingModel: EMBEDDING_MODEL });
+    record("embeddings: world embedding model set (stale until reindex)",
+      patch.status === 200 && patch.json?.embeddingModel === EMBEDDING_MODEL &&
+        patch.json?.embeddingStatus === "stale",
+      `embeddingModel=${patch.json?.embeddingModel} embeddingStatus=${patch.json?.embeddingStatus}`, patch);
+  }
 
   const list = await call("GET", `${API}/v1/worlds`, tokenA);
   record("list (user A)", list.status === 200 &&
@@ -132,12 +173,38 @@ ex:Doc2 ex:title "Second document" ; ex:ref ex:Doc1 .`;
   record("reindex", reindex.status === 200 && reindex.json?.status === "completed" &&
     reindex.json?.processedQuadCount >= 4 && reindex.json?.chunkRowCount > 0,
     `processedQuadCount=${reindex.json?.processedQuadCount} chunkRowCount=${reindex.json?.chunkRowCount}`, reindex);
+  if (HYBRID) {
+    const vs = reindex.json?.vectorSync;
+    record("embeddings: reindex synced vectors",
+      reindex.status === 200 && reindex.json?.status === "completed" &&
+        vs?.enabled === true && vs?.failedUpserts === 0 && vs?.embeddingFailures === 0,
+      `status=${reindex.json?.status} vectorSync.enabled=${vs?.enabled} failedUpserts=${vs?.failedUpserts} embeddingFailures=${vs?.embeddingFailures}`,
+      reindex);
+  }
 
   const search = await call("POST", `${DATA}/worlds/${worldId}/search`, worldToken, { query: MARKER });
   const hits = search.json?.results ?? [];
   record("search finds reindexed content", search.status === 200 &&
     hits.some((h) => JSON.stringify(h).includes(MARKER)),
     `${hits.length} hit(s), mode=${search.json?.mode}`, search);
+  if (HYBRID) {
+    const hit = hits.find((h) => JSON.stringify(h).includes(MARKER));
+    record("embeddings: marker search is hybrid and ranked",
+      search.status === 200 && search.json?.mode === "hybrid" &&
+        hit !== undefined && hit.scoreType !== "unranked",
+      `mode=${search.json?.mode} scoreType=${hit?.scoreType}`, search);
+
+    // A query sharing no lexeme with the document proves the vector path: pure
+    // full-text search would return nothing for it.
+    const paraphrase = "an explanatory note covering retrieval validation";
+    const pSearch = await call("POST", `${DATA}/worlds/${worldId}/search`, worldToken,
+      { query: paraphrase });
+    const pHits = pSearch.json?.results ?? [];
+    record("embeddings: paraphrase (no marker tokens) returns the document",
+      pSearch.status === 200 && pSearch.json?.mode === "hybrid" &&
+        pHits.some((h) => JSON.stringify(h).includes(MARKER)),
+      `${pHits.length} hit(s), mode=${pSearch.json?.mode}`, pSearch);
+  }
 
   // Cross-user denial: B holds a valid w_<ULID> that belongs to A.
   const bRead = await call("GET", `${API}/v1/worlds/${worldId}`, tokenB);
@@ -164,6 +231,32 @@ ex:Doc2 ex:title "Second document" ; ex:ref ex:Doc1 .`;
     { query: "SELECT * WHERE { ?s ?p ?o } LIMIT 1" });
   record("cross-world data-plane access denied (B's world token -> A's world)",
     [401, 403, 404].includes(crossData.status), "world token scoped to its own world", crossData);
+
+  if (HYBRID) {
+    // The vector index is shared across worlds and relies solely on the
+    // world_id metadata filter, so a leak would surface as A's marker in B's
+    // (empty) world, with a lexically disjoint query that only vectors reach.
+    if (bWorldToken) {
+      const isoVectors = await call("POST", `${DATA}/worlds/${bWorldId}/search`, bWorldToken,
+        { query: "an explanatory note covering retrieval validation" });
+      const isoHits = isoVectors.json?.results ?? [];
+      record("embeddings: cross-world isolation (B never sees A's vectors)",
+        isoVectors.status === 200 && !isoHits.some((h) => JSON.stringify(h).includes(MARKER)),
+        `${isoHits.length} hit(s) in B's world, mode=${isoVectors.json?.mode}`, isoVectors);
+    }
+
+    // Revoking the credential drops the namespace to keyword-only without a
+    // data change: the next search reports mode keyword and still succeeds.
+    if (hybridReady) {
+      const rev = await call("DELETE", `${DATA}/namespaces/${uidA}/embedding-credential`, DATA_ADMIN);
+      record("embeddings: revoke credential", rev.status === 204, "revoked", rev);
+      const afterRevoke = await call("POST", `${DATA}/worlds/${worldId}/search`, worldToken,
+        { query: MARKER });
+      record("embeddings: after revoke search is keyword (200)",
+        afterRevoke.status === 200 && afterRevoke.json?.mode === "keyword",
+        `mode=${afterRevoke.json?.mode}`, afterRevoke);
+    }
+  }
 
   // A well-formed but nonexistent ID is not found (validity is not authorization).
   const ghost = "w_00000000000000000000000000";
