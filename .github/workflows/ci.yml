@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Credential-free contract lint (R1-R5)
-        uses: wazootech/workspace-cli/skills/contract-lint@9841b8de3539b5350ec85b527018afb256480b16
+        uses: wazootech/workspace-cli/skills/contract-lint@f6b4e491b78a6ebe4c31560088eefcfd9f5ba4ba
 
   verify:
     runs-on: ubuntu-latest
