@@ -13,12 +13,32 @@ jobs:
     name: Production reachability and auth-boundary canary
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Run credential-free production canary
-        run: node scripts/platform-canary.mjs
+        id: canary
+        continue-on-error: true
+        run: |
+          set +e
+          node scripts/platform-canary.mjs 2> canary.err
+          rc=$?
+          cat canary.err >&2
+          exit $rc
         env:
           CANARY_ENV: prod
+      - name: Open, update, or close the canary issue
+        run: bash scripts/canary-alert.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CANARY_RESULT: ${{ steps.canary.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      - name: Fail the job when the canary failed
+        if: steps.canary.outcome != 'success'
+        run: exit 1
