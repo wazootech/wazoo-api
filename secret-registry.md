@@ -3,20 +3,22 @@
 ## Canonical source: Infisical
 
 The canonical source for every runtime secret is the
-[Infisical](https://infisical.com) project described in the workspace-level
-migration runbook (`infisical-secrets-migration.md` at the root of the
-wazootech workspace repo). That runbook owns the full inventory, the
-dev/qa/prod separation, and the cutover sequence; this file records only how
-wazoo-api consumes it.
+[Infisical](https://infisical.com) project `wazoo-n-jx-j`. That project's
+topology — its environments, folder layout, live inventory, the Cloudflare
+Worker syncs, and the rule for where a new secret goes — is recorded in the
+private ops home, `wazootech/memory` (`wiki/Infisical_(vault).md`); this file
+records only how wazoo-api consumes it.
 
 - Local secret files (`.env`, `.dev.vars`) are **retired**. There is no
   committed copy in this repo's history and nothing needs rotating on account
   of the migration. Secrets reach local processes by injection:
   `infisical run --env=dev -- npm run dev` (or `npm run secrets:check` to
   confirm what resolved, printing names and lengths only).
-- `.infisical.json` at the repo root is the committed project link
-  (`workspaceId`, `defaultEnvironment: dev`). It holds no secret values and is
-  safe to commit. It replaces the interactive `infisical init` step.
+- This repo has **no** `.infisical.json`, so `infisical` cannot resolve the
+  project from `repos/wazoo-api` on its own. Run injected commands from a
+  checkout that carries the link (`repos/worlds-api` does), or pass the project
+  id explicitly. (An earlier revision of this file claimed a committed
+  `.infisical.json` at this repo root; no such file exists.)
 - Deployed Worker secrets are owned by an **Infisical Cloudflare Workers Secret
   Sync**, configured in the Infisical dashboard (Project Integrations → Secret
   Syncs). `wrangler deploy` is plain and sets no secrets; provisioning happens
@@ -36,6 +38,7 @@ wazoo-api consumes it.
 | `RESEND_API_KEY` | qa, prod | ⚠️ see provenance gap | via sync | n/a | Resend API key (`re_` prefix). Used in `src/lib/email.ts:14` for transactional email. **Prod binding has no vault source** (see §5). |
 | `OTP_FROM_ADDRESS` | **not in vault** | ⚠️ orphan Worker secret | ⚠️ orphan Worker secret | n/a | "From" address for OTP emails. Read in `src/lib/email.ts:15`; falls back to `Wazoo <noreply@mail.wazoo.dev>` if unbound. Not in any Infisical environment or path. |
 | `WORKOS_COOKIE_PASSWORD` | dev, qa, prod | via sync | via sync | injected | ⚠️ **BOUND BUT NOT READ BY THIS SERVICE.** See §5 drift notes. Likely a copy-paste from console sync; should be removed. |
+| `WAZOO_EMBEDDINGS_PROVIDER_KEY` | qa (`/byok-qa`) | no | no | n/a | Platform's own provider key for the BYOK embeddings acceptance round-trip (`scripts/qa-roundtrip.mjs`). Deliberately in a vault **folder**, not at the project root, so no Worker Secret Sync publishes it. Inject it with `infisical run --env=qa --path=/ --path=/byok-qa -- pnpm run roundtrip:qa` — a `--path` replaces the default root, so both paths must be named to get the root secrets too. |
 
 ### Non-secret configuration
 
@@ -112,8 +115,9 @@ shell, and are deliberately **not** in the vault.
 
 > **NOTE on `WORKOS_COOKIE_PASSWORD`:** An earlier revision of the workspace
 > inventory (`docs/secret-inventory.md`) concluded this secret was a phantom —
-> "declared nowhere, read zero times." That was a **false zero**. See §5 of that
-> file for the full resolution: the console's AuthKit SDK reads it from
+> "declared nowhere, read zero times." That was a **false zero**. See the audit
+> notes in `wazootech/memory` (`wiki/Infisical_(vault).md`) for the full
+> resolution: the console's AuthKit SDK reads it from
 > `process.env` at module scope, and a live QA probe (307 → workos.com with
 > sealed PKCE state) confirmed it is required. For **this** service, however,
 > wazoo-api does not render sessions or seal cookies — its WorkOS usage is
@@ -136,6 +140,6 @@ value when calling the QA Worker and the prod value when calling the prod Worker
 | Vault `RESEND_API_KEY` in prod root | **Open** — see §5 provenance gap #2 |
 | Remove `WORKOS_COOKIE_PASSWORD` from wazoo-api Worker binds | **Open** — see §5 drift |
 | Remove `RESEND_API_KEY` from wazoo-console qa only if confirmed unused | **Open** — see §5 provenance gap #3 |
-| Remove `WORLDS_API_ADMIN_KEY` from wazoo-console Worker binds (console proxies through wazoo-api) | **Open** — see `docs/secret-inventory.md` §4 drift |
+| Remove `WORLDS_API_ADMIN_KEY` from wazoo-console Worker binds (console proxies through wazoo-api) | **Open** — see the discrepancy list in `wazootech/memory` (`wiki/Infisical_(vault).md`) |
 
-Last audited: 2026-10-05
+Last audited: 2026-10-13
