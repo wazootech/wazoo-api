@@ -54,7 +54,7 @@ shell, and are deliberately **not** in the vault.
 | QA Worker | Infisical Secret Sync (project `wazoo-n-jx-j`, source `/`, env `qa`) → script `wazoo-api-qa`. Deletion protection **on**. |
 | Prod Worker | Infisical Secret Sync (project `wazoo-n-jx-j`, source `/`, env `prod`) → script `wazoo-api`. Deletion protection **on**. |
 | CI (`health-qa`) | `Infisical/secrets-action@v1.0.17` with `method: oidc`, env `qa`, `secret-name: WAZOO_PLATFORM_ADMIN_TOKEN`. Per-repo machine identity subject `repo:wazootech@197434733/wazoo-api@<id>:ref:refs/heads/main`. Needs `permissions: id-token: write` and the `INFISICAL_MACHINE_ID` / `INFISICAL_PROJECT_SLUG` repository **variables**. |
-| CI (deploy jobs) | No secrets injected. `wrangler deploy` sets none, and the Worker copy belongs to the sync. |
+| CI (deploy jobs) | `Infisical/secrets-action@v1.0.17` with `method: oidc`, env `qa` / `prod`, `secret-path: /ci`, `secret-name: CLOUDFLARE_API_TOKEN`. The deploy credential lives at vault folder `/ci` and is deliberately **not** at the root, so no Worker Secret Sync binds it onto a runtime Worker. `wrangler deploy` sets no Worker secrets; the Worker copies belong to the sync. |
 
 ## Operational notes
 

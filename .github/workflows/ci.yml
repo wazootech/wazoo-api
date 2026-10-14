@@ -75,6 +75,7 @@ jobs:
           identity-id: ${{ vars.INFISICAL_MACHINE_ID }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
           env-slug: "qa"
+          secret-path: /ci
           secret-name: CLOUDFLARE_API_TOKEN
       - run: pnpm run deploy --env qa
         env:
@@ -124,6 +125,7 @@ jobs:
           identity-id: ${{ vars.INFISICAL_MACHINE_ID }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
           env-slug: "prod"
+          secret-path: /ci
           secret-name: CLOUDFLARE_API_TOKEN
       - run: pnpm run deploy
         env:
