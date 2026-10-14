@@ -128,3 +128,16 @@ jobs:
       - run: pnpm run deploy
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+  canary-prod:
+    needs: deploy-prod
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Credential-free production canary
+        run: node scripts/platform-canary.mjs
+        env:
+          CANARY_ENV: prod
