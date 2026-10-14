@@ -1,0 +1,24 @@
+name: canary-prod
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    name: Production reachability and auth-boundary canary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Run credential-free production canary
+        run: node scripts/platform-canary.mjs
+        env:
+          CANARY_ENV: prod
