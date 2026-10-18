@@ -38,7 +38,7 @@ records only how wazoo-api consumes it.
 | `RESEND_API_KEY` | qa, prod | ⚠️ see provenance gap | via sync | n/a | Resend API key (`re_` prefix). Used in `src/lib/email.ts:14` for transactional email. **Prod binding has no vault source** (see §5). |
 | `OTP_FROM_ADDRESS` | **not in vault** | ⚠️ orphan Worker secret | ⚠️ orphan Worker secret | n/a | "From" address for OTP emails. Read in `src/lib/email.ts:15`; falls back to `Wazoo <noreply@mail.wazoo.dev>` if unbound. Not in any Infisical environment or path. |
 | `WORKOS_COOKIE_PASSWORD` | dev, qa, prod | via sync | via sync | injected | ⚠️ **BOUND BUT NOT READ BY THIS SERVICE.** See §5 drift notes. Likely a copy-paste from console sync; should be removed. |
-| `WAZOO_EMBEDDINGS_PROVIDER_KEY` | qa (`/byok-qa`) | no | no | n/a | Platform's own provider key for the BYOK embeddings acceptance round-trip (`scripts/qa-roundtrip.mjs`). Deliberately in a vault **folder**, not at the project root, so no Worker Secret Sync publishes it. Inject it with `infisical run --env=qa --path=/ --path=/byok-qa -- pnpm run roundtrip:qa` — a `--path` replaces the default root, so both paths must be named to get the root secrets too. |
+| `WAZOO_EMBEDDINGS_PROVIDER_KEY` | qa (`/ci`) | no | no | n/a | Platform's own provider key for the BYOK embeddings acceptance round-trip (`scripts/qa-roundtrip.mjs`). Deliberately in the vault folder `/ci`, not at the project root, so no Worker Secret Sync publishes it. Inject it with `infisical run --env=qa --path=/ --path=/ci -- pnpm run roundtrip:qa` — a `--path` replaces the default root, so both paths must be named to get the root secrets too. `/ci` also holds `CLOUDFLARE_API_TOKEN`, so that run injects it as well; the script does not read it. |
 
 ### Non-secret configuration
 
