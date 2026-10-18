@@ -36,7 +36,7 @@ records only how wazoo-api consumes it.
 | `WORKOS_CLIENT_ID` | qa, prod | via sync | via sync | own value | WorkOS OIDC client identifier. Used alongside `WORKOS_API_KEY` in `src/routes/auth.ts:200`. |
 | `GOOGLE_SERVICE_ACCOUNT_KEY` | qa, prod | via sync | via sync | n/a | GCP service-account key (JSON). Used in `src/lib/beta-allowlist.ts:49` to verify allowlisted beta testers and `src/routes/auth.ts:117`. |
 | `RESEND_API_KEY` | qa (`/wazoo-api`) | ⚠️ see provenance gap | via sync | n/a | Resend API key (`re_` prefix). Used in `src/lib/email.ts:14` for transactional email. **The prod binding has no vault source** (see §5). |
-| `OTP_FROM_ADDRESS` | **not in vault** | ⚠️ orphan Worker secret | ⚠️ orphan Worker secret | n/a | "From" address for OTP emails. Read in `src/lib/email.ts:15`; falls back to `Wazoo <noreply@mail.wazoo.dev>` if unbound. Not in any Infisical environment or path. |
+| `OTP_FROM_ADDRESS` | **not a secret** | `[vars]` | `[env.qa.vars]` | optional | "From" address for OTP emails. Read in `src/lib/email.ts`; set in `wrangler.toml` to `Wazoo <noreply@mail.wazoo.dev>` (the code default). Not in the vault. |
 | `WAZOO_EMBEDDINGS_PROVIDER_KEY` | qa (`/ci`) | no | no | n/a | Platform's own provider key for the BYOK embeddings acceptance round-trip (`scripts/qa-roundtrip.mjs`). Deliberately in the vault folder `/ci`, not at the project root, so no Worker Secret Sync publishes it. Inject it with `infisical run --env=qa --path=/ --path=/ci -- pnpm run roundtrip:qa` — a `--path` replaces the default root, so both paths must be named to get the root secrets too. `/ci` also holds `CLOUDFLARE_API_TOKEN`, so that run injects it as well; the script does not read it. |
 
 ### Non-secret configuration
@@ -81,21 +81,13 @@ Measured 2026-10-18. The Worker bindings were cleaned up in the folder
 migration (tracker [wazootech/memory#57](https://github.com/wazootech/memory/issues/57)):
 `CLOUDFLARE_API_TOKEN` and `WORKOS_COOKIE_PASSWORD`, which this service never
 reads, were deleted from both Workers, and the console Workers lost their own
-unused bindings. Two gaps remain.
+unused bindings. One gap remains. `OTP_FROM_ADDRESS` is not a secret and is configured in
+`wrangler.toml` `[vars]` / `[env.qa.vars]`; the direct Worker secrets of the
+same name were deleted so the var is the only source.
 
-1. **`OTP_FROM_ADDRESS` has no vault source.** It is bound on both the prod
-   and QA wazoo-api Workers, but it appears in **no** Infisical environment
-   or path. It was set as a direct Worker secret (`wrangler secret put`)
-   outside the vault sync. The code falls back to
-   `Wazoo <noreply@mail.wazoo.dev>` when unbound. **Resolution:** add
-   `OTP_FROM_ADDRESS` to `/wazoo-api` in `qa` and `prod` and let the sync
-   republish it, or move it to `wrangler.toml` `[vars]` since it is not a secret.
-
-2. **`RESEND_API_KEY` prod binding has no vault source.** `/wazoo-api` in `qa`
-   holds the key; `/wazoo-api` in `prod` does not, yet the prod Worker binds
-   it. The prod value is invisible to the vault. **Resolution:** add a reissued
-   prod key to `/wazoo-api` in `prod`. Deletion protection keeps the existing
-   binding until then.
+1. **`RESEND_API_KEY` prod binding was set outside the vault.** Resolved
+   2026-10-18: a reissued prod key now lives at `/wazoo-api` in `prod`, so the
+   sync owns the binding.
 
 ## Single source of truth for `WORLDS_API_ADMIN_KEY`
 
@@ -111,8 +103,8 @@ prod value when calling the prod Worker.
 
 | Action | Status |
 | --- | --- |
-| Vault `OTP_FROM_ADDRESS` (or move it to `[vars]`) | **Open** — see §5 gap #1 |
-| Vault a reissued `RESEND_API_KEY` in `/wazoo-api` `prod` | **Open** — see §5 gap #2 |
+| Move `OTP_FROM_ADDRESS` to `wrangler.toml` `[vars]` | **Done** — set in both envs; delete the two direct Worker secrets before the deploy |
+| Vault a reissued `RESEND_API_KEY` in `/wazoo-api` `prod` | **Done** 2026-10-18 |
 | Point each sync at its service folder; delete unused Worker bindings | **Done** 2026-10-18 |
 
 Last audited: 2026-10-18

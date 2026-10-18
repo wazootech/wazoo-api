@@ -17,6 +17,7 @@ API_BASE_URL = "https://api.wazoo.dev"
 WORLDS_API_URL = "https://data.wazoo.dev"
 WAZOO_ENV = "prod"
 STRIPE_PRICE_ID = ""
+OTP_FROM_ADDRESS = "Wazoo <noreply@mail.wazoo.dev>"
 
 [env.qa]
 name = "wazoo-api-qa"
@@ -34,6 +35,7 @@ API_BASE_URL = "https://api-qa.wazoo.dev"
 WORLDS_API_URL = "https://data-qa.wazoo.dev"
 WAZOO_ENV = "qa"
 STRIPE_PRICE_ID = ""
+OTP_FROM_ADDRESS = "Wazoo <noreply@mail.wazoo.dev>"
 
 [observability]
 enabled = true
