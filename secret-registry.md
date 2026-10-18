@@ -9,13 +9,13 @@ Worker syncs, and the rule for where a new secret goes — is recorded in the
 private ops home, `wazootech/memory` (`wiki/Infisical_(vault).md`); this file
 records only how wazoo-api consumes it.
 
-- Local secret files (`.env`, `.dev.vars`) are **retired**. There is no
-  committed copy in this repo's history and nothing needs rotating on account
-  of the migration. Secrets reach local processes by injection:
-  `infisical run --env=dev -- npm run dev` (or `npm run secrets:check` to
-  confirm what resolved, printing names and lengths only).
+- There is no `dev` environment in the vault. Local development brings its own
+  resources: a gitignored `.dev.vars` copied from `.dev.vars.example`, holding
+  values you choose yourself (see `CONTRIBUTING.md`). Vault values (`qa`,
+  `prod`) are never copied into local files. Org members inject the `qa` value
+  only for QA checks, with `infisical run --env=qa -- <command>`.
 - This repo has **no** `.infisical.json`, so `infisical` cannot resolve the
-  project from `repos/wazoo-api` on its own. Run injected commands from a
+  project from `repos/wazoo-api` on its own. For QA commands, run from a
   checkout that carries the link (`repos/worlds-api` does), or pass the project
   id explicitly. (An earlier revision of this file claimed a committed
   `.infisical.json` at this repo root; no such file exists.)
@@ -28,16 +28,16 @@ records only how wazoo-api consumes it.
 
 ## wazoo-api
 
-| Secret | Infisical env | Prod Worker | QA Worker | Local `dev` | Notes |
+| Secret | Infisical env | Prod Worker | QA Worker | Local dev | Notes |
 | --- |---|---|---|---|---|
-| `WORLDS_API_ADMIN_KEY` | dev, qa, prod | via sync | via sync | injected | Platform→data-plane admin key (`wzw_` prefix). Sent **as a bearer token** by `src/lib/worlds-client.ts:16` when wazoo-api calls worlds-api. worlds-api's `authorize()` accepts it, bypassing `api_keys`. |
-| `WAZOO_PLATFORM_ADMIN_TOKEN` | dev, qa, prod | via sync | via sync | injected | Platform→platform admin credential (`wzp_` prefix). Authenticated **into** wazoo-api via `src/routes/auth.ts:76` — the `Authorization: Bearer` token checked for admin route access. |
-| `WORKOS_API_KEY` | dev, qa, prod | via sync | via sync | injected | WorkOS SSO API key (`sk_` prefix). Used in `src/routes/auth.ts:146,199` to exchange auth codes and refresh sessions. |
-| `WORKOS_CLIENT_ID` | dev, qa, prod | via sync | via sync | injected | WorkOS OIDC client identifier. Used alongside `WORKOS_API_KEY` in `src/routes/auth.ts:200`. |
-| `GOOGLE_SERVICE_ACCOUNT_KEY` | qa, prod | via sync | via sync | n/a | GCP service-account key (JSON). Used in `src/lib/beta-allowlist.ts:49` to verify allowlisted beta testers and `src/routes/auth.ts:117`. Not present in dev. |
+| `WORLDS_API_ADMIN_KEY` | qa, prod | via sync | via sync | own value | Platform→data-plane admin key (`wzw_` prefix). Sent **as a bearer token** by `src/lib/worlds-client.ts:16` when wazoo-api calls worlds-api. worlds-api's `authorize()` accepts it, bypassing `api_keys`. |
+| `WAZOO_PLATFORM_ADMIN_TOKEN` | qa, prod | via sync | via sync | own value | Platform→platform admin credential (`wzp_` prefix). Authenticated **into** wazoo-api via `src/routes/auth.ts:76` — the `Authorization: Bearer` token checked for admin route access. |
+| `WORKOS_API_KEY` | qa, prod | via sync | via sync | own value | WorkOS SSO API key (`sk_` prefix). Used in `src/routes/auth.ts:146,199` to exchange auth codes and refresh sessions. |
+| `WORKOS_CLIENT_ID` | qa, prod | via sync | via sync | own value | WorkOS OIDC client identifier. Used alongside `WORKOS_API_KEY` in `src/routes/auth.ts:200`. |
+| `GOOGLE_SERVICE_ACCOUNT_KEY` | qa, prod | via sync | via sync | n/a | GCP service-account key (JSON). Used in `src/lib/beta-allowlist.ts:49` to verify allowlisted beta testers and `src/routes/auth.ts:117`. |
 | `RESEND_API_KEY` | qa, prod | ⚠️ see provenance gap | via sync | n/a | Resend API key (`re_` prefix). Used in `src/lib/email.ts:14` for transactional email. **Prod binding has no vault source** (see §5). |
 | `OTP_FROM_ADDRESS` | **not in vault** | ⚠️ orphan Worker secret | ⚠️ orphan Worker secret | n/a | "From" address for OTP emails. Read in `src/lib/email.ts:15`; falls back to `Wazoo <noreply@mail.wazoo.dev>` if unbound. Not in any Infisical environment or path. |
-| `WORKOS_COOKIE_PASSWORD` | dev, qa, prod | via sync | via sync | injected | ⚠️ **BOUND BUT NOT READ BY THIS SERVICE.** See §5 drift notes. Likely a copy-paste from console sync; should be removed. |
+| `WORKOS_COOKIE_PASSWORD` | qa, prod | via sync | via sync | own value | ⚠️ **BOUND BUT NOT READ BY THIS SERVICE.** See §5 drift notes. Likely a copy-paste from console sync; should be removed. |
 | `WAZOO_EMBEDDINGS_PROVIDER_KEY` | qa (`/ci`) | no | no | n/a | Platform's own provider key for the BYOK embeddings acceptance round-trip (`scripts/qa-roundtrip.mjs`). Deliberately in the vault folder `/ci`, not at the project root, so no Worker Secret Sync publishes it. Inject it with `infisical run --env=qa --path=/ --path=/ci -- pnpm run roundtrip:qa` — a `--path` replaces the default root, so both paths must be named to get the root secrets too. `/ci` also holds `CLOUDFLARE_API_TOKEN`, so that run injects it as well; the script does not read it. |
 
 ### Non-secret configuration
@@ -50,7 +50,7 @@ shell, and are deliberately **not** in the vault.
 
 | Target | Path |
 | --- | --- |
-| Local dev | `npm run dev` → `scripts/dev.mjs` → `wrangler dev` under `infisical run --env=dev`; `CLOUDFLARE_INCLUDE_PROCESS_ENV=true` makes Wrangler pass the injected values into the Worker. |
+| Local dev | `pnpm run dev` → `wrangler dev`, reading your own gitignored `.dev.vars`. No vault involvement. |
 | QA Worker | Infisical Secret Sync (project `wazoo-n-jx-j`, source `/`, env `qa`) → script `wazoo-api-qa`. Deletion protection **on**. |
 | Prod Worker | Infisical Secret Sync (project `wazoo-n-jx-j`, source `/`, env `prod`) → script `wazoo-api`. Deletion protection **on**. |
 | CI (`health-qa`) | `Infisical/secrets-action@v1.0.17` with `method: oidc`, env `qa`, `secret-name: WAZOO_PLATFORM_ADMIN_TOKEN`. Per-repo machine identity subject `repo:wazootech@197434733/wazoo-api@<id>:ref:refs/heads/main`. Needs `permissions: id-token: write` and the `INFISICAL_MACHINE_ID` / `INFISICAL_PROJECT_SLUG` repository **variables**. |
@@ -82,7 +82,7 @@ shell, and are deliberately **not** in the vault.
 
 1. **`OTP_FROM_ADDRESS` has no vault source.** It is bound on both the prod
    and QA wazoo-api Workers, but it appears in **no** Infisical environment
-   or path (not in dev, qa, or prod root; not in any subfolder). It was almost
+   or path (not in qa or prod root; not in any subfolder). It was almost
    certainly set as a direct Worker secret (`wrangler secret put`) outside the
    vault sync. The code falls back to
    `Wazoo <noreply@mail.wazoo.dev>` when unbound, so the binding can be removed
@@ -111,7 +111,7 @@ shell, and are deliberately **not** in the vault.
 
 | Secret | Bound on | In vault? | Read by wazoo-api? | Verdict |
 | --- | --- | --- | --- | --- |
-| `WORKOS_COOKIE_PASSWORD` | prod, qa, dev | ✅ | ❌ no | ⚠️ Copy-paste from console — wazoo-api's WorkOS usage (auth code exchange) does not set/consume session cookies. Should be removed from the wazoo-api Worker sync. |
+| `WORKOS_COOKIE_PASSWORD` | prod, qa | ✅ | ❌ no | ⚠️ Copy-paste from console — wazoo-api's WorkOS usage (auth code exchange) does not set/consume session cookies. Should be removed from the wazoo-api Worker sync. |
 
 > **NOTE on `WORKOS_COOKIE_PASSWORD`:** An earlier revision of the workspace
 > inventory (`docs/secret-inventory.md`) concluded this secret was a phantom —
