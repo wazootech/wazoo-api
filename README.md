@@ -83,7 +83,8 @@ optional path argument. It requires `WAZOO_PLATFORM_ADMIN_TOKEN`.
 Set `WAZOO_EMBEDDINGS_ACCEPTANCE=1` to additionally run the bring-your-own-key
 embeddings acceptance (worlds-api#1): it also needs `WORLDS_API_ADMIN_KEY` and
 `WAZOO_EMBEDDINGS_PROVIDER_KEY` (a personal ephemeral provider key exported for
-the run, or the capped QA-only key from the vault folder `/ci`). It sets and then
+the run, or the capped QA-only key from the vault folder `/ci`). Set
+`WAZOO_EMBEDDINGS_PROVIDER` to `openai` (default) or `openrouter` to match the key. It sets and then
 revokes a namespace embedding credential and asserts hybrid search, paraphrase
 retrieval, and cross-world vector isolation. It is skipped by default because
 it needs a provider key and the target worlds-api needs `EMBEDDING_KEK_V1`;
