@@ -14,12 +14,26 @@ const evidencePath = process.argv[2];
 // worlds-api (BYOK has no mode switch), search is keyword-only, so the hybrid
 // assertions below would fail by design. The default round trip is unchanged.
 //   WAZOO_EMBEDDINGS_ACCEPTANCE=1  run the hybrid acceptance block
-//   WAZOO_EMBEDDINGS_PROVIDER_KEY  a personal ephemeral OpenAI key, or the capped QA key in /ci
+//   WAZOO_EMBEDDINGS_PROVIDER      openai (default) or openrouter
+//   WAZOO_EMBEDDINGS_PROVIDER_KEY  a key for that provider: a personal ephemeral
+//                                  one, or the capped QA OpenAI key in /ci
 //   WORLDS_API_ADMIN_KEY           data-plane admin key (Infisical qa)
 const HYBRID = process.env.WAZOO_EMBEDDINGS_ACCEPTANCE === "1";
 const DATA_ADMIN = process.env.WORLDS_API_ADMIN_KEY;
 const PROVIDER_KEY = process.env.WAZOO_EMBEDDINGS_PROVIDER_KEY;
-const EMBEDDING_MODEL = "openai/text-embedding-3-small";
+const PROVIDER = process.env.WAZOO_EMBEDDINGS_PROVIDER ?? "openai";
+const MODELS = {
+  openai: "openai/text-embedding-3-small",
+  openrouter: "openrouter/openai/text-embedding-3-small",
+};
+const EMBEDDING_MODEL = MODELS[PROVIDER];
+if (HYBRID && !EMBEDDING_MODEL) {
+  throw new Error(
+    `WAZOO_EMBEDDINGS_PROVIDER must be one of ${Object.keys(MODELS).join(", ")}`,
+  );
+}
+const CREDENTIAL_PATH = (uid) =>
+  `/namespaces/${uid}/embedding-providers/${PROVIDER}`;
 if (HYBRID && (!DATA_ADMIN || !PROVIDER_KEY)) {
   throw new Error(
     "WAZOO_EMBEDDINGS_ACCEPTANCE=1 needs WORLDS_API_ADMIN_KEY and WAZOO_EMBEDDINGS_PROVIDER_KEY",
@@ -125,13 +139,13 @@ try {
   // requires an active credential, before import can build vectors.
   let hybridReady = false;
   if (HYBRID) {
-    const cred = await call("PUT", `${DATA}/namespaces/${uidA}/embedding-credential`, DATA_ADMIN,
-      { provider: "openai", apiKey: PROVIDER_KEY });
+    const cred = await call("PUT", `${DATA}${CREDENTIAL_PATH(uidA)}`, DATA_ADMIN,
+      { apiKey: PROVIDER_KEY });
     hybridReady = record("embeddings: set namespace credential",
       cred.status === 200 && cred.json?.status === "active",
       `status=${cred.json?.status} last4=${cred.json?.last4}`, cred);
     cleanup.push(async () => {
-      await call("DELETE", `${DATA}/namespaces/${uidA}/embedding-credential`, DATA_ADMIN);
+      await call("DELETE", `${DATA}${CREDENTIAL_PATH(uidA)}`, DATA_ADMIN);
     });
     const patch = await call("PATCH", `${DATA}/worlds/${worldId}`, DATA_ADMIN,
       { embeddingModel: EMBEDDING_MODEL });
@@ -248,7 +262,7 @@ ex:Doc2 ex:title "Second document" ; ex:ref ex:Doc1 .`;
     // Revoking the credential drops the namespace to keyword-only without a
     // data change: the next search reports mode keyword and still succeeds.
     if (hybridReady) {
-      const rev = await call("DELETE", `${DATA}/namespaces/${uidA}/embedding-credential`, DATA_ADMIN);
+      const rev = await call("DELETE", `${DATA}${CREDENTIAL_PATH(uidA)}`, DATA_ADMIN);
       record("embeddings: revoke credential", rev.status === 204, "revoked", rev);
       const afterRevoke = await call("POST", `${DATA}/worlds/${worldId}/search`, worldToken,
         { query: MARKER });
