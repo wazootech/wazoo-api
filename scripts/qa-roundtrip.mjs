@@ -10,11 +10,11 @@ if (!ADMIN) throw new Error("WAZOO_PLATFORM_ADMIN_TOKEN missing");
 const evidencePath = process.argv[2];
 
 // BYOK embeddings acceptance (worlds-api#1, design section 6). Off unless
-// explicitly requested: until QA sets EMBEDDING_PROVIDER=byok and a capped QA
-// provider key exists, search is keyword-only, so the hybrid assertions below
-// would fail by design. The default round trip is unchanged.
+// explicitly requested: without a provider key and a KEK on the target
+// worlds-api (BYOK has no mode switch), search is keyword-only, so the hybrid
+// assertions below would fail by design. The default round trip is unchanged.
 //   WAZOO_EMBEDDINGS_ACCEPTANCE=1  run the hybrid acceptance block
-//   WAZOO_EMBEDDINGS_PROVIDER_KEY  the QA-only capped OpenAI key (decision D8)
+//   WAZOO_EMBEDDINGS_PROVIDER_KEY  a personal ephemeral OpenAI key, or the capped QA key in /ci
 //   WORLDS_API_ADMIN_KEY           data-plane admin key (Infisical qa)
 const HYBRID = process.env.WAZOO_EMBEDDINGS_ACCEPTANCE === "1";
 const DATA_ADMIN = process.env.WORLDS_API_ADMIN_KEY;
