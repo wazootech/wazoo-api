@@ -175,6 +175,62 @@
           "createTime"
         ]
       },
+      "EmbeddingProviderList": {
+        "type": "object",
+        "properties": {
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmbeddingCredential"
+            }
+          }
+        },
+        "required": [
+          "providers"
+        ]
+      },
+      "EmbeddingCredential": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "openai",
+              "openrouter"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "invalid",
+              "revoked"
+            ]
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "last4": {
+            "type": "string"
+          },
+          "createTime": {
+            "type": "string"
+          },
+          "rotateTime": {
+            "type": "string"
+          },
+          "revokeTime": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "status",
+          "fingerprint",
+          "last4",
+          "createTime"
+        ]
+      },
       "World": {
         "type": "object",
         "properties": {
@@ -1249,6 +1305,550 @@
           },
           "401": {
             "description": "Not authenticated as a user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me/embedding-providers": {
+      "get": {
+        "tags": [
+          "Embeddings"
+        ],
+        "operationId": "listEmbeddingProviders",
+        "summary": "List embedding provider credentials",
+        "description": "Lists the caller's bring-your-own-key embedding credentials, revoked ones included so their status stays readable. Metadata only: a key is never returned.",
+        "x-mint": {
+          "metadata": {
+            "title": "List embedding provider credentials"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Credential metadata, one entry per provider",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingProviderList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated as a user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me/embedding-providers/{provider}": {
+      "put": {
+        "tags": [
+          "Embeddings"
+        ],
+        "operationId": "setEmbeddingProviderCredential",
+        "summary": "Set an embedding provider credential",
+        "description": "Stores or rotates the caller's API key for one embedding provider. The key is encrypted at rest, write-only, and never returned or logged. Choose a model, reindex, and search with a world token on the data plane afterwards. Returns 503 EMBEDDINGS_NOT_CONFIGURED when the deployment has embeddings disabled.",
+        "x-mint": {
+          "metadata": {
+            "title": "Set an embedding provider credential"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "openai",
+                "openrouter"
+              ],
+              "description": "Embedding provider this credential addresses. A user holds at most one credential per provider."
+            },
+            "required": true,
+            "description": "Embedding provider this credential addresses. A user holds at most one credential per provider.",
+            "name": "provider",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "apiKey": {
+                    "type": "string",
+                    "description": "The provider API key: 16 to 512 printable characters with no whitespace."
+                  }
+                },
+                "required": [
+                  "apiKey"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Credential stored; metadata only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingCredential"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated as a user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Embeddings are not configured on this deployment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Embeddings"
+        ],
+        "operationId": "getEmbeddingProviderCredential",
+        "summary": "Get an embedding provider credential's status",
+        "description": "Returns the metadata of the caller's credential for one provider. The key itself is never returned.",
+        "x-mint": {
+          "metadata": {
+            "title": "Get an embedding provider credential"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "openai",
+                "openrouter"
+              ],
+              "description": "Embedding provider this credential addresses. A user holds at most one credential per provider."
+            },
+            "required": true,
+            "description": "Embedding provider this credential addresses. A user holds at most one credential per provider.",
+            "name": "provider",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Credential metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingCredential"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated as a user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Embeddings"
+        ],
+        "operationId": "deleteEmbeddingProviderCredential",
+        "summary": "Revoke an embedding provider credential",
+        "description": "Revokes the caller's credential for one provider. The stored key is erased and every world on that provider's models falls back to keyword search until a new key is stored and the world is reindexed. Worlds on another provider's models are not affected.",
+        "x-mint": {
+          "metadata": {
+            "title": "Revoke an embedding provider credential"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "openai",
+                "openrouter"
+              ],
+              "description": "Embedding provider this credential addresses. A user holds at most one credential per provider."
+            },
+            "required": true,
+            "description": "Embedding provider this credential addresses. A user holds at most one credential per provider.",
+            "name": "provider",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Revoked"
+          },
+          "401": {
+            "description": "Not authenticated as a user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No credential",
             "content": {
               "application/json": {
                 "schema": {

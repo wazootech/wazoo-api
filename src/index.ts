@@ -7,6 +7,7 @@ import { registerHealthRoutes } from "./routes/health";
 import { registerTokensRoutes } from "./routes/tokens";
 import { registerUsageRoutes } from "./routes/usage";
 import { registerUsersRoutes } from "./routes/users";
+import { registerEmbeddingProviderRoutes } from "./routes/embedding-providers";
 import { registerWorldsRoutes } from "./routes/worlds";
 import { registerMcpRoute } from "./routes/mcp";
 import { registerAdminRoutes } from "./routes/admin";
@@ -51,6 +52,7 @@ registerAuthRoutes(app);
 
 app.use("/v1/*", requireAuth);
 registerUsersRoutes(app);
+registerEmbeddingProviderRoutes(app);
 registerWorldsRoutes(app);
 registerTokensRoutes(app);
 registerUsageRoutes(app);
