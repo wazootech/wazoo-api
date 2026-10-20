@@ -196,7 +196,20 @@ ex:Doc2 ex:title "Second document" ; ex:ref ex:Doc1 .`;
       reindex);
   }
 
-  const search = await call("POST", `${DATA}/worlds/${worldId}/search`, worldToken, { query: MARKER });
+  // A reindex clears the SDK cache only in the isolate that served it. Another
+  // isolate may hold an SDK built while the world was stale (no embedder) for up
+  // to 60 s (worlds-api design 2.2), so hybrid search is polled, not asserted
+  // on the first try, and the wait is reported.
+  async function searchUntil(query, done, timeoutMs = 90_000) {
+    const started = Date.now();
+    for (;;) {
+      const res = await call("POST", `${DATA}/worlds/${worldId}/search`, worldToken, { query });
+      const waited = Math.round((Date.now() - started) / 1000);
+      if (!HYBRID || done(res) || Date.now() - started > timeoutMs) return { res, waited };
+      await new Promise((r) => setTimeout(r, 5000));
+    }
+  }
+  const { res: search, waited } = await searchUntil(MARKER, (r) => r.json?.mode === "hybrid");
   const hits = search.json?.results ?? [];
   record("search finds reindexed content", search.status === 200 &&
     hits.some((h) => JSON.stringify(h).includes(MARKER)),
@@ -206,16 +219,18 @@ ex:Doc2 ex:title "Second document" ; ex:ref ex:Doc1 .`;
     record("embeddings: marker search is hybrid and ranked",
       search.status === 200 && search.json?.mode === "hybrid" &&
         hit !== undefined && hit.scoreType !== "unranked",
-      `mode=${search.json?.mode} scoreType=${hit?.scoreType}`, search);
+      `mode=${search.json?.mode} scoreType=${hit?.scoreType} waitedForHybrid=${waited}s`, search);
 
     // A query sharing no lexeme with the document proves the vector path: pure
     // full-text search would return nothing for it.
     const paraphrase = "an explanatory note covering retrieval validation";
-    const pSearch = await call("POST", `${DATA}/worlds/${worldId}/search`, worldToken,
-      { query: paraphrase });
+    // No shared words means no keyword signal, so the vector-only mode
+    // ("semantic") is the expected one here; "hybrid" is also accepted.
+    const vectorMode = (r) => r.json?.mode === "hybrid" || r.json?.mode === "semantic";
+    const { res: pSearch } = await searchUntil(paraphrase, vectorMode);
     const pHits = pSearch.json?.results ?? [];
     record("embeddings: paraphrase (no marker tokens) returns the document",
-      pSearch.status === 200 && pSearch.json?.mode === "hybrid" &&
+      pSearch.status === 200 && vectorMode(pSearch) &&
         pHits.some((h) => JSON.stringify(h).includes(MARKER)),
       `${pHits.length} hit(s), mode=${pSearch.json?.mode}`, pSearch);
   }
@@ -264,11 +279,19 @@ ex:Doc2 ex:title "Second document" ; ex:ref ex:Doc1 .`;
     if (hybridReady) {
       const rev = await call("DELETE", `${DATA}${CREDENTIAL_PATH(uidA)}`, DATA_ADMIN);
       record("embeddings: revoke credential", rev.status === 204, "revoked", rev);
-      const afterRevoke = await call("POST", `${DATA}/worlds/${worldId}/search`, worldToken,
-        { query: MARKER });
+      // Other isolates may keep the SDK and decrypted key they cached before
+      // the revoke for up to 60 s, so wait for the drop to keyword search.
+      const started = Date.now();
+      let afterRevoke;
+      for (;;) {
+        afterRevoke = await call("POST", `${DATA}/worlds/${worldId}/search`, worldToken,
+          { query: MARKER });
+        if (afterRevoke.json?.mode === "keyword" || Date.now() - started > 90_000) break;
+        await new Promise((r) => setTimeout(r, 5000));
+      }
       record("embeddings: after revoke search is keyword (200)",
         afterRevoke.status === 200 && afterRevoke.json?.mode === "keyword",
-        `mode=${afterRevoke.json?.mode}`, afterRevoke);
+        `mode=${afterRevoke.json?.mode} waited=${Math.round((Date.now() - started) / 1000)}s`, afterRevoke);
     }
   }
 
