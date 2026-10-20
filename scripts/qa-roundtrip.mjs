@@ -32,8 +32,7 @@ if (HYBRID && !EMBEDDING_MODEL) {
     `WAZOO_EMBEDDINGS_PROVIDER must be one of ${Object.keys(MODELS).join(", ")}`,
   );
 }
-const CREDENTIAL_PATH = (uid) =>
-  `/namespaces/${uid}/embedding-providers/${PROVIDER}`;
+const CREDENTIAL_PATH = `/v1/users/me/embedding-providers/${PROVIDER}`;
 if (HYBRID && (!DATA_ADMIN || !PROVIDER_KEY)) {
   throw new Error(
     "WAZOO_EMBEDDINGS_ACCEPTANCE=1 needs WORLDS_API_ADMIN_KEY and WAZOO_EMBEDDINGS_PROVIDER_KEY",
@@ -93,7 +92,7 @@ async function mintPlatformToken(email, label) {
   const res = await call("POST", `${API}/v1/auth/api-tokens`, ADMIN, {
     email,
     tokenName: `${run}-${label}`,
-    scope: "users.read worlds.read worlds.write usage.read",
+    scope: "users.read users.write worlds.read worlds.write usage.read",
   });
   const token = res.json?.token?.token ?? res.json?.token ?? res.json?.apiToken?.token;
   if (typeof token === "string") secrets.add(token);
@@ -139,13 +138,15 @@ try {
   // requires an active credential, before import can build vectors.
   let hybridReady = false;
   if (HYBRID) {
-    const cred = await call("PUT", `${DATA}${CREDENTIAL_PATH(uidA)}`, DATA_ADMIN,
+    // Through the Platform API with the customer's own token, the path a hosted
+    // customer has (wazoo-api#123); wazoo-api forwards to worlds-api.
+    const cred = await call("PUT", `${API}${CREDENTIAL_PATH}`, tokenA,
       { apiKey: PROVIDER_KEY });
     hybridReady = record("embeddings: set namespace credential",
       cred.status === 200 && cred.json?.status === "active",
       `status=${cred.json?.status} last4=${cred.json?.last4}`, cred);
     cleanup.push(async () => {
-      await call("DELETE", `${DATA}${CREDENTIAL_PATH(uidA)}`, DATA_ADMIN);
+      await call("DELETE", `${API}${CREDENTIAL_PATH}`, tokenA);
     });
     const patch = await call("PATCH", `${DATA}/worlds/${worldId}`, DATA_ADMIN,
       { embeddingModel: EMBEDDING_MODEL });
@@ -277,7 +278,7 @@ ex:Doc2 ex:title "Second document" ; ex:ref ex:Doc1 .`;
     // Revoking the credential drops the namespace to keyword-only without a
     // data change: the next search reports mode keyword and still succeeds.
     if (hybridReady) {
-      const rev = await call("DELETE", `${DATA}${CREDENTIAL_PATH(uidA)}`, DATA_ADMIN);
+      const rev = await call("DELETE", `${API}${CREDENTIAL_PATH}`, tokenA);
       record("embeddings: revoke credential", rev.status === 204, "revoked", rev);
       // Other isolates may keep the SDK and decrypted key they cached before
       // the revoke for up to 60 s, so wait for the drop to keyword search.
