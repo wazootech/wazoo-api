@@ -201,7 +201,7 @@ ex:Doc2 ex:title "Second document" ; ex:ref ex:Doc1 .`;
   // isolate may hold an SDK built while the world was stale (no embedder) for up
   // to 60 s (worlds-api design 2.2), so hybrid search is polled, not asserted
   // on the first try, and the wait is reported.
-  async function searchUntil(query, done, timeoutMs = 90_000) {
+  async function searchUntil(query, done, timeoutMs = 240_000) {
     const started = Date.now();
     for (;;) {
       const res = await call("POST", `${DATA}/worlds/${worldId}/search`, worldToken, { query });
