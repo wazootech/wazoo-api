@@ -7,6 +7,14 @@ import type { AppEnv } from "../env";
 import { all, db, first } from "../lib/db";
 import { requireScope, resolveUser, respond } from "../lib/http";
 import { worldBillingQuota } from "../lib/quota";
+import { verifyStripeSignature } from "../lib/stripe";
+import {
+  applyStripeEvent,
+  HANDLED_EVENT_TYPES,
+  eventAlreadyProcessed,
+  markEventProcessed,
+  type StripeEvent,
+} from "../lib/subscriptions";
 import {
   worldIdParam,
   BillingResponseSchema,
@@ -328,7 +336,52 @@ export const stripeWebhook = new Hono<AppEnv>().post(
       );
     }
 
-    return c.json({ received: true });
+    let event: StripeEvent;
+    try {
+      event = JSON.parse(body) as StripeEvent;
+    } catch {
+      return c.json(
+        { error: { code: "INVALID_ARGUMENT", message: "Body is not JSON" } },
+        400,
+      );
+    }
+    if (typeof event.id !== "string" || typeof event.type !== "string") {
+      return c.json(
+        { error: { code: "INVALID_ARGUMENT", message: "Not a Stripe event" } },
+        400,
+      );
+    }
+
+    // Acknowledge event types we do not act on without touching the database.
+    if (!HANDLED_EVENT_TYPES.has(event.type)) {
+      return c.json({ received: true, handled: false });
+    }
+
+    // Stripe delivers at least once. Skip events already applied; an event is
+    // recorded only after it succeeds, so a failure is retried by Stripe.
+    if (await eventAlreadyProcessed(c.env, event.id)) {
+      return c.json({ received: true, duplicate: true });
+    }
+    try {
+      const result = await applyStripeEvent(c.env, event);
+      await markEventProcessed(c.env, event);
+      return c.json({ received: true, handled: result.handled });
+    } catch (error) {
+      console.error("[stripe-webhook] applying the event failed", {
+        eventId: event.id,
+        type: event.type,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        {
+          error: {
+            code: "INTERNAL",
+            message: "Could not apply the event; Stripe will retry",
+          },
+        },
+        500,
+      );
+    }
   },
 );
 
@@ -358,36 +411,4 @@ async function resolveWorldBilling(
   );
   if (!row) throw new HTTPException(404, { message: "World not found" });
   return row;
-}
-
-async function verifyStripeSignature(
-  body: string,
-  header: string,
-  secret: string,
-): Promise<boolean> {
-  const timestamp = header
-    .split(",")
-    .find((part) => part.startsWith("t="))
-    ?.slice(2);
-  const expected = header
-    .split(",")
-    .find((part) => part.startsWith("v1="))
-    ?.slice(3);
-  if (!timestamp || !expected) return false;
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const digest = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    new TextEncoder().encode(`${timestamp}.${body}`),
-  );
-  const actual = [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-  return actual === expected;
 }

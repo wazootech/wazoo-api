@@ -671,6 +671,24 @@
             "type": "string",
             "nullable": true,
             "description": "The UTC day."
+          },
+          "billing": {
+            "type": "object",
+            "properties": {
+              "checkoutAvailable": {
+                "type": "boolean",
+                "description": "True when this user can start a Pro checkout: billing is configured and they are on the free plan."
+              },
+              "portalAvailable": {
+                "type": "boolean",
+                "description": "True when the user has a billing account to manage in the Stripe portal."
+              }
+            },
+            "required": [
+              "checkoutAvailable",
+              "portalAvailable"
+            ],
+            "description": "What the console may offer."
           }
         },
         "required": [
@@ -678,7 +696,21 @@
           "dailyRowWrites",
           "rowsWrittenToday",
           "usagePercent",
-          "day"
+          "day",
+          "billing"
+        ]
+      },
+      "BillingSessionUrl": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The Stripe-hosted page to send the user to. It is single-use and expires."
+          }
+        },
+        "required": [
+          "url"
         ]
       }
     },
@@ -3884,6 +3916,250 @@
           },
           "502": {
             "description": "The plan was saved but the data plane did not accept its budget (BUDGET_SYNC_FAILED). Repeat the call.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me/billing/checkout": {
+      "post": {
+        "tags": [
+          "Billing"
+        ],
+        "operationId": "createCheckoutSession",
+        "summary": "Start a Pro subscription checkout",
+        "description": "Creates a Stripe Checkout session for the Pro plan and returns the hosted page's URL. The plan changes when Stripe confirms the payment (a webhook), not when this call returns, so the console shows the new plan shortly after the user comes back.",
+        "x-mint": {
+          "metadata": {
+            "title": "Start a Pro checkout"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Checkout session created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingSessionUrl"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The user already has a subscription (ALREADY_SUBSCRIBED).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Stripe refused the request (STRIPE_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Billing is not configured (BILLING_NOT_CONFIGURED).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me/billing/portal": {
+      "post": {
+        "tags": [
+          "Billing"
+        ],
+        "operationId": "createBillingPortalSession",
+        "summary": "Open the Stripe billing portal",
+        "description": "Creates a Stripe billing portal session where the user can update their card, see invoices or cancel, and returns its URL.",
+        "x-mint": {
+          "metadata": {
+            "title": "Open the billing portal"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Portal session created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingSessionUrl"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The user has no billing account yet (NO_BILLING_ACCOUNT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Stripe refused the request (STRIPE_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Billing is not configured (BILLING_NOT_CONFIGURED).",
             "content": {
               "application/json": {
                 "schema": {

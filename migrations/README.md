@@ -63,3 +63,14 @@ row-write budget in worlds-api: applied when a world is created and by
 prod). Until it runs, plan lookups fall back to `free` and setting a plan
 fails. SQLite has no `ADD COLUMN IF NOT EXISTS`: a "duplicate column name:
 plan" error means it is already applied. Existing users become `free`.
+
+## 2026-10-28-user-billing.sql
+
+Adds `users.stripe_customer_id` and `users.stripe_subscription_id`, an index on
+the customer id, and a `stripe_events` table of already-applied Stripe events.
+The Pro plan follows the user's subscription.
+
+**Run this before deploying the code that ships with it** (QA first, then
+prod), after `2026-10-27-user-plan.sql`. SQLite has no `ADD COLUMN IF NOT
+EXISTS`: a "duplicate column name" error means that statement is already
+applied, so run the remaining statements one by one.

@@ -347,6 +347,7 @@ describe("plans and the per-namespace write budget", () => {
         rowsWrittenToday: 12_500,
         usagePercent: 25,
         day: "2026-10-27",
+        billing: { checkoutAvailable: false, portalAvailable: false },
       });
     });
 

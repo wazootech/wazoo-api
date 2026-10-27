@@ -7,6 +7,8 @@ export type Bindings = {
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_ID?: string;
+  /** Console origin Stripe returns the user to. Unset turns checkout off. */
+  CONSOLE_URL?: string;
   RESEND_API_KEY?: string;
   OTP_FROM_ADDRESS?: string;
   WORKOS_API_KEY?: string;
@@ -37,6 +39,7 @@ export function bindingsFromProcessEnv(): Bindings {
     "STRIPE_SECRET_KEY",
     "STRIPE_WEBHOOK_SECRET",
     "STRIPE_PRICE_ID",
+    "CONSOLE_URL",
     "RESEND_API_KEY",
     "OTP_FROM_ADDRESS",
     "WORKOS_API_KEY",
