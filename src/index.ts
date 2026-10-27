@@ -11,6 +11,7 @@ import { registerEmbeddingProviderRoutes } from "./routes/embedding-providers";
 import { registerWorldsRoutes } from "./routes/worlds";
 import { registerMcpRoute } from "./routes/mcp";
 import { registerAdminRoutes } from "./routes/admin";
+import { registerPlanRoutes } from "./routes/plans";
 import { errorHandler, requireAuth } from "./lib/http";
 
 const app = new OpenAPIHono<AppEnv>();
@@ -58,6 +59,7 @@ registerTokensRoutes(app);
 registerUsageRoutes(app);
 registerBillingRoutes(app);
 registerAdminRoutes(app);
+registerPlanRoutes(app);
 
 app.use("/mcp", requireAuth);
 registerMcpRoute(app);

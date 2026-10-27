@@ -14,6 +14,9 @@ export type Bindings = {
   WAZOO_PLATFORM_ADMIN_TOKEN?: string;
   GOOGLE_SERVICE_ACCOUNT_KEY?: string;
   BETA_ALLOWLIST_SHEET_ID?: string;
+  /** Daily D1 rows a user on each plan may write (see lib/plans.ts). */
+  PLAN_FREE_DAILY_ROW_WRITES?: string;
+  PLAN_PRO_DAILY_ROW_WRITES?: string;
 };
 
 export type AuthContext = {
@@ -41,6 +44,8 @@ export function bindingsFromProcessEnv(): Bindings {
     "WAZOO_PLATFORM_ADMIN_TOKEN",
     "GOOGLE_SERVICE_ACCOUNT_KEY",
     "BETA_ALLOWLIST_SHEET_ID",
+    "PLAN_FREE_DAILY_ROW_WRITES",
+    "PLAN_PRO_DAILY_ROW_WRITES",
   ];
   const env: Record<string, string | undefined> = {};
   for (const key of keys) {

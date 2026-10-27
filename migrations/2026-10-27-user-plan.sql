@@ -1,0 +1,11 @@
+-- Adds the plan a user is on. The plan sets the user's daily D1 row-write
+-- budget in worlds-api (applied when a world is created and by
+-- PUT /v1/admin/users/{userUid}/plan).
+--
+-- Precondition: none. Run once per database (QA first, then prod). SQLite has
+-- no ADD COLUMN IF NOT EXISTS: if this fails with "duplicate column name:
+-- plan", it was already applied. Existing users become 'free'.
+--
+-- Deploy order: run this BEFORE deploying the code that reads `plan`. Until it
+-- runs, plan lookups fall back to 'free' and setting a plan fails.
+ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free';

@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   display_name TEXT,
   state TEXT NOT NULL DEFAULT 'active',
   age_confirmed_at TEXT,
+  plan TEXT NOT NULL DEFAULT 'free',
   create_time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 

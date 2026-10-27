@@ -52,3 +52,14 @@ as part of this migration:
 ```sql
 SELECT world_id, COUNT(*) FROM worlds GROUP BY world_id HAVING COUNT(*) > 1;
 ```
+
+## 2026-10-27-user-plan.sql
+
+Adds `users.plan` (`free` by default). The plan sets the user's daily D1
+row-write budget in worlds-api: applied when a world is created and by
+`PUT /v1/admin/users/{userUid}/plan`.
+
+**Run this before deploying the code that ships with it** (QA first, then
+prod). Until it runs, plan lookups fall back to `free` and setting a plan
+fails. SQLite has no `ADD COLUMN IF NOT EXISTS`: a "duplicate column name:
+plan" error means it is already applied. Existing users become `free`.
