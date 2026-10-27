@@ -14,9 +14,9 @@ database_id = "478c3732-dd9d-4931-825b-cf763ab67017"
 
 [vars]
 API_BASE_URL = "https://api.wazoo.dev"
+CONSOLE_URL = "https://console.wazoo.dev"
 WORLDS_API_URL = "https://data.wazoo.dev"
 WAZOO_ENV = "prod"
-STRIPE_PRICE_ID = ""
 OTP_FROM_ADDRESS = "Wazoo <noreply@mail.wazoo.dev>"
 
 [env.qa]
@@ -32,9 +32,9 @@ database_id = "54648bbf-c775-4c89-96b0-d1eb00dd2e43"
 
 [env.qa.vars]
 API_BASE_URL = "https://api-qa.wazoo.dev"
+CONSOLE_URL = "https://console-qa.wazoo.dev"
 WORLDS_API_URL = "https://data-qa.wazoo.dev"
 WAZOO_ENV = "qa"
-STRIPE_PRICE_ID = ""
 OTP_FROM_ADDRESS = "Wazoo <noreply@mail.wazoo.dev>"
 
 [observability]

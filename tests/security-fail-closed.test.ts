@@ -121,7 +121,10 @@ describe("stripe webhook fails closed (#76)", () => {
     );
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ received: true });
+    await expect(res.json()).resolves.toEqual({
+      received: true,
+      handled: false,
+    });
   });
 
   it("treats an empty-string secret as unconfigured, not as a valid one", async () => {

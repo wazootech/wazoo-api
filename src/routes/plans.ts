@@ -34,6 +34,18 @@ const UserPlanSchema = z
     }),
     usagePercent: z.number().int().nonnegative().nullable(),
     day: z.string().nullable().openapi({ description: "The UTC day." }),
+    billing: z
+      .object({
+        checkoutAvailable: z.boolean().openapi({
+          description:
+            "True when this user can start a Pro checkout: billing is configured and they are on the free plan.",
+        }),
+        portalAvailable: z.boolean().openapi({
+          description:
+            "True when the user has a billing account to manage in the Stripe portal.",
+        }),
+      })
+      .openapi({ description: "What the console may offer." }),
   })
   .openapi("UserPlan");
 
@@ -116,8 +128,22 @@ export function registerPlanRoutes(app: OpenAPIHono<AppEnv>) {
     const usage = await readPlanUsage(c.env, user.uid);
     const dailyRowWrites = usage?.dailyRowWrites ?? null;
     const rowsWrittenToday = usage?.rowsWrittenToday ?? null;
+    const row = await first<{ stripe_customer_id: string | null }>(
+      db(c.env)
+        .prepare("SELECT stripe_customer_id FROM users WHERE uid = ?")
+        .bind(user.uid),
+    ).catch(() => null);
+    const billingOn = Boolean(
+      c.env.STRIPE_SECRET_KEY && c.env.STRIPE_PRICE_ID && c.env.CONSOLE_URL,
+    );
     return respond(c, {
       plan,
+      billing: {
+        checkoutAvailable: billingOn && plan === "free",
+        portalAvailable: Boolean(
+          c.env.STRIPE_SECRET_KEY && row?.stripe_customer_id,
+        ),
+      },
       dailyRowWrites,
       rowsWrittenToday,
       usagePercent:
