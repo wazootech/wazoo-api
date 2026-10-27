@@ -9,3 +9,4 @@ allowBuilds:
 # consumed right after they publish, so they bypass that delay.
 minimumReleaseAgeExclude:
   - '@jsr/wazoo__*'
+  - '@jsr/worlds__*'

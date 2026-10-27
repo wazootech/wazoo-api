@@ -182,8 +182,8 @@ importers:
         specifier: ^10.8.0
         version: 10.8.0
       '@worlds/client':
-        specifier: npm:@jsr/worlds__client@^0.1.0
-        version: '@jsr/worlds__client@0.1.0'
+        specifier: npm:@jsr/worlds__client@^0.8.0
+        version: '@jsr/worlds__client@0.8.0'
       hono:
         specifier: ^4.10.3
         version: 4.12.30
@@ -620,8 +620,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.9':
     resolution: {integrity: sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ==}
 
-  '@jsr/worlds__client@0.1.0':
-    resolution: {integrity: sha512-Z5iL51C6EXn4Iu1S+zTM+CGRdYRwFUZrEHOVOP2mQslCID0qNaWO7GuNNvGRZMpokjPXSBnL7pHmz72R8Yw3bA==, tarball: https://npm.jsr.io/~/11/@jsr/worlds__client/0.1.0.tgz}
+  '@jsr/worlds__client@0.8.0':
+    resolution: {integrity: sha512-1WW20mdVOCOcLrU0J16/9AH9nLpMd1oNqzjKI2DrseVIXlbDQaBPCT2VMSUJxRf3EADqPOkhvg0+94u/To/MLA==, tarball: https://npm.jsr.io/~/11/@jsr/worlds__client/0.8.0.tgz}
 
   '@modelcontextprotocol/core@2.0.0':
     resolution: {integrity: sha512-pJCEwGG7Lfr/+PQp9ZTwKXNeO5wzbfKL7H3MYpCorM4oFBoQrdjnBgEoqG+RjhsvS1FKrDbKux+M1HhlnGWqcA==}
@@ -1462,7 +1462,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@jsr/worlds__client@0.1.0': {}
+  '@jsr/worlds__client@0.8.0': {}
 
   '@modelcontextprotocol/core@2.0.0':
     dependencies:

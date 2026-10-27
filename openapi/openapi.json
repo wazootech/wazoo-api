@@ -637,6 +637,49 @@
           "subscriptionConfigured",
           "paymentRequired"
         ]
+      },
+      "UserPlan": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "type": "string",
+            "enum": [
+              "free",
+              "pro"
+            ],
+            "description": "The user's plan. It sets their daily database write budget."
+          },
+          "dailyRowWrites": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "Database rows the user's worlds may write per UTC day, shared across all of them. A stored quad costs about 9 rows, and about 94 per asserted quad with inference on. Null if the data plane could not be reached."
+          },
+          "rowsWrittenToday": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "description": "Rows written so far today (UTC), or null if the data plane could not be reached."
+          },
+          "usagePercent": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "day": {
+            "type": "string",
+            "nullable": true,
+            "description": "The UTC day."
+          }
+        },
+        "required": [
+          "plan",
+          "dailyRowWrites",
+          "rowsWrittenToday",
+          "usagePercent",
+          "day"
+        ]
       }
     },
     "parameters": {}
@@ -3631,6 +3674,216 @@
           },
           "403": {
             "description": "Insufficient scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me/plan": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "operationId": "getUserPlan",
+        "summary": "Get the authenticated user's plan and today's write usage",
+        "x-mint": {
+          "metadata": {
+            "title": "Get plan and write usage"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The plan and usage against its daily write budget",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPlan"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/users/{userUid}/plan": {
+      "put": {
+        "tags": [
+          "Admin"
+        ],
+        "operationId": "setUserPlan",
+        "summary": "Set a user's plan",
+        "description": "Admin-only. Stores the plan and applies its daily write budget in the data plane. Idempotent: if the data plane cannot be reached the plan is still saved, the call returns 502 BUDGET_SYNC_FAILED, and repeating it retries the sync.",
+        "x-mint": {
+          "metadata": {
+            "title": "Set a user's plan"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "userUid",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "plan": {
+                    "type": "string",
+                    "enum": [
+                      "free",
+                      "pro"
+                    ],
+                    "description": "The user's plan. It sets their daily database write budget."
+                  }
+                },
+                "required": [
+                  "plan"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The plan now in effect",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "userUid": {
+                      "type": "string"
+                    },
+                    "plan": {
+                      "type": "string",
+                      "enum": [
+                        "free",
+                        "pro"
+                      ],
+                      "description": "The user's plan. It sets their daily database write budget."
+                    },
+                    "dailyRowWrites": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true
+                    }
+                  },
+                  "required": [
+                    "userUid",
+                    "plan",
+                    "dailyRowWrites"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The plan was saved but the data plane did not accept its budget (BUDGET_SYNC_FAILED). Repeat the call.",
             "content": {
               "application/json": {
                 "schema": {

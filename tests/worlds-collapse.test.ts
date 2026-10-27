@@ -54,6 +54,21 @@ function requestFromCall(
   return input instanceof Request ? input : new Request(String(input), init);
 }
 
+/** worlds-api's reply to PUT /admin/namespaces/{ns}/write-budget. */
+function budgetAppliedResponse() {
+  return new Response(
+    JSON.stringify({
+      namespace: "ns",
+      dailyRows: 50000,
+      defaultDailyRows: null,
+      effectiveDailyRows: 50000,
+      rowsWrittenToday: 0,
+      day: "2026-10-27",
+    }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
 let createdCounter = 0;
 let lastCreatedWorldId = CREATED_WORLD_ID;
 
@@ -69,6 +84,9 @@ function worldsApiMockHandler(input: RequestInfo | URL, init?: RequestInit) {
       JSON.stringify({ uid: "key-1", token: "wzw_test-key" }),
       { status: 201, headers: { "content-type": "application/json" } },
     );
+  }
+  if (url.includes("/write-budget") && method === "PUT") {
+    return budgetAppliedResponse();
   }
   if (url.endsWith("/worlds") && method === "POST") {
     // Canonical ids are minted by the data plane and unique per world.
@@ -229,6 +247,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
           status: 201,
         }),
       )
+      .mockResolvedValueOnce(budgetAppliedResponse())
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -300,6 +319,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
           },
         ),
       )
+      .mockResolvedValueOnce(budgetAppliedResponse())
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ id: duplicateWorldId }), {
           status: 201,
@@ -442,6 +462,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
           status: 201,
         }),
       )
+      .mockResolvedValueOnce(budgetAppliedResponse())
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({

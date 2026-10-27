@@ -12,6 +12,7 @@ import {
   quotaError,
   quotaStatus,
 } from "../lib/quota";
+import { syncPlanBudget, userPlan } from "../lib/plans";
 import {
   createApiKey,
   createWorld,
@@ -413,6 +414,20 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     }
     const mintedKey = keyRes.data;
 
+    // Apply the user's plan budget in the data plane (idempotent). A failure
+    // must not block world creation: the PUT /v1/admin/users/{uid}/plan call
+    // repeats the sync, and worlds-api falls back to its default budget.
+    const budgetSync = await syncPlanBudget(
+      c.env,
+      user.uid,
+      await userPlan(c.env, user.uid),
+    );
+    if (!budgetSync.ok) {
+      console.warn("plan budget sync failed at world creation", {
+        detail: budgetSync.detail,
+      });
+    }
+
     const world = {
       displayName: body.world.displayName,
       region: body.world.region,
@@ -562,7 +577,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
       if (existing.world_id) {
         const res = await updateWorld({
           client: worldsAdminClient(c.env),
-          path: { id: existing.world_id },
+          path: { worldId: existing.world_id },
           body: { displayName: patch.displayName },
         });
         if (res.error) {
@@ -599,7 +614,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     if (existing.world_id) {
       const res = await deleteWorld({
         client: worldsAdminClient(c.env),
-        path: { id: existing.world_id },
+        path: { worldId: existing.world_id },
       });
       if (res.error && res.response?.status !== 404) {
         return respond(
@@ -677,7 +692,7 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     if (existing.world_id) {
       const res = await undeleteWorld({
         client: worldsAdminClient(c.env),
-        path: { id: existing.world_id },
+        path: { worldId: existing.world_id },
       });
       if (res.error) {
         return respond(
