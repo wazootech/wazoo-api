@@ -8,7 +8,7 @@ import { requireScope, resolveUser, respond } from "../lib/http";
 import {
   PLAN_NAMES,
   planDailyRowWrites,
-  readPlanUsage,
+  readPlanUsageReconciled,
   setUserPlan,
   userPlan,
 } from "../lib/plans";
@@ -125,7 +125,7 @@ export function registerPlanRoutes(app: OpenAPIHono<AppEnv>) {
     requireScope(c, "usage.read");
     const user = await resolveUser(c);
     const plan = await userPlan(c.env, user.uid);
-    const usage = await readPlanUsage(c.env, user.uid);
+    const usage = await readPlanUsageReconciled(c.env, user.uid, plan);
     const dailyRowWrites = usage?.dailyRowWrites ?? null;
     const rowsWrittenToday = usage?.rowsWrittenToday ?? null;
     const row = await first<{ stripe_customer_id: string | null }>(

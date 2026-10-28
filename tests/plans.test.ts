@@ -42,7 +42,10 @@ const authHeaders = (token: string) => ({
 type WorldsCall = { method: string; path: string; body?: unknown };
 let calls: WorldsCall[] = [];
 let budgetPutStatus = 200;
-let usage = { effectiveDailyRows: 50_000, rowsWrittenToday: 12_500 };
+const DEPLOYMENT_DEFAULT = 500_000;
+/** The override worlds-api holds for the test user, or null when none is set. */
+let storedOverride: number | null = 50_000;
+let usage = { rowsWrittenToday: 12_500 };
 let usageStatus = 200;
 let worldCounter = 0;
 
@@ -68,6 +71,7 @@ async function worldsApi(
       );
     }
     const dailyRows = (JSON.parse(text) as { dailyRows: number }).dailyRows;
+    storedOverride = dailyRows;
     return json({
       namespace: budgetMatch[1],
       dailyRows,
@@ -86,9 +90,9 @@ async function worldsApi(
     }
     return json({
       namespace: budgetMatch[1],
-      dailyRows: usage.effectiveDailyRows,
-      defaultDailyRows: null,
-      effectiveDailyRows: usage.effectiveDailyRows,
+      dailyRows: storedOverride,
+      defaultDailyRows: DEPLOYMENT_DEFAULT,
+      effectiveDailyRows: storedOverride ?? DEPLOYMENT_DEFAULT,
       rowsWrittenToday: usage.rowsWrittenToday,
       day: "2026-10-27",
     });
@@ -133,6 +137,8 @@ describe("plans and the per-namespace write budget", () => {
       headers: authHeaders(ADMIN_TOKEN),
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+
+  const budgetPuts = () => calls.filter((c) => c.method === "PUT");
 
   const rows = <T>(sql: string, ...args: unknown[]) => {
     const client = new DatabaseSync(dbPath);
@@ -191,7 +197,8 @@ describe("plans and the per-namespace write budget", () => {
     calls = [];
     budgetPutStatus = 200;
     usageStatus = 200;
-    usage = { effectiveDailyRows: 50_000, rowsWrittenToday: 12_500 };
+    storedOverride = 50_000;
+    usage = { rowsWrittenToday: 12_500 };
   });
 
   describe("planDailyRowWrites", () => {
@@ -348,6 +355,51 @@ describe("plans and the per-namespace write budget", () => {
         usagePercent: 25,
         day: "2026-10-27",
         billing: { checkoutAvailable: false, portalAvailable: false },
+      });
+    });
+
+    it("applies the plan's budget when the data plane has none for this user yet", async () => {
+      // A user from before plans existed: worlds-api only has its default.
+      storedOverride = null;
+      const res = await api("/v1/users/me/plan", {
+        headers: authHeaders(userToken),
+      });
+      expect(await res.json()).toMatchObject({
+        plan: "free",
+        dailyRowWrites: 50_000,
+        rowsWrittenToday: 12_500,
+        usagePercent: 25,
+      });
+      expect(storedOverride).toBe(50_000);
+      expect(budgetPuts()).toHaveLength(1);
+    });
+
+    it("corrects a stale budget, for example after a plan number changed", async () => {
+      storedOverride = 25_000;
+      const res = await api("/v1/users/me/plan", {
+        headers: authHeaders(userToken),
+      });
+      expect(((await res.json()) as any).dailyRowWrites).toBe(50_000);
+      expect(storedOverride).toBe(50_000);
+    });
+
+    it("does not write when the budget already matches the plan", async () => {
+      await api("/v1/users/me/plan", { headers: authHeaders(userToken) });
+      await api("/v1/users/me/plan", { headers: authHeaders(userToken) });
+      expect(budgetPuts()).toHaveLength(0);
+    });
+
+    it("still reports usage when the reconcile cannot be applied", async () => {
+      storedOverride = null;
+      budgetPutStatus = 500;
+      const res = await api("/v1/users/me/plan", {
+        headers: authHeaders(userToken),
+      });
+      expect(res.status).toBe(200);
+      // Honest about what applies right now: the deployment default.
+      expect(await res.json()).toMatchObject({
+        dailyRowWrites: DEPLOYMENT_DEFAULT,
+        rowsWrittenToday: 12_500,
       });
     });
 
