@@ -114,10 +114,34 @@ export async function setUserPlan(
 }
 
 export type PlanUsage = {
+  /** The budget that applies now: the user's override, else the deployment default. */
   dailyRowWrites: number | null;
+  /** The override stored in worlds-api for this user, or null if none is set. */
+  override: number | null;
   rowsWrittenToday: number;
   day: string;
 };
+
+/**
+ * Reads today's usage against the budget and, when the budget stored in
+ * worlds-api differs from the plan's (a user who has not created a world since
+ * plans existed, or a plan number that changed), applies the plan's budget
+ * first. Idempotent; a failed sync leaves the read as it was.
+ */
+export async function readPlanUsageReconciled(
+  env: Bindings,
+  userUid: string,
+  plan: PlanName,
+): Promise<PlanUsage | null> {
+  const usage = await readPlanUsage(env, userUid);
+  if (!usage || usage.override === planDailyRowWrites(env, plan)) return usage;
+  const sync = await syncPlanBudget(env, userUid, plan);
+  if (!sync.ok) {
+    console.warn("plan budget reconcile failed", { detail: sync.detail });
+    return usage;
+  }
+  return (await readPlanUsage(env, userUid)) ?? usage;
+}
 
 /** Today's usage against the budget, read from worlds-api; null if it fails. */
 export async function readPlanUsage(
@@ -132,6 +156,7 @@ export async function readPlanUsage(
     if (res.error || !res.data) return null;
     return {
       dailyRowWrites: res.data.effectiveDailyRows,
+      override: res.data.dailyRows,
       rowsWrittenToday: res.data.rowsWrittenToday,
       day: res.data.day,
     };
