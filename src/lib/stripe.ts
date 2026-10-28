@@ -82,6 +82,42 @@ export async function stripePost<T>(
   }
 }
 
+/**
+ * DELETEs a Stripe resource (a subscription cancels immediately). Same
+ * contract as `stripePost`: never throws, and the message is Stripe's own.
+ */
+export async function stripeDelete<T>(
+  env: Bindings,
+  path: string,
+): Promise<StripeResult<T>> {
+  if (!env.STRIPE_SECRET_KEY) {
+    return { ok: false, status: 503, message: "Stripe is not configured" };
+  }
+  try {
+    const res = await fetch(`https://api.stripe.com${path}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: { message?: string };
+    } & T;
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: res.status,
+        message: body.error?.message ?? `Stripe returned ${res.status}`,
+      };
+    }
+    return { ok: true, data: body };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 502,
+      message: error instanceof Error ? error.message : "Stripe is unreachable",
+    };
+  }
+}
+
 const SIGNATURE_TOLERANCE_SECONDS = 300;
 
 function hexToBytes(hex: string): Uint8Array | null {
