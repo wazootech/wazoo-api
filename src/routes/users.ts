@@ -6,6 +6,7 @@ import type { AppEnv } from "../env";
 import { createToken, sha256Hex } from "../lib/crypto";
 import { db, id, now } from "@/lib/db";
 import { isAdmin, requireScope, respond } from "@/lib/http";
+import { stripeDelete } from "@/lib/stripe";
 import { UserSchema } from "../lib/schemas";
 import { deleteNamespaceWorlds } from "@worlds/client";
 import { worldsAdminClient } from "@/lib/worlds-client";
@@ -382,6 +383,38 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
         },
         400,
       );
+    }
+
+    // Stop billing before anything is destroyed: a Pro user must never be
+    // charged for an account that no longer exists. A failed cancel blocks the
+    // deletion so the user can retry. The Stripe customer is kept on purpose
+    // (invoices and tax records), and a subscription Stripe no longer knows
+    // (404) is already gone.
+    const billing = await database
+      .prepare("SELECT stripe_subscription_id FROM users WHERE uid = ?")
+      .bind(userUid)
+      .first<{ stripe_subscription_id: string | null }>();
+    if (billing?.stripe_subscription_id) {
+      const canceled = await stripeDelete(
+        c.env,
+        `/v1/subscriptions/${encodeURIComponent(billing.stripe_subscription_id)}`,
+      );
+      if (!canceled.ok && canceled.status !== 404) {
+        console.error(
+          `account deletion blocked: could not cancel subscription (${canceled.status}): ${canceled.message}`,
+        );
+        return respond(
+          c,
+          {
+            error: {
+              code: "BILLING_CANCEL_FAILED",
+              message:
+                "Could not cancel your subscription, so the account was not deleted. Please try again.",
+            },
+          },
+          502,
+        );
+      }
     }
 
     // Mark every world for this user (namespace) deleted in worlds-api so the
