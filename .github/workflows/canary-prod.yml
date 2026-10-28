@@ -2,7 +2,9 @@ name: canary-prod
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    # Off the :00 and :30 marks: GitHub delays scheduled runs most at the start
+    # of the hour, and this canary has been running about every four hours.
+    - cron: "11,41 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -38,6 +40,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           CANARY_RESULT: ${{ steps.canary.outcome }}
+          # Repository variable such as "@EthanThatOneKid". Unset means no mention.
+          ALERT_MENTION: ${{ vars.ALERT_MENTION }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       - name: Fail the job when the canary failed
         if: steps.canary.outcome != 'success'
