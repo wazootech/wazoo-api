@@ -773,6 +773,6 @@ export function registerWorldsRoutes(app: OpenAPIHono<AppEnv>) {
     });
     if (res.error && res.response?.status !== 404)
       throw new HTTPException(502, { message: worldsApiError(res) });
-    return c.body(null, 204) as any;
+    return c.body(null, 204);
   });
 }

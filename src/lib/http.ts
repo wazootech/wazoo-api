@@ -10,7 +10,11 @@ export function respond(
   data: unknown,
   status?: ContentfulStatusCode,
 ) {
-  return c.json(data, status as any) as any;
+  // The `any` return is load-bearing: OpenAPI route handlers are typed against
+  // each route's response union, and several also return raw `Response`s.
+  // `any` absorbs both; narrowing it means typing every handler's responses.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return c.json(data, status as ContentfulStatusCode) as any;
 }
 
 export function ok(
