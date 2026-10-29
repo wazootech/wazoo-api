@@ -10,12 +10,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: File length (warn-only; 120 src / 300 test, blank/comment/import lines excluded)
+      - name: File length (warn-only; 120 src / 300 test; blank, comment, import and re-export lines excluded)
         run: |
+          # Counts code lines. Skips blank/comment lines and import / export-from
+          # statements, including ones a formatter wrapped over several lines
+          # (from a line opening `import`, `export {` or `export *` until the
+          # line holding `from "..."`). A plain `export { a, b };` or
+          # `export const` never swallows code.
+          cat > "$RUNNER_TEMP/count.awk" <<'AWK'
+          # Counts lines of code: skips blank, comment, and import / export-from statements (including multi-line ones).
+          inimp { if ($0 ~ /from[ ]+["\x27]/) inimp = 0; next }
+          /^[ \t]*($|\/\/|\/\*|\*)/ { next }
+          /^[ \t]*import[ \t]/ { if ($0 !~ /from[ ]+["\x27]/ && $0 !~ /^[ \t]*import[ \t]+["\x27]/) inimp = 1; next }
+          /^[ \t]*export[ \t]+(type[ \t]+)?(\{|\*)/ { if ($0 ~ /from[ ]+["\x27]/) next; if ($0 !~ /\}/) { inimp = 1; next } }
+          { n++ }
+          END { print n + 0 }
+          AWK
           git ls-files '*.ts' '*.tsx' '*.js' '*.mjs' \
             | grep -vE '(^|/)(node_modules|dist|generated|fixtures|\.next)/|\.d\.ts$|\.gen\.|openapi|snapshot|schema' \
             | while read -r f; do
-                n=$(grep -cvE '^\s*($|//|/\*|\*|import |export .* from )' "$f" || true)
+                n=$(awk -f "$RUNNER_TEMP/count.awk" "$f")
                 case "$f" in *.test.*|*.spec.*|*/tests/*|tests/*) max=300;; *) max=120;; esac
                 if [ "$n" -gt "$max" ]; then echo "::warning file=$f::$n lines of code (limit $max)"; echo "- \`$f\`: $n (limit $max)" >> "$GITHUB_STEP_SUMMARY"; fi
               done
