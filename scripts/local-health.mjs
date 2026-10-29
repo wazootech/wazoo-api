@@ -17,7 +17,10 @@ const BASE_URL = process.argv[2] ?? "http://localhost:8787";
 try {
   const url = new URL(BASE_URL);
   if (
-    !(url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1")) &&
+    !(
+      url.protocol === "http:" &&
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1")
+    ) &&
     !(url.protocol === "https:" && url.hostname === "api-qa.wazoo.dev")
   ) {
     throw new Error(
@@ -27,10 +30,10 @@ try {
 } catch (err) {
   throw new Error(
     `BASE_URL must be http://localhost, http://127.0.0.1, or https://api-qa.wazoo.dev`,
+    { cause: err },
   );
 }
 const ADMIN_TOKEN = required("WAZOO_PLATFORM_ADMIN_TOKEN");
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function required(name) {
   const value = process.env[name];
@@ -66,10 +69,6 @@ async function assertStatus(res, expected) {
 
 async function assertOk(res) {
   await assertStatus(res, 200);
-}
-
-async function assertCreated(res) {
-  await assertStatus(res, 201);
 }
 
 async function assertBadRequest(res) {
@@ -229,9 +228,7 @@ await test("POST /v1/worlds creates a World", async () => {
   const worldId = body.world?.id;
   if (
     typeof worldId !== "string" ||
-    !/^w_[0-7][0-9a-hjkmnp-tv-z]{25}$/.test(
-      worldId,
-    )
+    !/^w_[0-7][0-9a-hjkmnp-tv-z]{25}$/.test(worldId)
   ) {
     throw new Error("Missing canonical world.id");
   }

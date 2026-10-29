@@ -182,7 +182,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     const client = new DatabaseSync((env.DB as TestD1).path);
     const rs = client.prepare("PRAGMA table_info(worlds)").all();
     client.close();
-    const worldIdCol = rs.find((row: any) => row.name === "world_id");
+    const worldIdCol = rs.find((row) => row.name === "world_id");
     expect(worldIdCol).toBeTruthy();
     expect(worldIdCol!.pk).toBe(1);
     expect(worldIdCol!.notnull).toBe(1);

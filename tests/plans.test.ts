@@ -292,7 +292,9 @@ describe("plans and the per-namespace write budget", () => {
         plan: "free",
       });
       expect(res.status).toBe(502);
-      expect(((await res.json()) as any).error.code).toBe("BUDGET_SYNC_FAILED");
+      expect(
+        ((await res.json()) as { error: { code: string } }).error.code,
+      ).toBe("BUDGET_SYNC_FAILED");
       expect(
         rows<{ plan: string }>(
           "SELECT plan FROM users WHERE uid = ?",
@@ -379,7 +381,9 @@ describe("plans and the per-namespace write budget", () => {
       const res = await api("/v1/users/me/plan", {
         headers: authHeaders(userToken),
       });
-      expect(((await res.json()) as any).dailyRowWrites).toBe(50_000);
+      expect(
+        ((await res.json()) as { dailyRowWrites: number }).dailyRowWrites,
+      ).toBe(50_000);
       expect(storedOverride).toBe(50_000);
     });
 

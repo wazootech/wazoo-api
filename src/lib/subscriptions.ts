@@ -11,7 +11,7 @@ import { setUserPlan, type PlanName } from "./plans";
 export type StripeEvent = {
   id: string;
   type: string;
-  data: { object: Record<string, any> };
+  data: { object: Record<string, unknown> };
 };
 
 /** Subscription statuses that keep a user on pro. `past_due` stays pro while Stripe retries the payment. */
@@ -69,6 +69,14 @@ export type ApplyResult =
   | { handled: true; userUid: string; plan: PlanName }
   | { handled: false; reason: string };
 
+/** Reads `metadata.user_uid` from a Stripe object when it is a string. */
+function metadataUserUid(object: Record<string, unknown>): string | undefined {
+  const metadata = object.metadata;
+  if (!metadata || typeof metadata !== "object") return undefined;
+  const uid = (metadata as Record<string, unknown>).user_uid;
+  return typeof uid === "string" ? uid : undefined;
+}
+
 /**
  * Applies one verified event. Throws when the plan was saved but worlds-api
  * refused the budget, so the webhook answers 5xx and Stripe retries (the whole
@@ -87,7 +95,7 @@ export async function applyStripeEvent(
     const uid =
       typeof object.client_reference_id === "string"
         ? object.client_reference_id
-        : (object.metadata?.user_uid as string | undefined);
+        : metadataUserUid(object);
     const user = uid ? await userByUid(env, uid) : null;
     if (!user) return { handled: false, reason: "no matching user" };
     await saveBilling(
@@ -108,7 +116,7 @@ export async function applyStripeEvent(
     const subscriptionId = typeof object.id === "string" ? object.id : null;
     const customerId =
       typeof object.customer === "string" ? object.customer : null;
-    const metaUid = object.metadata?.user_uid as string | undefined;
+    const metaUid = metadataUserUid(object);
     const user =
       (customerId ? await userByCustomer(env, customerId) : null) ??
       (metaUid ? await userByUid(env, metaUid) : null);

@@ -300,16 +300,14 @@ export function registerAuthRoutes(app: OpenAPIHono<AppEnv>) {
     }
 
     const workos = new WorkOS(apiKey);
-    let workosUser: { id: string; email: string };
     try {
-      const result = await workos.userManagement.authenticateWithMagicAuth({
+      await workos.userManagement.authenticateWithMagicAuth({
         clientId,
         code,
         email,
       });
-      workosUser = result.user;
-    } catch (err: any) {
-      const message = err?.message ?? String(err);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       if (message.includes("invalid")) {
         return respond(
           c,
