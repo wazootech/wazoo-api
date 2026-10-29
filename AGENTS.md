@@ -51,3 +51,14 @@ alongside the `bug` / `enhancement` categories. See
 Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. Both are
 optional — the `/domain-modeling` skill creates them lazily. See
 `docs/agents/domain.md`.
+
+## Code health
+
+Family-wide rules live in the [wazootech workspace constitution](https://github.com/wazootech/workspace/blob/main/AGENTS.md#code-health-standards); this repo's specifics:
+
+- Before pushing, run what CI runs: `pnpm run format:check`, `pnpm run lint` (`--max-warnings 0`), `pnpm run typecheck`, and `pnpm exec vitest run --coverage`.
+- Coverage floors live in `vitest.config.ts` and only rise: lines 76, functions 79, branches 61, statements 75. Never lower one to land a change.
+- The `openapi-breaking` job (oasdiff, `fail-on: ERR`) blocks breaking changes to `openapi/openapi.json`. Never hand-edit the snapshot or a generated client; regenerate. Downstream chain: `worlds-api` / `wazoo-api` -> `worlds-client-ts` / `wazoo-client-ts` -> `wazoo-console` / `wazoo-cli`. List dependents and merge order in the PR.
+- `@typescript-eslint/no-explicit-any` is `error` in `src/`, `scripts/`, and `tests/`. Fix with real types or `unknown`; the one justified `any` is `respond()`, under an `eslint-disable` with its reason.
+- `.gitleaksignore` holds exact fingerprints for verified fixture strings only. Never add regex allowlists or disable a rule. `secret-scan.yml` runs gitleaks on every PR and push to `main`.
+- Third-party actions are pinned to full SHAs; CI Node comes from `.node-version` (deploy jobs keep an explicit `node-version`). `code-health.yml` (file length, TODO/FIXME without an issue) is warn-only. `.github/CODEOWNERS` assigns review.
