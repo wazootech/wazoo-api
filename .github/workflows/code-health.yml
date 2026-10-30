@@ -18,11 +18,12 @@ jobs:
           # line holding `from "..."`). A plain `export { a, b };` or
           # `export const` never swallows code.
           cat > "$RUNNER_TEMP/count.awk" <<'AWK'
-          # Counts lines of code: skips blank, comment, and import / export-from statements (including multi-line ones).
-          inimp { if ($0 ~ /from[ ]+["\x27]/) inimp = 0; next }
+          inimp { if ($0 ~ /from[ \t]*["'][^"']+["'];?[ \t]*$/ || $0 ~ /^[ \t]*\}/) inimp = 0; next }
+          /^[ \t]*(import[ \t]|export[ \t]+(type[ \t]+)?(\{|\*))/ {
+            if ($0 !~ /from[ \t]*["'][^"']+["'];?[ \t]*$/ && $0 !~ /^[ \t]*import[ \t]*["']/ && $0 !~ /\}/) inimp = 1
+            next
+          }
           /^[ \t]*($|\/\/|\/\*|\*)/ { next }
-          /^[ \t]*import[ \t]/ { if ($0 !~ /from[ ]+["\x27]/ && $0 !~ /^[ \t]*import[ \t]+["\x27]/) inimp = 1; next }
-          /^[ \t]*export[ \t]+(type[ \t]+)?(\{|\*)/ { if ($0 ~ /from[ ]+["\x27]/) next; if ($0 !~ /\}/) { inimp = 1; next } }
           { n++ }
           END { print n + 0 }
           AWK
