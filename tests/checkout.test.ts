@@ -58,11 +58,11 @@ async function sign(payload: string, secret = WEBHOOK_SECRET, t?: number) {
 }
 
 /** Calls the fake worlds-api and Stripe received, for assertions. */
-let worldsCalls: { method: string; path: string; body?: any }[] = [];
+let worldsCalls: { method: string; path: string; body?: unknown }[] = [];
 let stripeCalls: { path: string; params: URLSearchParams }[] = [];
 let worldsBudgetStatus = 200;
 let stripeStatus = 200;
-let stripeUrl = "https://checkout.stripe.com/c/pay/cs_test_123";
+const stripeUrl = "https://checkout.stripe.com/c/pay/cs_test_123";
 
 async function fakeFetch(
   input: RequestInfo | URL,
@@ -361,9 +361,9 @@ describe("checkout, portal and subscription webhooks", () => {
           [missing]: "",
         });
         expect(res.status, missing).toBe(503);
-        expect(((await res.json()) as any).error.code).toBe(
-          "BILLING_NOT_CONFIGURED",
-        );
+        expect(
+          ((await res.json()) as { error: { code: string } }).error.code,
+        ).toBe("BILLING_NOT_CONFIGURED");
       }
       expect(stripeCalls).toHaveLength(0);
     });
@@ -375,7 +375,9 @@ describe("checkout, portal and subscription webhooks", () => {
       );
       const res = await asUser("/v1/users/me/billing/checkout");
       expect(res.status).toBe(409);
-      expect(((await res.json()) as any).error.code).toBe("ALREADY_SUBSCRIBED");
+      expect(
+        ((await res.json()) as { error: { code: string } }).error.code,
+      ).toBe("ALREADY_SUBSCRIBED");
       expect(stripeCalls).toHaveLength(0);
     });
 
@@ -383,7 +385,7 @@ describe("checkout, portal and subscription webhooks", () => {
       stripeStatus = 400;
       const res = await asUser("/v1/users/me/billing/checkout");
       expect(res.status).toBe(502);
-      const body = (await res.json()) as any;
+      const body = (await res.json()) as { error: { code: string } };
       expect(body.error.code).toBe("STRIPE_ERROR");
       expect(JSON.stringify(body)).not.toContain("price_bad");
     });
@@ -416,15 +418,17 @@ describe("checkout, portal and subscription webhooks", () => {
     it("has nothing to open before the first checkout", async () => {
       const res = await asUser("/v1/users/me/billing/portal");
       expect(res.status).toBe(409);
-      expect(((await res.json()) as any).error.code).toBe("NO_BILLING_ACCOUNT");
+      expect(
+        ((await res.json()) as { error: { code: string } }).error.code,
+      ).toBe("NO_BILLING_ACCOUNT");
     });
   });
 
   describe("GET /v1/users/me/plan billing flags", () => {
     it("offers checkout to a free user, and the portal once they have a customer", async () => {
-      let plan = (await (
-        await asUser("/v1/users/me/plan", "GET")
-      ).json()) as any;
+      let plan = (await (await asUser("/v1/users/me/plan", "GET")).json()) as {
+        billing: unknown;
+      };
       expect(plan.billing).toEqual({
         checkoutAvailable: true,
         portalAvailable: false,
@@ -433,7 +437,9 @@ describe("checkout, portal and subscription webhooks", () => {
         "UPDATE users SET plan = 'pro', stripe_customer_id = 'cus_1' WHERE uid = ?",
         userUid,
       );
-      plan = (await (await asUser("/v1/users/me/plan", "GET")).json()) as any;
+      plan = (await (await asUser("/v1/users/me/plan", "GET")).json()) as {
+        billing: unknown;
+      };
       expect(plan.billing).toEqual({
         checkoutAvailable: false,
         portalAvailable: true,
@@ -446,7 +452,7 @@ describe("checkout, portal and subscription webhooks", () => {
           ...env,
           STRIPE_PRICE_ID: "",
         })
-      ).json()) as any;
+      ).json()) as { billing: unknown };
       expect(plan.billing).toEqual({
         checkoutAvailable: false,
         portalAvailable: false,

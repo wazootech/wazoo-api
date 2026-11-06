@@ -26,7 +26,10 @@ describe("OpenAPI document", () => {
 
   it("documents the auth entrypoints so generated clients can log in", () => {
     const doc = app.getOpenAPIDocument(openApiDocOptions);
-    const paths = doc.paths as Record<string, Record<string, any>>;
+    const paths = doc.paths as Record<
+      string,
+      Record<string, { operationId?: string; security?: unknown[] }>
+    >;
 
     const login = paths["/v1/auth/login"]?.post;
     const verify = paths["/v1/auth/verify"]?.post;

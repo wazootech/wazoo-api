@@ -445,7 +445,7 @@ export function registerUsersRoutes(app: OpenAPIHono<AppEnv>) {
       .bind(userUid)
       .run();
 
-    return c.body(null, 204) as any;
+    return c.body(null, 204);
   });
 
   app.openapi(exportRoute, async (c) => {

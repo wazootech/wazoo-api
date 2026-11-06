@@ -126,7 +126,9 @@ describe("BYOK embedding provider credentials (wazoo-api#123)", () => {
       env,
     );
     expect(res.status).toBe(200);
-    expect(((await res.json()) as any).provider).toBe("openai");
+    expect(((await res.json()) as { provider: string }).provider).toBe(
+      "openai",
+    );
 
     const [url, init] = upstream.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(
@@ -176,7 +178,9 @@ describe("BYOK embedding provider credentials (wazoo-api#123)", () => {
       env,
     );
     expect(res.status).toBe(200);
-    expect(((await res.json()) as any).providers).toHaveLength(2);
+    expect(
+      ((await res.json()) as { providers: unknown[] }).providers,
+    ).toHaveLength(2);
     expect((upstream.mock.calls[0] as [string])[0]).toBe(
       `http://localhost:9999/namespaces/${alice.uid}/embedding-providers`,
     );
@@ -237,7 +241,7 @@ describe("BYOK embedding provider credentials (wazoo-api#123)", () => {
       env,
     );
     expect(res.status).toBe(503);
-    expect(((await res.json()) as any).error.code).toBe(
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
       "EMBEDDINGS_NOT_CONFIGURED",
     );
   });
