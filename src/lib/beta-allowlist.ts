@@ -79,3 +79,26 @@ export async function getApprovedEmails(
 export function clearAllowlistCache(): void {
   cache = null;
 }
+
+/**
+ * Fail-closed membership check for session-minting paths (memory#68): an
+ * unreadable allowlist means nobody is approved.
+ */
+export async function isApprovedEmail(
+  env: {
+    GOOGLE_SERVICE_ACCOUNT_KEY?: string;
+    BETA_ALLOWLIST_SHEET_ID?: string;
+  },
+  email: string,
+): Promise<boolean> {
+  try {
+    const approved = await getApprovedEmails(
+      env.GOOGLE_SERVICE_ACCOUNT_KEY ?? "",
+      env.BETA_ALLOWLIST_SHEET_ID,
+    );
+    return approved.has(email);
+  } catch (error) {
+    console.error("[beta-allowlist] could not load allowlist; denying", error);
+    return false;
+  }
+}

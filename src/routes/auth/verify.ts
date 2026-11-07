@@ -5,6 +5,7 @@ import type { AppEnv } from "../../env";
 import { db, id } from "../../lib/db";
 import { rateLimit } from "../../lib/ratelimit";
 import { respond } from "../../lib/http";
+import { isApprovedEmail } from "../../lib/beta-allowlist";
 
 export function registerVerify(app: OpenAPIHono<AppEnv>) {
   app.post("/v1/auth/verify", async (c) => {
@@ -52,6 +53,22 @@ export function registerVerify(app: OpenAPIHono<AppEnv>) {
         c,
         { error: { code: "CONFIG_ERROR", message: "Auth is not configured." } },
         500,
+      );
+    }
+
+    // Re-check the beta allowlist where the session is minted, not only where
+    // the code is issued (memory#68). Same response as a bad code so this is
+    // not an oracle for the beta list.
+    if (!(await isApprovedEmail(c.env, email))) {
+      return respond(
+        c,
+        {
+          error: {
+            code: "INVALID_CODE",
+            message: "Invalid verification code.",
+          },
+        },
+        400,
       );
     }
 
