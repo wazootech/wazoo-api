@@ -1,10 +1,8 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
-import type { Context } from "hono";
 import type { AppEnv } from "../../env";
-import { createToken, sha256Hex } from "../../lib/crypto";
-import { all, db, id } from "../../lib/db";
+import { all, db } from "../../lib/db";
 import { isAdmin, requireScope, resolveUser, respond } from "../../lib/http";
-import { TOKEN_DEFAULT_SCOPES } from "../../lib/scopes";
+import { createPlatformToken } from "./create";
 import {
   listRoute,
   createRouteDef,
@@ -82,41 +80,4 @@ export function registerTokensRoutes(app: OpenAPIHono<AppEnv>) {
         : 0,
     });
   });
-}
-
-async function createPlatformToken(
-  c: Context<AppEnv>,
-  userUid: string,
-  name: string,
-  body: { scope?: string; expiresAt?: string },
-) {
-  const scope = body.scope ?? TOKEN_DEFAULT_SCOPES;
-  if (scope.split(/\s+/).includes("admin")) {
-    return respond(
-      c,
-      {
-        error: {
-          code: "PERMISSION_DENIED",
-          message: "Admin tokens must be manually seeded",
-        },
-      },
-      403,
-    );
-  }
-  const token = createToken("wzp");
-  const tokenId = id();
-  await db(c.env)
-    .prepare(
-      "INSERT INTO platform_api_tokens (uid, user_uid, name, token_hash, scope, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
-    )
-    .bind(
-      tokenId,
-      userUid,
-      name,
-      await sha256Hex(token),
-      scope,
-      body.expiresAt ?? null,
-    )
-    .run();
-  return respond(c, { uid: tokenId, name, token }, 201);
 }
