@@ -1,4 +1,3 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { HTTPException } from "hono/http-exception";
 import type { AppEnv } from "../../env";
@@ -6,78 +5,11 @@ import { requireScope, respond } from "../../lib/http";
 import { createApiKey, deleteApiKey, listApiKeys } from "@worlds/client";
 import { worldsAdminClient, worldsApiError } from "../../lib/worlds-client";
 import {
-  WorldTokenListSchema,
-  WorldTokenCreateRequestSchema,
-  WorldTokenSingleResponseSchema,
-  worldIdParam,
-  emailQuery,
-} from "../../lib/schemas";
+  createTokenRoute,
+  deleteTokenRoute,
+  listTokensRoute,
+} from "./token-routes";
 import { currentUser, notFound, worldForUser } from "./shared";
-
-const listTokensRoute = createRoute({
-  method: "get",
-  path: "/v1/worlds/{worldId}/auth/tokens",
-  tags: ["WorldTokens"],
-  operationId: "listWorldTokens",
-  summary: "List world tokens",
-  "x-mint": { metadata: { title: "List world tokens" } },
-  security: [{ bearerPlatformToken: [] }],
-  request: { params: worldIdParam, query: emailQuery },
-  responses: {
-    200: {
-      description: "World tokens",
-      content: { "application/json": { schema: WorldTokenListSchema } },
-    },
-  },
-});
-
-const createTokenRoute = createRoute({
-  method: "post",
-  path: "/v1/worlds/{worldId}/auth/tokens",
-  tags: ["WorldTokens"],
-  operationId: "createWorldToken",
-  summary: "Create world token",
-  "x-mint": { metadata: { title: "Create world token" } },
-  security: [{ bearerPlatformToken: [] }],
-  request: {
-    params: worldIdParam,
-    query: emailQuery,
-    body: {
-      content: {
-        "application/json": { schema: WorldTokenCreateRequestSchema },
-      },
-    },
-  },
-  responses: {
-    201: {
-      description: "Created World token",
-      content: {
-        "application/json": { schema: WorldTokenSingleResponseSchema },
-      },
-    },
-  },
-});
-
-const deleteTokenRoute = createRoute({
-  method: "delete",
-  path: "/v1/worlds/{worldId}/auth/tokens/{tokenUid}",
-  tags: ["WorldTokens"],
-  operationId: "deleteWorldToken",
-  summary: "Revoke world token",
-  "x-mint": { metadata: { title: "Revoke world token" } },
-  security: [{ bearerPlatformToken: [] }],
-  request: {
-    params: worldIdParam.merge(
-      z.object({
-        tokenUid: z.string().openapi({
-          param: { name: "tokenUid", in: "path", required: true },
-        }),
-      }),
-    ),
-    query: emailQuery,
-  },
-  responses: { 204: { description: "Revoked" } },
-});
 
 export function registerWorldTokenRoutes(app: OpenAPIHono<AppEnv>) {
   app.openapi(listTokensRoute, async (c) => {
@@ -125,9 +57,25 @@ export function registerWorldTokenRoutes(app: OpenAPIHono<AppEnv>) {
     const user = await currentUser(c, query.email, query.email);
     const existing = await worldForUser(c, user.uid, c.req.param("worldId"));
     if (!existing) return notFound(c);
+    // Bind the key to the caller's namespace and the path world before the
+    // admin-credentialed revoke (memory#69). Not-owned looks like not-found.
+    const owned = await listApiKeys({
+      client: worldsAdminClient(c.env),
+      query: { namespace: user.uid },
+    });
+    if (owned.error)
+      throw new HTTPException(502, { message: worldsApiError(owned) });
+    const tokenUid = c.req.param("tokenUid");
+    const match = (owned.data?.keys ?? []).find(
+      (key) =>
+        key.uid === tokenUid &&
+        key.namespace === user.uid &&
+        key.worldId === existing.world_id,
+    );
+    if (!match) return notFound(c);
     const res = await deleteApiKey({
       client: worldsAdminClient(c.env),
-      path: { keyId: c.req.param("tokenUid") },
+      path: { keyId: match.uid },
     });
     if (res.error && res.response?.status !== 404)
       throw new HTTPException(502, { message: worldsApiError(res) });
