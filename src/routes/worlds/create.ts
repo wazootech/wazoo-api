@@ -4,7 +4,7 @@ import type { AppEnv } from "../../env";
 import { recordAdminAudit } from "../../lib/audit";
 import { db, first, now } from "../../lib/db";
 import { isAdmin, requireScope, respond } from "../../lib/http";
-import { quotaError, quotaStatus } from "../../lib/quota";
+import { privateBetaQuota, quotaError, quotaStatus } from "../../lib/quota";
 import { syncPlanBudget, userPlan } from "../../lib/plans";
 import { createApiKey, createWorld } from "@worlds/client";
 import {
@@ -14,6 +14,7 @@ import {
 } from "../../lib/worlds-client";
 import { worldId as worldIdSchema } from "../../lib/schemas";
 import { insertWorldRow } from "./insert";
+import { rollbackProvisioning } from "./rollback";
 import { createRouteDef } from "./create-route";
 import { currentUser, worldResource, type WorldRow } from "./shared";
 
@@ -116,13 +117,24 @@ export function registerCreateWorld(app: OpenAPIHono<AppEnv>) {
     }
     const canonicalWorldId = parsedWorld.data.id;
 
-    await insertWorldRow(database, {
+    // The count above is only a fast path. This conditional insert is the
+    // atomic gate: it re-counts inside the same statement (wazoo-api#150).
+    const inserted = await insertWorldRow(database, {
       worldId: canonicalWorldId,
       userUid: user.uid,
       displayName: world.displayName,
       region: world.region,
       now: world.now,
+      maxWorlds: isAdmin(c) ? undefined : privateBetaQuota.maxWorlds,
     });
+    if (!inserted) {
+      await rollbackProvisioning(c.env, canonicalWorldId, mintedKey.uid);
+      return quotaError(
+        c,
+        "User has reached the private beta World limit",
+        await quotaStatus(c, user.uid),
+      );
+    }
 
     if (isAdmin(c) && quota.state !== "OK" && quota.state !== "WARN") {
       await recordAdminAudit(c, {
