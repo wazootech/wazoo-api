@@ -1,10 +1,10 @@
 import { issueSessionToken } from "./session-token";
 import type { OpenAPIHono } from "@hono/zod-openapi";
-import { WorkOS } from "@workos-inc/node";
 import type { AppEnv } from "../../env";
-import { db, id } from "../../lib/db";
+import { findOrCreateUser, redeemCode } from "./verify-helpers";
 import { rateLimit } from "../../lib/ratelimit";
 import { respond } from "../../lib/http";
+import { isApprovedEmail } from "../../lib/beta-allowlist";
 
 export function registerVerify(app: OpenAPIHono<AppEnv>) {
   app.post("/v1/auth/verify", async (c) => {
@@ -55,79 +55,28 @@ export function registerVerify(app: OpenAPIHono<AppEnv>) {
       );
     }
 
-    const workos = new WorkOS(apiKey);
-    try {
-      await workos.userManagement.authenticateWithMagicAuth({
-        clientId,
-        code,
-        email,
-      });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (message.includes("invalid")) {
-        return respond(
-          c,
-          {
-            error: {
-              code: "INVALID_CODE",
-              message: "Invalid verification code.",
-            },
-          },
-          400,
-        );
-      }
-      if (message.includes("expired")) {
-        return respond(
-          c,
-          {
-            error: {
-              code: "EXPIRED",
-              message: "Verification code has expired.",
-            },
-          },
-          400,
-        );
-      }
+    // Re-check the beta allowlist where the session is minted, not only where
+    // the code is issued (memory#68). Same response as a bad code so this is
+    // not an oracle for the beta list.
+    if (!(await isApprovedEmail(c.env, email))) {
       return respond(
         c,
         {
-          error: { code: "AUTH_ERROR", message: "Authentication failed." },
+          error: {
+            code: "INVALID_CODE",
+            message: "Invalid verification code.",
+          },
         },
-        401,
+        400,
       );
     }
 
-    const database = db(c.env);
-    const existing = await database
-      .prepare("SELECT uid FROM users WHERE email = ?")
-      .bind(email)
-      .first<{ uid: string }>();
+    const failed = await redeemCode(c, apiKey, clientId, email, code);
+    if (failed) return failed;
 
-    let userUid: string;
-    if (existing) {
-      userUid = existing.uid;
-    } else {
-      if (!ageConfirmed) {
-        return respond(
-          c,
-          {
-            error: {
-              code: "AGE_GATE_REQUIRED",
-              message:
-                "You must confirm that you are at least 13 years old to create a Wazoo account.",
-            },
-          },
-          400,
-        );
-      }
-      userUid = id();
-      await database
-        .prepare(
-          "INSERT INTO users (uid, email, age_confirmed_at) VALUES (?, ?, ?)",
-        )
-        .bind(userUid, email, new Date().toISOString())
-        .run();
-    }
+    const created = await findOrCreateUser(c, email, ageConfirmed);
+    if (created instanceof Response) return created;
+    const userUid = created;
 
     return issueSessionToken(c, userUid);
   });
