@@ -9,7 +9,7 @@ export type PreparedStatement = BoundStatement & {
 export type BoundStatement = {
   all<T extends Row>(): Promise<{ results: T[] }>;
   first<T extends Row>(): Promise<T | null>;
-  run(): Promise<void>;
+  run(): Promise<{ changes: number }>;
 };
 
 export type Database = {
@@ -34,7 +34,8 @@ export function db(env: Bindings): Database {
             return await stmt.first<T>();
           },
           async run() {
-            await stmt.run();
+            const result = await stmt.run();
+            return { changes: result?.meta?.changes ?? 0 };
           },
         };
       };
