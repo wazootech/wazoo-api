@@ -21,7 +21,9 @@ const app = new OpenAPIHono<AppEnv>();
 app.use(
   "*",
   cors({
-    origin: (origin, c) => corsOrigin(origin, c.env.WAZOO_ENV),
+    // c.env is undefined for app.request() without bindings (tests).
+    origin: (origin, c) =>
+      corsOrigin(origin, (c.env as AppEnv["Bindings"] | undefined)?.WAZOO_ENV),
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     maxAge: 86400,
