@@ -383,6 +383,42 @@
           "name"
         ]
       },
+      "WorldTokenCreated": {
+        "type": "object",
+        "properties": {
+          "uid": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "worldId": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "token": {
+            "type": "string",
+            "description": "One-time wzw_ secret returned only when the token is created; it cannot be retrieved again."
+          }
+        },
+        "required": [
+          "uid",
+          "name",
+          "token"
+        ]
+      },
       "WorldTokenCreateRequest": {
         "type": "object",
         "properties": {
@@ -2649,7 +2685,7 @@
                   "type": "object",
                   "properties": {
                     "token": {
-                      "$ref": "#/components/schemas/WorldToken"
+                      "$ref": "#/components/schemas/WorldTokenCreated"
                     }
                   },
                   "required": [
