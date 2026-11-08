@@ -13,6 +13,7 @@ import { registerMcpRoute } from "./routes/mcp";
 import { registerAdminRoutes } from "./routes/admin";
 import { registerPlanRoutes } from "./routes/plans";
 import { registerCheckoutRoutes } from "./routes/checkout";
+import { corsOrigin } from "./lib/cors-origin";
 import { errorHandler, requireAuth } from "./lib/http";
 
 const app = new OpenAPIHono<AppEnv>();
@@ -20,12 +21,7 @@ const app = new OpenAPIHono<AppEnv>();
 app.use(
   "*",
   cors({
-    origin: (origin) => {
-      if (!origin) return null;
-      if (origin.endsWith(".wazoo.dev")) return origin;
-      if (origin.startsWith("http://localhost:")) return origin;
-      return null;
-    },
+    origin: (origin, c) => corsOrigin(origin, c.env.WAZOO_ENV),
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     maxAge: 86400,
