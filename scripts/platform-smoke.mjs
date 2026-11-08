@@ -15,6 +15,8 @@
  * Exits non-zero if any assertion fails, so CI treats it as a gate.
  */
 
+import { createNegativeChecks } from "./smoke-negative.mjs";
+
 const API_BASE_URL = process.env.API_BASE_URL ?? "https://api-qa.wazoo.dev";
 const WORLDS_API_URL = process.env.WORLDS_API_URL ?? "https://data-qa.wazoo.dev";
 const CONSOLE_URL = process.env.CONSOLE_URL;
@@ -46,6 +48,14 @@ if (CONSOLE_URL) assertSmokeTarget("CONSOLE_URL", CONSOLE_URL, "console-qa.wazoo
 
 const runId = Date.now().toString();
 const ownerEmail = `e2e+${runId}@wazoo.dev`;
+
+const negative = createNegativeChecks({
+  apiUrl: API_BASE_URL,
+  worldsUrl: WORLDS_API_URL,
+  adminToken: ADMIN_TOKEN,
+  ownerEmail,
+  runId,
+});
 
 console.log(
   `Smoke gate targets: ${API_BASE_URL} / ${WORLDS_API_URL}` +
@@ -274,6 +284,7 @@ async function testTokenManagement(worldId) {
       passed: true,
       detail: `world auth token minted (${worldToken.slice(0, 12)}...)`,
       worldToken,
+      worldTokenUid: body?.token?.uid,
       worldId,
     };
   });
@@ -416,6 +427,11 @@ if (lifecycle.passed) {
   const token = await testTokenManagement(lifecycle.worldId);
   results.push(token);
   results.push(await testSparqlQuery(token.worldToken, token.worldId));
+  results.push(
+    await negative.testCrossWorldRevoke(token.worldId, token.worldTokenUid),
+    await negative.testWorldKeyNamespaceRoutes(token.worldToken),
+    await negative.testRemoteLoadDenied(token.worldToken, token.worldId),
+  );
 } else {
   results.push(
     {
@@ -430,6 +446,8 @@ if (lifecycle.passed) {
     },
   );
 }
+results.push(await negative.testTokenMintClamp());
+results.push(await negative.cleanup());
 results.push(await cleanupWorld(lifecycle.worldId));
 
 let failed = false;
