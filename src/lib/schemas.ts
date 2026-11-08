@@ -146,8 +146,18 @@ export const WorldTokenCreateRequestSchema = z
   })
   .openapi("WorldTokenCreateRequest");
 
+// Create-only: the one-time wzw_ secret is returned on creation and never
+// again, so it is deliberately absent from WorldToken (shared with the list).
+export const WorldTokenCreatedSchema = WorldTokenSchema.extend({
+  token: z
+    .string()
+    .describe(
+      "One-time wzw_ secret returned only when the token is created; it cannot be retrieved again.",
+    ),
+}).openapi("WorldTokenCreated");
+
 export const WorldTokenSingleResponseSchema = z.object({
-  token: WorldTokenSchema,
+  token: WorldTokenCreatedSchema,
 });
 
 export const UsageEventSchema = z
