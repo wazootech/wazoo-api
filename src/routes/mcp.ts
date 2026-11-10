@@ -34,7 +34,7 @@ import * as z from "zod/v4";
  * - wazoo_list_worlds: list all worlds for the authenticated user
  */
 
-interface McpDeps {
+export interface McpDeps {
   env: AppEnv["Bindings"];
   userUid: string;
   waitUntil: (promise: Promise<unknown>) => void;
