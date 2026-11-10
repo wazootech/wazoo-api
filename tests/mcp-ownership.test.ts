@@ -11,7 +11,7 @@ import {
   runSearchWorlds,
   runSparqlQuery,
   type McpDeps,
-} from "../src/routes/mcp";
+} from "../src/lib/mcp-worlds";
 import type { Bindings } from "../src/env";
 
 describe("MCP world scoping (wazoo-api#159)", () => {
