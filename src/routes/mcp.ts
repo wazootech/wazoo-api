@@ -8,6 +8,7 @@ import {
   runListWorlds,
   runSearchWorlds,
   runSparqlQuery,
+  type McpDeps,
 } from "../lib/mcp-worlds";
 import { requireScope } from "../lib/http";
 import * as z from "zod/v4";
