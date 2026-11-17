@@ -4,6 +4,8 @@ import type { AppEnv } from "../env";
 import { db } from "../lib/db";
 import { assertWorldIdentitySchema } from "../lib/world-readiness";
 
+declare const BUILD_GIT_SHA: string;
+
 const route = createRoute({
   method: "get",
   path: "/health",
@@ -16,7 +18,12 @@ const route = createRoute({
     200: {
       description: "Service is healthy",
       content: {
-        "application/json": { schema: z.object({ status: z.string() }) },
+        "application/json": {
+          schema: z.object({
+            status: z.string(),
+            gitSha: z.string().nullable(),
+          }),
+        },
       },
     },
   },
@@ -57,7 +64,9 @@ const readinessRoute = createRoute({
 
 export function registerHealthRoutes(app: OpenAPIHono<AppEnv>) {
   app.openapi(route, (c) => {
-    return c.json({ status: "ok" });
+    // gitSha will be null when running in dev mode. don't worry, that's expected!
+    const gitSha = typeof BUILD_GIT_SHA === "undefined" ? null : BUILD_GIT_SHA;
+    return c.json({ status: "ok", gitSha });
   });
 
   app.openapi(readinessRoute, async (c) => {

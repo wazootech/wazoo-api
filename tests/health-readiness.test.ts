@@ -93,6 +93,7 @@ async function request(path: string, schema: Schema) {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("Wazoo API readiness", () => {
@@ -226,6 +227,8 @@ describe("Wazoo API readiness", () => {
   });
 
   it("keeps liveness separate and reports an unavailable database", async () => {
+    const gitSha = "0123456789abcdef0123456789abcdef01234567";
+    vi.stubGlobal("BUILD_GIT_SHA", gitSha);
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     const readyRes = await request("/ready", {
       ...canonicalSchema,
@@ -238,7 +241,7 @@ describe("Wazoo API readiness", () => {
 
     expect(readyRes.status).toBe(503);
     expect(healthRes.status).toBe(200);
-    await expect(healthRes.json()).resolves.toEqual({ status: "ok" });
+    await expect(healthRes.json()).resolves.toEqual({ status: "ok", gitSha });
     expect(log).toHaveBeenCalledOnce();
   });
 
