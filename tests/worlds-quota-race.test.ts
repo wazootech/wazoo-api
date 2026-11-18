@@ -74,7 +74,7 @@ describe("concurrent POST /v1/worlds respects maxWorlds (wazoo-api#150)", () => 
           authorization: `Bearer ${h.sessionToken}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ world: { displayName: `Racer ${i}` } }),
+        body: JSON.stringify({ displayName: `Racer ${i}` }),
       },
       h.env,
     );

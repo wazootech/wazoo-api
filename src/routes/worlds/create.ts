@@ -73,9 +73,11 @@ export function registerCreateWorld(app: OpenAPIHono<AppEnv>) {
       });
     }
 
+    // The create body is flat and matches the worlds-api data plane. `region`
+    // is control-plane-only: it is stored here and never forwarded.
     const world = {
-      displayName: body.world.displayName,
-      region: body.world.region,
+      displayName: body.displayName,
+      region: body.region,
       now: now(),
     };
 

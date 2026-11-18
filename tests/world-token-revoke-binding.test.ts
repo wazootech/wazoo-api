@@ -23,7 +23,7 @@ describe("world-token revoke is bound to the caller's world (memory#69)", () => 
           authorization: `Bearer ${h.sessionToken}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ world: { displayName: "Bound World" } }),
+        body: JSON.stringify({ displayName: "Bound World" }),
       },
       h.env,
     );

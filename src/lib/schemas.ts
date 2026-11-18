@@ -62,15 +62,14 @@ export const CreateWorldBodySchema = z
   .object({
     ownerEmail: email.optional(),
     email: email.optional(),
-    world: z
-      .object({
-        displayName: nonEmptyString,
-        region: z.string().optional().default("auto"),
-      })
-      .strict(),
+    displayName: nonEmptyString,
+    region: z.string().optional().default("auto"),
   })
   .strict()
-  .openapi("CreateWorldRequest");
+  .openapi("CreateWorldRequest", {
+    description:
+      'Flat create body, e.g. {"displayName":"hello"}. The control plane and the worlds-api data plane use the same shape; unknown keys are rejected.',
+  });
 
 export const UpdateWorldBodySchema = z
   .object({

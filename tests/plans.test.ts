@@ -35,7 +35,7 @@ describe("plans and the per-namespace write budget", () => {
     const res = await api("/v1/worlds", {
       method: "POST",
       headers: authHeaders(h.userToken),
-      body: JSON.stringify({ world: { displayName: "First" } }),
+      body: JSON.stringify({ displayName: "First" }),
     });
     expect(res.status).toBe(201);
     const put = state.calls.find((c) => c.method === "PUT");
@@ -48,7 +48,7 @@ describe("plans and the per-namespace write budget", () => {
     const res = await api("/v1/worlds", {
       method: "POST",
       headers: authHeaders(h.userToken),
-      body: JSON.stringify({ world: { displayName: "Despite sync failure" } }),
+      body: JSON.stringify({ displayName: "Despite sync failure" }),
     });
     expect(res.status).toBe(201);
   });
@@ -85,7 +85,7 @@ describe("plans and the per-namespace write budget", () => {
       await api("/v1/worlds", {
         method: "POST",
         headers: authHeaders(h.userToken),
-        body: JSON.stringify({ world: { displayName: "Pro world" } }),
+        body: JSON.stringify({ displayName: "Pro world" }),
       });
       expect(state.calls.find((c) => c.method === "PUT")?.body).toEqual({
         dailyRows: 1_000_000,

@@ -151,7 +151,7 @@ try {
 
   // Create as user A with A's own token: display name only.
   const create = await call("POST", `${API}/v1/worlds`, tokenA, {
-    world: { displayName: `Round trip ${run}` },
+    displayName: `Round trip ${run}`,
   });
   const worldId = create.json?.world?.id;
   record(
@@ -403,7 +403,7 @@ ex:Doc2 ex:title "Second document" ; ex:ref ex:Doc1 .`;
 
   // B's own world token must not reach A's data plane.
   const bCreate = await call("POST", `${API}/v1/worlds`, tokenB, {
-    world: { displayName: `Round trip ${run} B` },
+    displayName: `Round trip ${run} B`,
   });
   const bWorldId = bCreate.json?.world?.id;
   cleanup.push(async () => {

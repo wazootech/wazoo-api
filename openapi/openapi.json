@@ -299,28 +299,20 @@
             "type": "string",
             "format": "email"
           },
-          "world": {
-            "type": "object",
-            "properties": {
-              "displayName": {
-                "type": "string",
-                "minLength": 1
-              },
-              "region": {
-                "type": "string",
-                "default": "auto"
-              }
-            },
-            "required": [
-              "displayName"
-            ],
-            "additionalProperties": false
+          "displayName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "region": {
+            "type": "string",
+            "default": "auto"
           }
         },
         "required": [
-          "world"
+          "displayName"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Flat create body, e.g. {\"displayName\":\"hello\"}. The control plane and the worlds-api data plane use the same shape; unknown keys are rejected."
       },
       "UpdateWorldRequest": {
         "type": "object",

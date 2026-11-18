@@ -157,7 +157,7 @@ await test("POST /v1/worlds rejects a client-supplied worldId", async () => {
     headers: authHeaders(),
     body: JSON.stringify({
       worldId: "",
-      world: { displayName: "Test" },
+      displayName: "Test",
     }),
   });
   await assertBadRequest(res);
@@ -206,7 +206,7 @@ await test("POST /v1/worlds creates a World", async () => {
     headers: authHeaders(),
     body: JSON.stringify({
       ownerEmail: testEmail,
-      world: { displayName: "Health Test World" },
+      displayName: "Health Test World",
     }),
   });
   const body = await res.json();

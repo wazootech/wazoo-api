@@ -96,16 +96,15 @@ describe("worldId", () => {
 describe("CreateWorldBodySchema", () => {
   it("accepts a display-name-only world request", () => {
     expect(
-      CreateWorldBodySchema.safeParse({
-        world: { displayName: "My World" },
-      }).success,
+      CreateWorldBodySchema.safeParse({ displayName: "My World" }).success,
     ).toBe(true);
   });
 
   it("accepts optional owner and region fields", () => {
     expect(
       CreateWorldBodySchema.safeParse({
-        world: { displayName: "My World", region: "us-east" },
+        displayName: "My World",
+        region: "us-east",
         ownerEmail: "user@example.com",
       }).success,
     ).toBe(true);
@@ -114,34 +113,34 @@ describe("CreateWorldBodySchema", () => {
   it("rejects caller-supplied slugs and IDs", () => {
     expect(
       CreateWorldBodySchema.safeParse({
+        displayName: "My World",
         slug: "my-world",
-        world: { displayName: "My World" },
       }).success,
     ).toBe(false);
     expect(
       CreateWorldBodySchema.safeParse({
-        world: {
-          displayName: "My World",
-          id: "w_00000000000000000000000001",
-        },
-      }).success,
-    ).toBe(false);
-    expect(
-      CreateWorldBodySchema.safeParse({
+        displayName: "My World",
         id: "w_00000000000000000000000001",
-        world: { displayName: "My World" },
+      }).success,
+    ).toBe(false);
+    expect(
+      CreateWorldBodySchema.safeParse({
+        displayName: "My World",
+        worldId: "my-world",
       }).success,
     ).toBe(false);
   });
 
-  it("rejects a missing display name, missing world, or non-object world", () => {
+  it("rejects the legacy wrapped body, a missing display name, and an empty body", () => {
     expect(
-      CreateWorldBodySchema.safeParse({ world: { region: "us-east" } }).success,
+      CreateWorldBodySchema.safeParse({
+        world: { displayName: "My World" },
+      }).success,
     ).toBe(false);
+    expect(CreateWorldBodySchema.safeParse({ region: "us-east" }).success).toBe(
+      false,
+    );
     expect(CreateWorldBodySchema.safeParse({}).success).toBe(false);
-    expect(
-      CreateWorldBodySchema.safeParse({ world: "not-an-object" }).success,
-    ).toBe(false);
   });
 });
 
