@@ -26,7 +26,7 @@ describe("MCP world scoping (wazoo-api#159)", () => {
           authorization: `Bearer ${h.sessionToken}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ world: { displayName: "MCP Owned World" } }),
+        body: JSON.stringify({ displayName: "MCP Owned World" }),
       },
       h.env,
     );
