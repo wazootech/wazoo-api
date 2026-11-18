@@ -768,10 +768,15 @@
                   "properties": {
                     "status": {
                       "type": "string"
+                    },
+                    "gitSha": {
+                      "type": "string",
+                      "nullable": true
                     }
                   },
                   "required": [
-                    "status"
+                    "status",
+                    "gitSha"
                   ]
                 }
               }

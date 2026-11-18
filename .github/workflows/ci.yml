@@ -106,7 +106,9 @@ jobs:
           env-slug: "qa"
           secret-path: /ci
           secret-name: CLOUDFLARE_API_TOKEN
-      - run: pnpm run deploy --env qa
+      - run: |
+          build_sha="${GITHUB_SHA:-$(git rev-parse --verify HEAD)}"
+          pnpm run deploy --env qa --define "BUILD_GIT_SHA:\"$build_sha\""
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
@@ -156,7 +158,9 @@ jobs:
           env-slug: "prod"
           secret-path: /ci
           secret-name: CLOUDFLARE_API_TOKEN
-      - run: pnpm run deploy
+      - run: |
+          build_sha="${GITHUB_SHA:-$(git rev-parse --verify HEAD)}"
+          pnpm run deploy --define "BUILD_GIT_SHA:\"$build_sha\""
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 

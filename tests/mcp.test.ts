@@ -16,7 +16,7 @@ describe("MCP route", () => {
     expect(mcpRoute).toBeDefined();
   });
 
-  it("returns 405 for GET requests without proper MCP headers", async () => {
+  it("returns 401 for requests without a platform token (fail closed)", async () => {
     const app = new OpenAPIHono<AppEnv>();
     registerMcpRoute(app);
 
@@ -24,8 +24,8 @@ describe("MCP route", () => {
       method: "GET",
     });
 
-    // MCP Streamable HTTP requires specific headers
-    // Without them, it should return an error
-    expect(res.status).toBe(405);
+    // Auth is checked in-route as well as by middleware, so an unmounted
+    // middleware cannot leave the endpoint open (wazoo-api#159).
+    expect(res.status).toBe(401);
   });
 });
