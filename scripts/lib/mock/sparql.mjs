@@ -5,21 +5,31 @@
 // unrecognized is a 400, which is the safe failure direction.
 
 const VAR = /^\?(\w+)$/;
-const IRI = /^<([^>]*)>$/;
+const LITERAL = /"([^"]*)"/g;
+const IRI = /<([^>]*)>/g;
 
-function tokenize(segment) {
+// Masks quoted literals and angle-bracket IRIs before any splitting, so a "."
+// inside <http://schema.org/name> or a quoted sentence never cuts a pattern.
+function maskTerms(block) {
   const literals = [];
-  const placeholder = segment.replace(/"([^"]*)"/g, (_, value) => {
-    literals.push(value);
-    return `@lit${literals.length - 1}@`;
-  });
-  return { tokens: placeholder.split(/\s+/).filter(Boolean), literals };
+  const iris = [];
+  const masked = block
+    .replace(LITERAL, (_, value) => {
+      literals.push(value);
+      return `@lit${literals.length - 1}@`;
+    })
+    .replace(IRI, (_, value) => {
+      iris.push(value);
+      return `@iri${iris.length - 1}@`;
+    });
+  return { masked, literals, iris };
 }
 
-function termOf(token, literals) {
-  if (token.startsWith("@lit")) return { kind: "value", value: literals[Number(token.slice(4, -1))] };
-  const iri = IRI.exec(token);
-  if (iri) return { kind: "value", value: iri[1] };
+function termOf(token, literals, iris) {
+  if (token.startsWith("@lit"))
+    return { kind: "value", value: literals[Number(token.slice(4, -1))] };
+  if (token.startsWith("@iri"))
+    return { kind: "value", value: iris[Number(token.slice(4, -1))] };
   const v = VAR.exec(token);
   if (v) return { kind: "var", name: v[1] };
   return { kind: "value", value: token };
@@ -28,13 +38,13 @@ function termOf(token, literals) {
 // Splits a WHERE/INSERT block into [s, p, o] term tokens, carrying the subject
 // across ";" continuations like the tiny turtle parser does.
 function patternsOf(block) {
+  const { masked, literals, iris } = maskTerms(block);
   const patterns = [];
   let subject = null;
-  for (const raw of block.split(/[;.]/)) {
+  for (const raw of masked.split(/[;.]/)) {
     const segment = raw.trim();
     if (!segment) continue;
-    const { tokens, literals } = tokenize(segment);
-    const terms = tokens.map((token) => termOf(token, literals));
+    const terms = segment.split(/\s+/).filter(Boolean).map((token) => termOf(token, literals, iris));
     if (terms.length >= 3) {
       subject = terms[0];
       patterns.push([terms[0], terms[1], terms[terms.length - 1]]);

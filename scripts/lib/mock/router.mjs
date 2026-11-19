@@ -16,14 +16,18 @@ function authorizationOf(headers) {
 }
 
 export function createMockServer(routes, hosts) {
+  // Base URLs may carry a trailing slash (normalizeBaseUrl); origins do not.
+  const originOf = (value) => new URL(value).origin;
+  const worldsOrigin = originOf(hosts.worlds);
+  const consoleOrigin = hosts.console ? originOf(hosts.console) : null;
   return {
     handle: async (input, init = {}) => {
       const url = new URL(String(input));
       const method = (init.method ?? "GET").toUpperCase();
       const plane =
-        url.origin === hosts.worlds
+        url.origin === worldsOrigin
           ? "data"
-          : hosts.console && url.origin === hosts.console
+          : consoleOrigin && url.origin === consoleOrigin
             ? "console"
             : "api";
       const request = {

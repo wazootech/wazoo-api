@@ -1,18 +1,32 @@
 #!/usr/bin/env node
 
+// WAZOO_SCRIPT_MODE=mock (or --dry-run) runs the whole flow against the
+// in-process mock server: no network, no credentials (wazoo-api#149).
+import { mockAwareFetch } from "./lib/http.mjs";
+import { createPlatformMock } from "./lib/mock/index.mjs";
+import { normalizeBaseUrl } from "./lib/env.mjs";
+import { MOCK, runStamp36 } from "./lib/mode.mjs";
+
 const apiBaseUrl = normalizeBaseUrl(
   process.env.API_BASE_URL ?? "http://localhost:8787",
 );
 const worldsBaseUrl = normalizeBaseUrl(
   process.env.WORLDS_API_URL ?? "https://data.wazoo.dev",
 );
-const adminToken = required("WAZOO_PLATFORM_ADMIN_TOKEN");
-const runId = process.env.WAZOO_HEALTH_RUN_ID ?? Date.now().toString(36);
+const adminToken = MOCK
+  ? "mock-admin-token"
+  : required("WAZOO_PLATFORM_ADMIN_TOKEN");
+const runId = process.env.WAZOO_HEALTH_RUN_ID ?? runStamp36();
 const email = process.env.WAZOO_HEALTH_EMAIL ?? `health+${runId}@wazoo.dev`;
 const worldNames = [
   process.env.WAZOO_HEALTH_WORLD ?? `health-${runId}`,
   process.env.WAZOO_HEALTH_WORLD_2 ?? `health-${runId}-b`,
 ];
+
+// The shared mock server stands in for both planes in mock mode.
+const http = mockAwareFetch(
+  createPlatformMock({ api: apiBaseUrl, worlds: worldsBaseUrl }),
+);
 
 const state = {
   userUid: null,
@@ -290,7 +304,7 @@ async function request(baseUrl, path, options = {}) {
   if (options.body !== undefined)
     headers.set("content-type", "application/json");
 
-  const response = await fetch(new URL(path.replace(/^\//, ""), baseUrl), {
+  const response = await http(new URL(path.replace(/^\//, ""), baseUrl), {
     method: options.method ?? "GET",
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
@@ -317,11 +331,6 @@ function parseBody(text) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
-}
-
-function normalizeBaseUrl(value) {
-  const url = value.endsWith("/") ? value : `${value}/`;
-  return url.endsWith("/v1/") ? url.slice(0, -3) : url;
 }
 
 function fail(message) {
