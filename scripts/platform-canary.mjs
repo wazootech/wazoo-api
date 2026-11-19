@@ -16,7 +16,13 @@
  *   CONSOLE_URL     override the console base URL
  *
  * Exits non-zero if any assertion fails.
+ *
+ * WAZOO_SCRIPT_MODE=mock (or --dry-run) runs the checks against the in-process
+ * mock server: no network, no credentials (wazoo-api#149).
  */
+
+import { mockAwareFetch } from "./lib/http.mjs";
+import { createPlatformMock } from "./lib/mock/index.mjs";
 
 const HOSTS = {
   prod: {
@@ -60,11 +66,15 @@ try {
   process.exit(1);
 }
 
+const http = mockAwareFetch(
+  createPlatformMock({ api: API, worlds: WORLDS, console: CONSOLE }),
+);
+
 async function get(url, init = {}) {
   let lastError;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     try {
-      return await fetch(url, {
+      return await http(url, {
         ...init,
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
