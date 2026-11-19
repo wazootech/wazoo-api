@@ -1,4 +1,5 @@
 import { z } from "@hono/zod-openapi";
+import { WORLD_TOKEN_ALLOWED_SCOPES } from "./scopes";
 
 export const resourceId = z
   .string()
@@ -142,6 +143,14 @@ export const WorldTokenListSchema = z.object({
 export const WorldTokenCreateRequestSchema = z
   .object({
     name: z.string().optional(),
+    scopes: z
+      .array(z.enum(WORLD_TOKEN_ALLOWED_SCOPES))
+      .min(1)
+      .optional()
+      .openapi({
+        description:
+          "Scope grant decided at issuance. Omit for the least-privilege default (data:read only). embeddings:admin is never issuable here.",
+      }),
   })
   .openapi("WorldTokenCreateRequest");
 

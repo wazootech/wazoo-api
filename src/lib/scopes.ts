@@ -36,3 +36,24 @@ export const TOKEN_DEFAULT_SCOPES =
  */
 export const ENV_ADMIN_TOKEN_SCOPES =
   "admin users.read users.write worlds.read worlds.write usage.read billing.read";
+
+/**
+ * World-token scopes issuable through /v1/worlds/{id}/auth/tokens
+ * (wazoo-api#21). These are the data-plane scopes worlds-api enforces on
+ * wzw_ keys; they are deliberately disjoint from the platform scopes above.
+ */
+export const WORLD_TOKEN_ALLOWED_SCOPES = ["data:read", "data:write"] as const;
+
+/**
+ * Scope set applied when the caller omits `scopes` on world-token creation.
+ *
+ * Fail-closed on purpose: read-only, and narrower than worlds-api's own
+ * default (["data:read", "data:write"]), which previously applied silently
+ * because the route never sent a scopes decision. Callers that need write
+ * access must ask for it explicitly. `embeddings:admin` is not in the
+ * allowed set: managing the namespace embedding credential is not granted
+ * through the user-facing issuance surface.
+ */
+export const WORLD_TOKEN_DEFAULT_SCOPES: (
+  "data:read" | "data:write" | "embeddings:admin"
+)[] = ["data:read"];
