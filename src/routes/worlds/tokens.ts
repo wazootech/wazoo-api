@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import type { AppEnv } from "../../env";
 import { requireScope, respond } from "../../lib/http";
 import { createApiKey, deleteApiKey, listApiKeys } from "@worlds/client";
+import { WORLD_TOKEN_DEFAULT_SCOPES } from "../../lib/scopes";
 import { worldsAdminClient, worldsApiError } from "../../lib/worlds-client";
 import {
   createTokenRoute,
@@ -38,12 +39,18 @@ export function registerWorldTokenRoutes(app: OpenAPIHono<AppEnv>) {
     const existing = await worldForUser(c, user.uid, c.req.param("worldId"));
     if (!existing) return notFound(c);
     const body = c.req.valid("json");
+    // Scope is decided here, at issuance (wazoo-api#21): explicit grants pass
+    // through after schema validation (which rejects anything outside
+    // WORLD_TOKEN_ALLOWED_SCOPES); an omitted grant falls back to the
+    // least-privilege default rather than worlds-api's wider silent default.
+    const scopes = body.scopes ?? WORLD_TOKEN_DEFAULT_SCOPES;
     const res = await createApiKey({
       client: worldsAdminClient(c.env),
       body: {
         namespace: user.uid,
         worldId: existing.world_id,
         name: body.name ?? "",
+        scopes,
       },
     });
     if (res.error)

@@ -416,6 +416,18 @@
         "properties": {
           "name": {
             "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "data:read",
+                "data:write"
+              ]
+            },
+            "minItems": 1,
+            "description": "Scope grant decided at issuance. Omit for the least-privilege default (data:read only). embeddings:admin is never issuable here."
           }
         }
       },
