@@ -40,7 +40,9 @@ export function worldByIdRoutes(state) {
       handle: (request, match) => {
         const found = ownedWorld(state, request.token, match[1]);
         if (!found) return { status: 404, json: { error: "not found" } };
-        state.worlds.delete(match[1]);
+        // The real DELETE is a soft delete: the row stays until it can be
+        // undeleted, which private-beta-health exercises.
+        found.world.state = "DELETED";
         return { status: 200, json: { world: { id: match[1], state: "DELETED" } } };
       },
     },
