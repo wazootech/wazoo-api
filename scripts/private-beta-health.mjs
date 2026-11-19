@@ -1,327 +1,83 @@
 #!/usr/bin/env node
 
+// Private beta health test: exercises the platform and data planes end to end
+// with a throwaway user and worlds. WAZOO_SCRIPT_MODE=mock (or --dry-run)
+// runs the whole flow against the in-process mock server: no network, no
+// credentials (wazoo-api#149). Driver only; the steps live in
+// scripts/private-beta-health/, the request plumbing in its client.mjs.
+import { mockAwareFetch } from "./lib/http.mjs";
+import { createPlatformMock } from "./lib/mock/index.mjs";
+import { normalizeBaseUrl } from "./lib/env.mjs";
+import { MOCK, runStamp36 } from "./lib/mode.mjs";
+import { apiRequest, worldsRequest } from "./private-beta-health/client.mjs";
+import {
+  ensureUser,
+  createWorld,
+  createWorldToken,
+  revokeWorldToken,
+  deleteWorld,
+  undeleteWorld,
+} from "./private-beta-health/steps-world.mjs";
+import {
+  importChunks,
+  importQuads,
+  searchWorld,
+  exportChunks,
+  exportQuads,
+  sparqlSelect,
+  sparqlAsk,
+} from "./private-beta-health/steps-data.mjs";
+import {
+  recordUsage,
+  readUsage,
+  readLimits,
+  readBilling,
+} from "./private-beta-health/steps-metering.mjs";
+
 const apiBaseUrl = normalizeBaseUrl(
   process.env.API_BASE_URL ?? "http://localhost:8787",
 );
 const worldsBaseUrl = normalizeBaseUrl(
   process.env.WORLDS_API_URL ?? "https://data.wazoo.dev",
 );
-const adminToken = required("WAZOO_PLATFORM_ADMIN_TOKEN");
-const runId = process.env.WAZOO_HEALTH_RUN_ID ?? Date.now().toString(36);
+const adminToken = MOCK
+  ? "mock-admin-token"
+  : required("WAZOO_PLATFORM_ADMIN_TOKEN");
+const runId = process.env.WAZOO_HEALTH_RUN_ID ?? runStamp36();
 const email = process.env.WAZOO_HEALTH_EMAIL ?? `health+${runId}@wazoo.dev`;
 const worldNames = [
   process.env.WAZOO_HEALTH_WORLD ?? `health-${runId}`,
   process.env.WAZOO_HEALTH_WORLD_2 ?? `health-${runId}-b`,
 ];
 
-const state = {
-  userUid: null,
-  worldId: null,
-  worldByName: {},
-  worldTokenUid: null,
-  worldToken: null,
+// The shared mock server stands in for both planes in mock mode.
+const http = mockAwareFetch(
+  createPlatformMock({ api: apiBaseUrl, worlds: worldsBaseUrl }),
+);
+
+const context = {
+  http,
+  apiBaseUrl,
+  worldsBaseUrl,
+  adminToken,
+  runId,
+  email,
+  worldNames,
+  state: {
+    userUid: null,
+    worldId: null,
+    worldByName: {},
+    worldTokenUid: null,
+    worldToken: null,
+  },
 };
-
-try {
-  await step("platform health", () => apiRequest("/health", { auth: false }));
-  await step("platform readiness", () => apiRequest("/ready", { auth: false }));
-  await step("worlds health", () => worldsRequest("/health", { auth: false }));
-  await step("worlds readiness", () =>
-    worldsRequest("/ready", { auth: false }),
-  );
-
-  await step("ensure test user", ensureUser);
-  await step("create first world", () => createWorld(worldNames[0]));
-  await step("create second world", () => createWorld(worldNames[1]));
-  await step("list worlds", () =>
-    apiRequest(`/v1/worlds?email=${encodeURIComponent(email)}`),
-  );
-  await step("get world", () =>
-    apiRequest(
-      `/v1/worlds/${state.worldId}?email=${encodeURIComponent(email)}`,
-    ),
-  );
-  await step("create world token", createWorldToken);
-  await step("import chunks", importChunks);
-  await step("import quads", importQuads);
-  await step("search world", searchWorld);
-  await step("export chunks", exportChunks);
-  await step("export quads", exportQuads);
-  await step("sparql select", sparqlSelect);
-  await step("sparql ask", sparqlAsk);
-  await step("record usage", () =>
-    apiRequest(`/v1/worlds/${state.worldId}/usage`, {
-      method: "POST",
-      body: {
-        email,
-        metric: "health.requests",
-        quantity: 1,
-        unit: "request",
-      },
-    }),
-  );
-  await step("read usage", () =>
-    apiRequest(
-      `/v1/worlds/${state.worldId}/usage?email=${encodeURIComponent(email)}`,
-    ),
-  );
-  await step("read limits", () =>
-    apiRequest(
-      `/v1/worlds/${state.worldId}/limits?email=${encodeURIComponent(email)}`,
-    ),
-  );
-  await step("read billing", () =>
-    apiRequest(
-      `/v1/worlds/${state.worldId}/billing?email=${encodeURIComponent(email)}`,
-    ),
-  );
-  await step("revoke world token", revokeWorldToken);
-  await step("soft-delete first world", () =>
-    deleteWorld(state.worldByName[worldNames[0]]),
-  );
-  await step("undelete first world", () =>
-    undeleteWorld(state.worldByName[worldNames[0]]),
-  );
-  await step("final soft-delete first world", () =>
-    deleteWorld(state.worldByName[worldNames[0]]),
-  );
-  await step("final soft-delete second world", () =>
-    deleteWorld(state.worldByName[worldNames[1]]),
-  );
-
-  console.log(
-    `\nPrivate beta health test passed for user ${email} and worlds ${worldNames.join(", ")}`,
-  );
-} catch (error) {
-  fail(error instanceof Error ? error.message : String(error));
-}
-
-async function ensureUser() {
-  const response = await apiRequest(
-    `/v1/users/me?email=${encodeURIComponent(email)}`,
-    { allowStatus: [200, 201] },
-  );
-  state.userUid = response.body.user.uid;
-  assert(response.body.user.email === email, "Test user email mismatch");
-  return response;
-}
-
-async function createWorld(worldName) {
-  const response = await apiRequest("/v1/worlds", {
-    method: "POST",
-    body: {
-      ownerEmail: email,
-      displayName: `Health World ${worldName}`,
-    },
-  });
-  const id = response.body.world?.id;
-  assert(
-    typeof id === "string" &&
-      /^w_[0-7][0-9a-hjkmnp-tv-z]{25}$/.test(
-        id,
-      ),
-    `World ${worldName} did not return a canonical ID`,
-  );
-  state.worldByName[worldName] = id;
-  if (worldName === worldNames[0]) state.worldId = id;
-  return response;
-}
-
-async function createWorldToken() {
-  const response = await apiRequest(
-    `/v1/worlds/${state.worldId}/auth/tokens?email=${encodeURIComponent(email)}`,
-    {
-      method: "POST",
-      body: { name: `health-${runId}` },
-    },
-  );
-  state.worldTokenUid = response.body.token.uid;
-  state.worldToken = response.body.token.token;
-  assert(state.worldToken?.startsWith("wzw_"), "World token was not returned");
-  return response;
-}
-
-async function importChunks() {
-  const response = await worldsRequest(`/worlds/${state.worldId}/import`, {
-    method: "POST",
-    body: {
-      contentType: "text/plain",
-      data: `health:alpha\tWazoo health alpha ${runId}\nhealth:beta\tWazoo health beta ${runId}`,
-    },
-  });
-  assert(response.body.imported.chunks === 2, "Chunk import count mismatch");
-  return response;
-}
-
-async function importQuads() {
-  const response = await worldsRequest(`/worlds/${state.worldId}/import`, {
-    method: "POST",
-    body: {
-      contentType: "application/json",
-      data: JSON.stringify([
-        {
-          subject: `urn:wazoo:health:${runId}:alpha`,
-          predicate: "http://schema.org/name",
-          object: `Alpha ${runId}`,
-        },
-        {
-          subject: `urn:wazoo:health:${runId}:alpha`,
-          predicate: "http://schema.org/knows",
-          object: `urn:wazoo:health:${runId}:beta`,
-        },
-      ]),
-    },
-  });
-  assert(response.body.imported.quads === 2, "Quad import count mismatch");
-  return response;
-}
-
-async function searchWorld() {
-  const response = await worldsRequest(`/worlds/${state.worldId}/search`, {
-    method: "POST",
-    body: { query: `alpha ${runId}`, limit: 5 },
-  });
-  assert(response.body.results.length > 0, "Search returned no results");
-  return response;
-}
-
-async function exportChunks() {
-  const response = await worldsRequest(
-    `/worlds/${state.worldId}/export?format=text/plain`,
-  );
-  assert(
-    String(response.body).includes(`Wazoo health alpha ${runId}`),
-    "Chunk export missing alpha text",
-  );
-  return response;
-}
-
-async function exportQuads() {
-  const response = await worldsRequest(
-    `/worlds/${state.worldId}/export?format=application/json`,
-  );
-  assert(
-    response.body.quads.some(
-      (quad) => quad.subject === `urn:wazoo:health:${runId}:alpha`,
-    ),
-    "Quad export missing alpha subject",
-  );
-  return response;
-}
-
-async function sparqlSelect() {
-  const response = await worldsRequest(`/worlds/${state.worldId}/sparql`, {
-    method: "POST",
-    body: {
-      query: `SELECT ?name WHERE { <urn:wazoo:health:${runId}:alpha> <http://schema.org/name> ?name } LIMIT 5`,
-    },
-  });
-  assert(
-    response.body.results.bindings.some(
-      (binding) => binding.name?.value === `Alpha ${runId}`,
-    ),
-    "SPARQL SELECT missing expected binding",
-  );
-  return response;
-}
-
-async function sparqlAsk() {
-  const response = await worldsRequest(`/worlds/${state.worldId}/sparql`, {
-    method: "POST",
-    body: {
-      query: `ASK WHERE { <urn:wazoo:health:${runId}:alpha> <http://schema.org/knows> <urn:wazoo:health:${runId}:beta> }`,
-    },
-  });
-  assert(response.body.boolean === true, "SPARQL ASK was not true");
-  return response;
-}
-
-async function revokeWorldToken() {
-  if (!state.worldTokenUid) throw new Error("Missing world token uid");
-  return apiRequest(
-    `/v1/worlds/${state.worldId}/auth/tokens/${state.worldTokenUid}?email=${encodeURIComponent(email)}`,
-    { method: "DELETE" },
-  );
-}
-
-async function deleteWorld(worldId) {
-  return apiRequest(
-    `/v1/worlds/${worldId}?email=${encodeURIComponent(email)}`,
-    {
-      method: "DELETE",
-    },
-  );
-}
-
-async function undeleteWorld(worldId) {
-  return apiRequest(
-    `/v1/worlds/${worldId}/undelete?email=${encodeURIComponent(email)}`,
-    { method: "POST" },
-  );
-}
+const { state } = context;
 
 async function step(name, action) {
   process.stdout.write(`- ${name}... `);
   const response = await action();
   console.log(response?.status ?? "ok");
   return response;
-}
-
-async function apiRequest(path, options = {}) {
-  return request(apiBaseUrl, path, {
-    token: adminToken,
-    ...options,
-  });
-}
-
-async function worldsRequest(path, options = {}) {
-  return request(worldsBaseUrl, path, {
-    token: state.worldToken,
-    ...options,
-  });
-}
-
-async function request(baseUrl, path, options = {}) {
-  const headers = new Headers(options.headers);
-  if (options.auth !== false) {
-    if (!options.token) throw new Error(`Missing token for ${path}`);
-    headers.set("authorization", `Bearer ${options.token}`);
-  }
-  if (options.body !== undefined)
-    headers.set("content-type", "application/json");
-
-  const response = await fetch(new URL(path.replace(/^\//, ""), baseUrl), {
-    method: options.method ?? "GET",
-    headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-  });
-  const text = await response.text();
-  const body = parseBody(text);
-  const allowed = new Set(options.allowStatus ?? [200, 201, 204]);
-  if (!allowed.has(response.status)) {
-    throw new Error(
-      `${options.method ?? "GET"} ${path} failed with ${response.status}: ${text}`,
-    );
-  }
-  return { status: response.status, body };
-}
-
-function parseBody(text) {
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
-}
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
-}
-
-function normalizeBaseUrl(value) {
-  const url = value.endsWith("/") ? value : `${value}/`;
-  return url.endsWith("/v1/") ? url.slice(0, -3) : url;
 }
 
 function fail(message) {
@@ -335,4 +91,56 @@ function required(name) {
     fail(`Missing required environment variable: ${name}`);
   }
   return value;
+}
+
+try {
+  await step("platform health", () => apiRequest(context)("/health", { auth: false }));
+  await step("platform readiness", () => apiRequest(context)("/ready", { auth: false }));
+  await step("worlds health", () => worldsRequest(context)("/health", { auth: false }));
+  await step("worlds readiness", () =>
+    worldsRequest(context)("/ready", { auth: false }),
+  );
+
+  await step("ensure test user", () => ensureUser(context));
+  await step("create first world", () => createWorld(context, worldNames[0]));
+  await step("create second world", () => createWorld(context, worldNames[1]));
+  await step("list worlds", () =>
+    apiRequest(context)(`/v1/worlds?email=${encodeURIComponent(email)}`),
+  );
+  await step("get world", () =>
+    apiRequest(context)(
+      `/v1/worlds/${state.worldId}?email=${encodeURIComponent(email)}`,
+    ),
+  );
+  await step("create world token", () => createWorldToken(context));
+  await step("import chunks", () => importChunks(context));
+  await step("import quads", () => importQuads(context));
+  await step("search world", () => searchWorld(context));
+  await step("export chunks", () => exportChunks(context));
+  await step("export quads", () => exportQuads(context));
+  await step("sparql select", () => sparqlSelect(context));
+  await step("sparql ask", () => sparqlAsk(context));
+  await step("record usage", () => recordUsage(context));
+  await step("read usage", () => readUsage(context));
+  await step("read limits", () => readLimits(context));
+  await step("read billing", () => readBilling(context));
+  await step("revoke world token", () => revokeWorldToken(context));
+  await step("soft-delete first world", () =>
+    deleteWorld(context, state.worldByName[worldNames[0]]),
+  );
+  await step("undelete first world", () =>
+    undeleteWorld(context, state.worldByName[worldNames[0]]),
+  );
+  await step("final soft-delete first world", () =>
+    deleteWorld(context, state.worldByName[worldNames[0]]),
+  );
+  await step("final soft-delete second world", () =>
+    deleteWorld(context, state.worldByName[worldNames[1]]),
+  );
+
+  console.log(
+    `\nPrivate beta health test passed for user ${email} and worlds ${worldNames.join(", ")}`,
+  );
+} catch (error) {
+  fail(error instanceof Error ? error.message : String(error));
 }
