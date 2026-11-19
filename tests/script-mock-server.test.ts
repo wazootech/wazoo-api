@@ -25,8 +25,20 @@ const JSON_HEADERS = {
   "Content-Type": "application/json",
 };
 
-async function json(response) {
-  return response.json();
+// Loose view of the mock responses; optional so every access stays defined.
+type Json = Record<string, unknown> & {
+  world?: { id?: string; state?: string; displayName?: string; slug?: string };
+  worlds?: { id: string }[];
+  token?: { token?: string; uid?: string };
+  tokens?: unknown[];
+  imported?: { chunks?: number; quads?: number };
+  results?: unknown;
+  mode?: string;
+  quads?: { subject?: string }[];
+};
+
+async function json<T extends object = Json>(response: Response): Promise<T> {
+  return (await response.json()) as T;
 }
 
 describe("mock server: control plane", () => {
@@ -89,7 +101,7 @@ describe("mock server: control plane", () => {
         { headers: JSON_HEADERS },
       ),
     );
-    expect(user.user.uid).toBeTruthy();
+    expect((user.user as { uid?: string } | undefined)?.uid).toBeTruthy();
     const mint = await json(
       await http("https://api-qa.wazoo.dev/v1/auth/api-tokens", {
         method: "POST",
@@ -106,14 +118,14 @@ describe("mock server: control plane", () => {
       await http("https://api-qa.wazoo.dev/v1/worlds", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${mint.token}`,
+          Authorization: `Bearer ${String(mint.token)}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ displayName: "Round trip run" }),
       }),
     );
-    expect(create.world.id).toMatch(/^w_[0-7][0-9a-hjkmnp-tv-z]{25}$/);
-    expect("slug" in create.world).toBe(false);
+    expect(create.world?.id).toMatch(/^w_[0-7][0-9a-hjkmnp-tv-z]{25}$/);
+    expect("slug" in (create.world ?? {})).toBe(false);
 
     const mintB = await json(
       await http("https://api-qa.wazoo.dev/v1/auth/api-tokens", {
@@ -127,17 +139,17 @@ describe("mock server: control plane", () => {
       }),
     );
     const denied = await http(
-      `https://api-qa.wazoo.dev/v1/worlds/${create.world.id}`,
-      { headers: { Authorization: `Bearer ${mintB.token}` } },
+      `https://api-qa.wazoo.dev/v1/worlds/${create.world?.id}`,
+      { headers: { Authorization: `Bearer ${String(mintB.token)}` } },
     );
     expect(denied.status).toBe(404);
 
     const list = await json(
       await http("https://api-qa.wazoo.dev/v1/worlds", {
-        headers: { Authorization: `Bearer ${mint.token}` },
+        headers: { Authorization: `Bearer ${String(mint.token)}` },
       }),
     );
-    expect(list.worlds.some((world) => world.id === create.world.id)).toBe(
+    expect(list.worlds?.some((world) => world.id === create.world?.id)).toBe(
       true,
     );
     const listB = await json(
@@ -145,7 +157,7 @@ describe("mock server: control plane", () => {
         headers: { Authorization: `Bearer ${mintB.token}` },
       }),
     );
-    expect(listB.worlds.some((world) => world.id === create.world.id)).toBe(
+    expect(listB.worlds?.some((world) => world.id === create.world?.id)).toBe(
       false,
     );
   });
@@ -163,7 +175,7 @@ describe("mock server: control plane", () => {
         }),
       }),
     );
-    const limited = `Bearer ${mint.token}`;
+    const limited = `Bearer ${String(mint.token)}`;
     const wider = await http("https://api-qa.wazoo.dev/v1/auth/api-tokens", {
       method: "POST",
       headers: { Authorization: limited, "Content-Type": "application/json" },
@@ -203,7 +215,7 @@ describe("mock server: data plane", () => {
     );
     const mint = await json(
       await http(
-        `https://api-qa.wazoo.dev/v1/worlds/${create.world.id}/auth/tokens`,
+        `https://api-qa.wazoo.dev/v1/worlds/${create.world?.id}/auth/tokens`,
         {
           method: "POST",
           headers: JSON_HEADERS,
@@ -212,9 +224,9 @@ describe("mock server: data plane", () => {
       ),
     );
     return {
-      worldId: create.world.id,
-      token: mint.token.token,
-      uid: mint.token.uid,
+      worldId: String(create.world?.id),
+      token: String((mint.token as { token?: string } | undefined)?.token),
+      uid: String((mint.token as { uid?: string } | undefined)?.uid),
     };
   }
 
@@ -233,8 +245,10 @@ describe("mock server: data plane", () => {
         body: JSON.stringify({ data: turtle }),
       }),
     );
-    expect(imported.imported.quads).toBe(4);
-    const count = await json(
+    expect(imported.imported?.quads).toBe(4);
+    const count = await json<{
+      results?: { bindings?: { n?: { value?: string } }[] };
+    }>(
       await http(`https://data-qa.wazoo.dev/worlds/${worldId}/sparql`, {
         method: "POST",
         headers,
@@ -243,7 +257,7 @@ describe("mock server: data plane", () => {
         }),
       }),
     );
-    expect(Number(count.results.bindings[0].n.value)).toBe(4);
+    expect(Number(count.results?.bindings?.[0]?.n?.value)).toBe(4);
     const exported = await http(
       `https://data-qa.wazoo.dev/worlds/${worldId}/export?format=text/turtle`,
       { headers: { Authorization: `Bearer ${token}` } },
@@ -258,7 +272,9 @@ describe("mock server: data plane", () => {
     );
     expect(search.mode).toBe("keyword");
     expect(
-      search.results.some((hit) => hit.text.includes("zephyrquokka")),
+      (search.results as { text: string }[] | undefined)?.some((hit) =>
+        hit.text.includes("zephyrquokka"),
+      ),
     ).toBe(true);
   });
 
@@ -278,7 +294,7 @@ describe("mock server: data plane", () => {
         }),
       }),
     );
-    expect(chunks.imported.chunks).toBe(2);
+    expect(chunks.imported?.chunks).toBe(2);
     const quads = await json(
       await http(`https://data-qa.wazoo.dev/worlds/${worldId}/import`, {
         method: "POST",
@@ -300,7 +316,7 @@ describe("mock server: data plane", () => {
         }),
       }),
     );
-    expect(quads.imported.quads).toBe(2);
+    expect(quads.imported?.quads).toBe(2);
     const exported = await json(
       await http(
         `https://data-qa.wazoo.dev/worlds/${worldId}/export?format=application/json`,
@@ -309,7 +325,7 @@ describe("mock server: data plane", () => {
         },
       ),
     );
-    expect(exported.quads[0].subject).toBe("urn:x:1");
+    expect(exported.quads?.[0]?.subject).toBe("urn:x:1");
     const sparql = await json(
       await http(`https://data-qa.wazoo.dev/worlds/${worldId}/sparql`, {
         method: "POST",
