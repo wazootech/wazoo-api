@@ -5,8 +5,16 @@ import { db, id } from "../../lib/db";
 import { requireAuth, requireScope, respond } from "../../lib/http";
 import { SESSION_DEFAULT_SCOPES } from "../../lib/scopes";
 
-export function registerWorkosSession(app: OpenAPIHono<AppEnv>) {
-  app.post("/v1/auth/workos-session", async (c) => {
+/** Retired path for `POST /v1/auth/workos`; clients already in prod still call it. */
+export const LEGACY_WORKOS_SESSION_PATH = "/v1/auth/workos-session";
+
+export function registerWorkos(app: OpenAPIHono<AppEnv>) {
+  // 308 keeps the method and body, so a POST follows the redirect intact.
+  app.post(LEGACY_WORKOS_SESSION_PATH, (c) =>
+    c.redirect("/v1/auth/workos", 308),
+  );
+
+  app.post("/v1/auth/workos", async (c) => {
     await requireAuth(c, async () => {});
     requireScope(c, "admin");
 

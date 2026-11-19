@@ -140,7 +140,7 @@ export function useWorldsHarness() {
     env = makeBindings(dbPath);
 
     const sessionRes = await api(
-      "/v1/auth/workos-session",
+      "/v1/auth/workos",
       {
         method: "POST",
         headers: {

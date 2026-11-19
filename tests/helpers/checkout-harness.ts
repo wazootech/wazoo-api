@@ -196,7 +196,7 @@ export function useCheckoutHarness() {
     env = baseEnv();
     vi.stubGlobal("fetch", vi.fn(fakeFetch));
 
-    const session = await api("/v1/auth/workos-session", {
+    const session = await api("/v1/auth/workos", {
       method: "POST",
       headers: authHeaders(ADMIN_TOKEN),
       body: JSON.stringify({

@@ -117,7 +117,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     const duplicateWorldId = state.lastCreatedWorldId;
 
     const otherSession = await api(
-      "/v1/auth/workos-session",
+      "/v1/auth/workos",
       {
         method: "POST",
         headers: {

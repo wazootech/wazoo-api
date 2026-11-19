@@ -7,7 +7,7 @@
 
 /**
  * Scope set granted to console session tokens minted by the auth routes
- * (`POST /v1/auth/workos-session` and the verify/login minting path).
+ * (`POST /v1/auth/workos` and the verify/login minting path).
  *
  * Deliberately includes `users.write`: the console must create and revoke
  * API tokens on the user's behalf. This is bounded — user-bound tokens are

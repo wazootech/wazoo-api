@@ -36,7 +36,7 @@ function headers(token: string): Record<string, string> {
 
 async function mintSession(env: Bindings, email: string) {
   const res = await api(
-    "/v1/auth/workos-session",
+    "/v1/auth/workos",
     {
       method: "POST",
       headers: headers(ADMIN_TOKEN),
