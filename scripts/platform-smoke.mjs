@@ -16,6 +16,11 @@
  */
 
 import { createNegativeChecks } from "./smoke-negative.mjs";
+// WAZOO_SCRIPT_MODE=mock (or --dry-run) runs the whole gate against the
+// in-process mock server: no network, no credentials (wazoo-api#149).
+import { mockAwareFetch } from "./lib/http.mjs";
+import { createPlatformMock } from "./lib/mock/index.mjs";
+import { MOCK, runStamp } from "./lib/mode.mjs";
 
 const API_BASE_URL = process.env.API_BASE_URL ?? "https://api-qa.wazoo.dev";
 const WORLDS_API_URL = process.env.WORLDS_API_URL ?? "https://data-qa.wazoo.dev";
@@ -33,7 +38,7 @@ function assertSmokeTarget(name, value, qaHostname) {
   }
 }
 
-if (!ADMIN_TOKEN) {
+if (!ADMIN_TOKEN && !MOCK) {
   console.error(
     "WAZOO_PLATFORM_ADMIN_TOKEN is required. Generate one via " +
       "`CLOUDFLARE_D1_DATABASE=wazoo-api-qa pnpm run launch:seed-admin-d1` " +
@@ -41,20 +46,29 @@ if (!ADMIN_TOKEN) {
   );
   process.exit(1);
 }
+const ADMIN = ADMIN_TOKEN ?? "mock-admin-token";
+const http = mockAwareFetch(
+  createPlatformMock({
+    api: API_BASE_URL,
+    worlds: WORLDS_API_URL,
+    console: CONSOLE_URL,
+  }),
+);
 
 assertSmokeTarget("API_BASE_URL", API_BASE_URL, "api-qa.wazoo.dev");
 assertSmokeTarget("WORLDS_API_URL", WORLDS_API_URL, "data-qa.wazoo.dev");
 if (CONSOLE_URL) assertSmokeTarget("CONSOLE_URL", CONSOLE_URL, "console-qa.wazoo.dev");
 
-const runId = Date.now().toString();
+const runId = runStamp();
 const ownerEmail = `e2e+${runId}@wazoo.dev`;
 
 const negative = createNegativeChecks({
   apiUrl: API_BASE_URL,
   worldsUrl: WORLDS_API_URL,
-  adminToken: ADMIN_TOKEN,
+  adminToken: ADMIN,
   ownerEmail,
   runId,
+  fetchImpl: http,
 });
 
 console.log(
@@ -76,7 +90,7 @@ async function requireReadiness() {
     { name: "WORLDS_API_URL", url: `${WORLDS_API_URL}/ready` },
   ];
   for (const { name, url } of targets) {
-    const response = await fetch(url);
+    const response = await http(url);
     const body = await jsonOrNull(response);
     if (response.status !== 200 || body?.status !== "ready") {
       console.error(
@@ -97,7 +111,7 @@ async function check(name, fn) {
 
 async function testUnauthenticatedAppRedirect() {
   return check("testUnauthenticatedAppRedirect", async () => {
-    const response = await fetch(`${CONSOLE_URL}/worlds`, {
+    const response = await http(`${CONSOLE_URL}/worlds`, {
       redirect: "manual",
     });
     const passed = response.status >= 300 && response.status < 400;
@@ -119,7 +133,7 @@ async function testApiHealth() {
       ...(CONSOLE_URL ? [`${CONSOLE_URL}/api/health`] : []),
     ];
     for (const url of urls) {
-      const response = await fetch(url);
+      const response = await http(url);
       if (response.status !== 200) {
         return {
           name: "testApiHealth",
@@ -147,7 +161,7 @@ async function testOpenApiReachable() {
       `${WORLDS_API_URL}/openapi.json`,
     ];
     for (const url of urls) {
-      const response = await fetch(url);
+      const response = await http(url);
       if (response.status !== 200) {
         return {
           name: "testOpenApiReachable",
@@ -170,7 +184,7 @@ async function testOpenApiReachable() {
 
 async function testUnauthenticatedApiCallsReturn401() {
   return check("testUnauthenticatedApiCallsReturn401", async () => {
-    const apiResponse = await fetch(`${API_BASE_URL}/v1/worlds`);
+    const apiResponse = await http(`${API_BASE_URL}/v1/worlds`);
     if (apiResponse.status !== 401) {
       return {
         name: "testUnauthenticatedApiCallsReturn401",
@@ -178,7 +192,7 @@ async function testUnauthenticatedApiCallsReturn401() {
         detail: `expected 401 from ${API_BASE_URL}/v1/worlds, got ${apiResponse.status}`,
       };
     }
-    const worldsResponse = await fetch(`${WORLDS_API_URL}/worlds`);
+    const worldsResponse = await http(`${WORLDS_API_URL}/worlds`);
     if (worldsResponse.status !== 401) {
       return {
         name: "testUnauthenticatedApiCallsReturn401",
@@ -196,9 +210,9 @@ async function testUnauthenticatedApiCallsReturn401() {
 
 async function testWorldLifecycle() {
   return check("testWorldLifecycle", async () => {
-    const userResponse = await fetch(
+    const userResponse = await http(
       `${API_BASE_URL}/v1/users/me?email=${encodeURIComponent(ownerEmail)}`,
-      { headers: { Authorization: `Bearer ${ADMIN_TOKEN}` } },
+      { headers: { Authorization: `Bearer ${ADMIN}` } },
     );
     if (userResponse.status < 200 || userResponse.status >= 300) {
       return {
@@ -208,10 +222,10 @@ async function testWorldLifecycle() {
       };
     }
 
-    const createResponse = await fetch(`${API_BASE_URL}/v1/worlds`, {
+    const createResponse = await http(`${API_BASE_URL}/v1/worlds`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${ADMIN_TOKEN}`,
+        Authorization: `Bearer ${ADMIN}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -253,12 +267,12 @@ async function testWorldLifecycle() {
 
 async function testTokenManagement(worldId) {
   return check("testTokenManagement", async () => {
-    const tokenResponse = await fetch(
+    const tokenResponse = await http(
       `${API_BASE_URL}/v1/worlds/${worldId}/auth/tokens?email=${encodeURIComponent(ownerEmail)}`,
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${ADMIN_TOKEN}`,
+          Authorization: `Bearer ${ADMIN}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ name: "e2e-test-token" }),
@@ -312,7 +326,7 @@ async function testSparqlQuery(worldToken, canonicalId) {
       Authorization: `Bearer ${worldToken}`,
       "Content-Type": "application/json",
     };
-    const insertResponse = await fetch(
+    const insertResponse = await http(
       `${WORLDS_API_URL}/worlds/${worldId}/sparql`,
       {
         method: "POST",
@@ -334,7 +348,7 @@ INSERT DATA {
         detail: `sparql insert: expected 200, got ${insertResponse.status}`,
       };
     }
-    const selectResponse = await fetch(
+    const selectResponse = await http(
       `${WORLDS_API_URL}/worlds/${worldId}/sparql`,
       {
         method: "POST",
@@ -396,9 +410,9 @@ async function cleanupWorld(worldId) {
         detail: "no canonical world ID was created; cleanup skipped",
       };
     }
-    const response = await fetch(
+    const response = await http(
       `${API_BASE_URL}/v1/worlds/${worldId}?email=${encodeURIComponent(ownerEmail)}`,
-      { method: "DELETE", headers: { Authorization: `Bearer ${ADMIN_TOKEN}` } },
+      { method: "DELETE", headers: { Authorization: `Bearer ${ADMIN}` } },
     );
     const passed = response.ok || response.status === 404;
     return {

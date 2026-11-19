@@ -74,7 +74,12 @@ function solve(triples, block) {
 
 export function sparqlEngine(world) {
   return (query) => {
-    const q = query.trim();
+    // PREFIX declarations carry no triples; drop them before matching.
+    const q = query
+      .split("\n")
+      .filter((line) => !/^\s*PREFIX\b/i.test(line))
+      .join("\n")
+      .trim();
     if (/^LOAD\b/i.test(q))
       return { status: 400, text: "policy: remote LOAD is not permitted" };
     const insert = q.match(/^INSERT\s+DATA\s*\{([\s\S]*)\}\s*$/i);
