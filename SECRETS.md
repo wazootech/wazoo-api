@@ -31,7 +31,7 @@ records only how wazoo-api consumes it.
 | Secret | Infisical env | Prod Worker | QA Worker | Local dev | Notes |
 | --- |---|---|---|---|---|
 | `WORLDS_API_ADMIN_KEY` | qa, prod | via sync | via sync | own value | Platform→data-plane admin key (`wzw_` prefix). Sent **as a bearer token** by `src/lib/worlds-client.ts:16` when wazoo-api calls worlds-api. worlds-api's `authorize()` accepts it, bypassing `api_keys`. |
-| `WAZOO_PLATFORM_ADMIN_TOKEN` | qa, prod | via sync | via sync | own value | Platform→platform admin credential (`wzp_` prefix). Authenticated **into** wazoo-api via `src/routes/auth/workos-session.ts` — the `Authorization: Bearer` token checked for admin route access. |
+| `WAZOO_PLATFORM_ADMIN_TOKEN` | qa, prod | via sync | via sync | own value | Platform→platform admin credential (`wzp_` prefix). Authenticated **into** wazoo-api via `src/routes/auth/workos.ts` — the `Authorization: Bearer` token checked for admin route access. |
 | `WORKOS_API_KEY` | qa, prod | via sync | via sync | own value | WorkOS SSO API key (`sk_` prefix). Used in `src/routes/auth/login.ts` and `src/routes/auth/verify.ts` to exchange auth codes and refresh sessions. |
 | `WORKOS_CLIENT_ID` | qa, prod | via sync | via sync | own value | WorkOS OIDC client identifier. Used alongside `WORKOS_API_KEY` in `src/routes/auth/verify.ts`. |
 | `GOOGLE_SERVICE_ACCOUNT_KEY` | qa, prod | via sync | via sync | n/a | GCP service-account key (JSON). Used in `src/lib/beta-allowlist.ts:49` to verify allowlisted beta testers and `src/routes/auth/login.ts`. |
@@ -52,8 +52,7 @@ shell, and are deliberately **not** in the vault.
 | Local dev | `pnpm run dev` → `wrangler dev`, reading your own gitignored `.dev.vars`. No vault involvement. |
 | QA Worker | Infisical Secret Sync (project `wazoo-n-jx-j`, source `/wazoo-api`, env `qa`) → script `wazoo-api-qa`. Deletion protection **on**. |
 | Prod Worker | Infisical Secret Sync (project `wazoo-n-jx-j`, source `/wazoo-api`, env `prod`) → script `wazoo-api`. Deletion protection **on**. |
-| CI (`health-qa`) | `Infisical/secrets-action@v1.0.17` with `method: oidc`, env `qa`, `secret-name: WAZOO_PLATFORM_ADMIN_TOKEN`. Per-repo machine identity subject `repo:wazootech@197434733/wazoo-api@<id>:ref:refs/heads/main`. Needs `permissions: id-token: write` and the `INFISICAL_MACHINE_ID` / `INFISICAL_PROJECT_SLUG` repository **variables**. |
-| CI (deploy jobs) | `Infisical/secrets-action@v1.0.17` with `method: oidc`, env `qa` / `prod`, `secret-path: /ci`, `secret-name: CLOUDFLARE_API_TOKEN`. The deploy credential lives at vault folder `/ci` and is deliberately **not** at the root, so no Worker Secret Sync binds it onto a runtime Worker. `wrangler deploy` sets no Worker secrets; the Worker copies belong to the sync. |
+| CI (`deploy-prod`) | `Infisical/secrets-action@v1.0.17` with `method: oidc`, env `prod`, `secret-path: /ci`, `secret-name: CLOUDFLARE_API_TOKEN`. The deploy credential lives at vault folder `/ci` and is deliberately **not** at the root, so no Worker Secret Sync binds it onto a runtime Worker. `wrangler deploy` sets no Worker secrets; the Worker copies belong to the sync. |
 
 ## Operational notes
 
