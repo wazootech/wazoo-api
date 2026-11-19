@@ -20,7 +20,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
           authorization: `Bearer ${h.sessionToken}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ world: { displayName: "Owned World" } }),
+        body: JSON.stringify({ displayName: "Owned World" }),
       },
       h.env,
     );
@@ -94,7 +94,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          world: { displayName: "Del World" },
+          displayName: "Del World",
         }),
       },
       h.env,
@@ -152,7 +152,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          world: { displayName: "Fail World" },
+          displayName: "Fail World",
         }),
       },
       h.env,

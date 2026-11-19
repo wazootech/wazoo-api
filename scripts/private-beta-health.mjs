@@ -111,7 +111,7 @@ async function createWorld(worldName) {
     method: "POST",
     body: {
       ownerEmail: email,
-      world: { displayName: `Health World ${worldName}` },
+      displayName: `Health World ${worldName}`,
     },
   });
   const id = response.body.world?.id;

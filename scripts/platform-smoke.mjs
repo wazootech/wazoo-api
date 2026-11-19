@@ -216,7 +216,8 @@ async function testWorldLifecycle() {
       },
       body: JSON.stringify({
         ownerEmail,
-        world: { displayName: `E2E Test ${runId}`, region: "auto" },
+        displayName: `E2E Test ${runId}`,
+        region: "auto",
       }),
     });
     if (createResponse.status !== 201) {

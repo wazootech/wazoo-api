@@ -55,7 +55,8 @@ export function createNegativeChecks(options) {
       if (!worldId || !worldTokenUid) return "no world/token uid on context";
       const created = await send(`${apiUrl}/v1/worlds`, "POST", adminToken, {
         ownerEmail,
-        world: { displayName: `E2E Other ${runId}`, region: "auto" },
+        displayName: `E2E Other ${runId}`,
+        region: "auto",
       });
       if (created.status !== 201)
         return `create other world: expected 201, got ${created.status}`;
