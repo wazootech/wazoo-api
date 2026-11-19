@@ -79,7 +79,8 @@ function mint(state, email, body) {
     expiresAt: body?.expiresAt ?? null,
     email,
   });
-  return { status: 201, json: { token: { token, uid } } };
+  // Real shape (src/routes/tokens/create.ts): { uid, name, token: <string> }.
+  return { status: 201, json: { uid, name: body?.tokenName ?? "", token } };
 }
 
 function clamped(parent, body) {

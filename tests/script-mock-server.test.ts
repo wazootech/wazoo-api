@@ -101,12 +101,12 @@ describe("mock server: control plane", () => {
         }),
       }),
     );
-    expect(mint.token.token).toMatch(/^wzp_/);
+    expect(mint.token).toMatch(/^wzp_/);
     const create = await json(
       await http("https://api-qa.wazoo.dev/v1/worlds", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${mint.token.token}`,
+          Authorization: `Bearer ${mint.token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ displayName: "Round trip run" }),
@@ -128,13 +128,13 @@ describe("mock server: control plane", () => {
     );
     const denied = await http(
       `https://api-qa.wazoo.dev/v1/worlds/${create.world.id}`,
-      { headers: { Authorization: `Bearer ${mintB.token.token}` } },
+      { headers: { Authorization: `Bearer ${mintB.token}` } },
     );
     expect(denied.status).toBe(404);
 
     const list = await json(
       await http("https://api-qa.wazoo.dev/v1/worlds", {
-        headers: { Authorization: `Bearer ${mint.token.token}` },
+        headers: { Authorization: `Bearer ${mint.token}` },
       }),
     );
     expect(list.worlds.some((world) => world.id === create.world.id)).toBe(
@@ -142,7 +142,7 @@ describe("mock server: control plane", () => {
     );
     const listB = await json(
       await http("https://api-qa.wazoo.dev/v1/worlds", {
-        headers: { Authorization: `Bearer ${mintB.token.token}` },
+        headers: { Authorization: `Bearer ${mintB.token}` },
       }),
     );
     expect(listB.worlds.some((world) => world.id === create.world.id)).toBe(
@@ -163,7 +163,7 @@ describe("mock server: control plane", () => {
         }),
       }),
     );
-    const limited = `Bearer ${mint.token.token}`;
+    const limited = `Bearer ${mint.token}`;
     const wider = await http("https://api-qa.wazoo.dev/v1/auth/api-tokens", {
       method: "POST",
       headers: { Authorization: limited, "Content-Type": "application/json" },
