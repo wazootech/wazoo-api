@@ -31,7 +31,7 @@ jobs:
           # cannot be exercised locally or in CI, so a split could not be
           # verified. Linear scenario scripts; each step shares one run's state.
           # This list may only shrink; never add a file to it.
-          ALLOW='scripts/qa-roundtrip.mjs scripts/platform-smoke.mjs scripts/private-beta-health.mjs scripts/local-health.mjs scripts/platform-canary.mjs'
+          ALLOW='scripts/platform-smoke.mjs scripts/private-beta-health.mjs scripts/local-health.mjs scripts/platform-canary.mjs'
           : > "$RUNNER_TEMP/over"
           git ls-files '*.ts' '*.tsx' '*.js' '*.mjs' \
             | grep -vE '(^|/)(node_modules|dist|generated|fixtures|\.next)/|\.d\.ts$|\.gen\.|openapi|snapshot|schema' \
