@@ -1,19 +1,16 @@
-import { randomInt } from "node:crypto";
-
-// A random, well-formed world ID (w_<lowercase ULID>) that no world holds.
-const CROCKFORD = "0123456789abcdefghjkmnpqrstvwxyz";
-function randomWorldId() {
-  let id = "w_0";
-  for (let i = 0; i < 25; i++) id += CROCKFORD[randomInt(32)];
-  return id;
-}
+// WAZOO_SCRIPT_MODE=mock (or --dry-run) runs the whole flow against the
+// in-process mock server: no network, no credentials (wazoo-api#149).
+import { mockAwareFetch } from "./lib/http.mjs";
+import { createPlatformMock } from "./lib/mock/index.mjs";
+import { MOCK, runStamp } from "./lib/mode.mjs";
+import { randomWorldId } from "./lib/world-id.mjs";
 
 // Local health test for wazoo-api
 // Usage: node scripts/local-health.mjs [baseUrl]
 //   Defaults to http://localhost:8787 for wrangler dev
 //   Set WAZOO_PLATFORM_ADMIN_TOKEN env var for authenticated tests
 
-const BASE_URL = process.argv[2] ?? "http://localhost:8787";
+const BASE_URL = process.argv.filter((arg) => arg !== "--dry-run")[2] ?? "http://localhost:8787";
 try {
   const url = new URL(BASE_URL);
   if (
@@ -33,7 +30,9 @@ try {
     { cause: err },
   );
 }
-const ADMIN_TOKEN = required("WAZOO_PLATFORM_ADMIN_TOKEN");
+const ADMIN_TOKEN = MOCK
+  ? "mock-admin-token"
+  : required("WAZOO_PLATFORM_ADMIN_TOKEN");
 
 function required(name) {
   const value = process.env[name];
@@ -42,6 +41,12 @@ function required(name) {
   }
   return value;
 }
+
+
+// The shared mock server stands in for the API in mock mode.
+const http = mockAwareFetch(
+  createPlatformMock({ api: BASE_URL, worlds: BASE_URL }),
+);
 
 let passed = 0;
 let failed = 0;
@@ -98,7 +103,7 @@ console.log(
   `  Admin token: ${ADMIN_TOKEN ? "set" : "NOT SET (auth tests skipped)"}\n`,
 );
 
-const readyResponse = await fetch(`${BASE_URL}/ready`);
+const readyResponse = await http(`${BASE_URL}/ready`);
 await assertOk(readyResponse);
 const readyBody = await readyResponse.json();
 if (readyBody.status !== "ready") {
@@ -109,14 +114,14 @@ console.log(`  PASS  GET /ready confirms canonical world identity schema`);
 // ── Health ───
 
 await test("GET /health returns ok", async () => {
-  const res = await fetch(`${BASE_URL}/health`);
+  const res = await http(`${BASE_URL}/health`);
   await assertOk(res);
   const body = await res.json();
   if (body.status !== "ok") throw new Error(`status is ${body.status}`);
 });
 
 await test("GET /openapi.json returns OpenAPI spec", async () => {
-  const res = await fetch(`${BASE_URL}/openapi.json`);
+  const res = await http(`${BASE_URL}/openapi.json`);
   await assertOk(res);
   const body = await res.json();
   if (!body.openapi) throw new Error("Missing openapi version");
@@ -130,12 +135,12 @@ await test("GET /openapi.json returns OpenAPI spec", async () => {
 // ── Auth validation ───
 
 await test("GET /v1/worlds without token returns 401", async () => {
-  const res = await fetch(`${BASE_URL}/v1/worlds`);
+  const res = await http(`${BASE_URL}/v1/worlds`);
   await assertUnauthorized(res);
 });
 
 await test("GET /v1/worlds with invalid token returns 401", async () => {
-  const res = await fetch(`${BASE_URL}/v1/worlds`, {
+  const res = await http(`${BASE_URL}/v1/worlds`, {
     headers: { Authorization: "Bearer wzp_invalidtoken123" },
   });
   await assertUnauthorized(res);
@@ -144,7 +149,7 @@ await test("GET /v1/worlds with invalid token returns 401", async () => {
 // ── Schema validation (no auth needed for these, auth middleware catches first) ───
 
 await test("POST /v1/worlds without body returns 400", async () => {
-  const res = await fetch(`${BASE_URL}/v1/worlds`, {
+  const res = await http(`${BASE_URL}/v1/worlds`, {
     method: "POST",
     headers: authHeaders(),
   });
@@ -152,7 +157,7 @@ await test("POST /v1/worlds without body returns 400", async () => {
 });
 
 await test("POST /v1/worlds rejects a client-supplied worldId", async () => {
-  const res = await fetch(`${BASE_URL}/v1/worlds`, {
+  const res = await http(`${BASE_URL}/v1/worlds`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({
@@ -164,7 +169,7 @@ await test("POST /v1/worlds rejects a client-supplied worldId", async () => {
 });
 
 await test("POST /v1/users/me without email returns 400", async () => {
-  const res = await fetch(`${BASE_URL}/v1/users/me`, {
+  const res = await http(`${BASE_URL}/v1/users/me`, {
     headers: authHeaders(),
   });
   await assertBadRequest(res);
@@ -172,11 +177,11 @@ await test("POST /v1/users/me without email returns 400", async () => {
 
 // ── Authenticated health flow (requires admin token) ───
 
-const testEmail = `health-${Date.now()}@wazoo.dev`;
+const testEmail = `health-${runStamp()}@wazoo.dev`;
 let testWorldId = randomWorldId();
 
 await test("GET /v1/users/me?email=... creates/returns user", async () => {
-  const res = await fetch(
+  const res = await http(
     `${BASE_URL}/v1/users/me?email=${encodeURIComponent(testEmail)}`,
     { headers: authHeaders() },
   );
@@ -191,7 +196,7 @@ await test("GET /v1/users/me?email=... creates/returns user", async () => {
 });
 
 await test("GET /v1/worlds returns list (may be empty)", async () => {
-  const res = await fetch(
+  const res = await http(
     `${BASE_URL}/v1/worlds?email=${encodeURIComponent(testEmail)}`,
     { headers: authHeaders() },
   );
@@ -201,7 +206,7 @@ await test("GET /v1/worlds returns list (may be empty)", async () => {
 });
 
 await test("POST /v1/worlds creates a World", async () => {
-  const res = await fetch(`${BASE_URL}/v1/worlds`, {
+  const res = await http(`${BASE_URL}/v1/worlds`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({
@@ -237,7 +242,7 @@ await test("POST /v1/worlds creates a World", async () => {
 });
 
 await test("GET /v1/worlds/:worldId returns the World", async () => {
-  const res = await fetch(
+  const res = await http(
     `${BASE_URL}/v1/worlds/${testWorldId}?email=${encodeURIComponent(testEmail)}`,
     { headers: authHeaders() },
   );
@@ -255,7 +260,7 @@ await test("GET /v1/worlds/:worldId returns the World", async () => {
 });
 
 await test("PATCH /v1/worlds/:worldId updates displayName", async () => {
-  const res = await fetch(
+  const res = await http(
     `${BASE_URL}/v1/worlds/${testWorldId}?email=${encodeURIComponent(testEmail)}`,
     {
       method: "PATCH",
@@ -280,7 +285,7 @@ await test("PATCH /v1/worlds/:worldId updates displayName", async () => {
 });
 
 await test("DELETE /v1/worlds/:worldId deletes the World", async () => {
-  const res = await fetch(
+  const res = await http(
     `${BASE_URL}/v1/worlds/${testWorldId}?email=${encodeURIComponent(testEmail)}`,
     { method: "DELETE", headers: authHeaders() },
   );
@@ -291,7 +296,7 @@ await test("DELETE /v1/worlds/:worldId deletes the World", async () => {
 });
 
 await test("DELETE /v1/worlds/:worldId returns 404 for an unknown canonical ID", async () => {
-  const res = await fetch(
+  const res = await http(
     `${BASE_URL}/v1/worlds/${randomWorldId()}?email=${encodeURIComponent(testEmail)}`,
     { method: "DELETE", headers: authHeaders() },
   );
@@ -299,7 +304,7 @@ await test("DELETE /v1/worlds/:worldId returns 404 for an unknown canonical ID",
 });
 
 await test("GET /v1/auth/api-tokens lists platform tokens", async () => {
-  const res = await fetch(`${BASE_URL}/v1/auth/api-tokens`, {
+  const res = await http(`${BASE_URL}/v1/auth/api-tokens`, {
     headers: authHeaders(),
   });
   await assertOk(res);
@@ -308,7 +313,7 @@ await test("GET /v1/auth/api-tokens lists platform tokens", async () => {
 });
 
 await test("GET /v1/auth/api-tokens/validate returns token expiry", async () => {
-  const res = await fetch(`${BASE_URL}/v1/auth/api-tokens/validate`, {
+  const res = await http(`${BASE_URL}/v1/auth/api-tokens/validate`, {
     headers: authHeaders(),
   });
   await assertOk(res);
