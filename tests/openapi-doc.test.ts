@@ -33,11 +33,15 @@ describe("OpenAPI document", () => {
 
     const login = paths["/v1/auth/login"]?.post;
     const verify = paths["/v1/auth/verify"]?.post;
-    const session = paths["/v1/auth/workos-session"]?.post;
+    const session = paths["/v1/auth/workos"]?.post;
+    const legacy = paths["/v1/auth/workos-session"]?.post;
 
     expect(login?.operationId).toBe("login");
     expect(verify?.operationId).toBe("verifyLogin");
-    expect(session?.operationId).toBe("createWorkosSession");
+    expect(session?.operationId).toBe("mintWorkosSession");
+    // The retired path stays documented (deprecated) so removal is not a
+    // breaking schema change for clients still on it.
+    expect(legacy?.operationId).toBe("createWorkosSession");
 
     // Login and verify are the unauthenticated bootstrap flow: they must opt
     // out of the document-level bearer requirement or clients will refuse to

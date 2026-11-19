@@ -39,7 +39,7 @@ async function workosSession(
   env: Bindings,
 ): Promise<Response> {
   return api(
-    "/v1/auth/workos-session",
+    "/v1/auth/workos",
     {
       method: "POST",
       headers: {

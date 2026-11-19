@@ -57,7 +57,7 @@ describe("token minting is clamped to the presenting token (memory#67)", () => {
     } as Bindings;
     const seeded = await Promise.resolve(
       app.request(
-        "/v1/auth/workos-session",
+        "/v1/auth/workos",
         {
           method: "POST",
           headers: {

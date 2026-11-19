@@ -61,7 +61,7 @@ describe("account deletion and data export (wazoo-api#26)", () => {
 
     // Mint a console session token through the real admin-gated endpoint.
     const sessionRes = await api(
-      "/v1/auth/workos-session",
+      "/v1/auth/workos",
       {
         method: "POST",
         headers: authHeaders(ADMIN_TOKEN),

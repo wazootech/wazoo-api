@@ -134,7 +134,7 @@ describe("account deletion cancels the Stripe subscription", () => {
   /** Creates a user (optionally with a subscription) and a valid confirmation token. */
   async function seedUser(email: string, subscriptionId: string | null) {
     const session = await api(
-      "/v1/auth/workos-session",
+      "/v1/auth/workos",
       {
         method: "POST",
         headers: authHeaders(ADMIN_TOKEN),

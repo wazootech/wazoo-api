@@ -1,4 +1,4 @@
-import { createRoute } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { AppEnv } from "../../env";
 import {
@@ -68,11 +68,11 @@ export const verifyRoute = createRoute({
   },
 });
 
-export const workosSessionRoute = createRoute({
+export const workosRoute = createRoute({
   method: "post",
-  path: "/v1/auth/workos-session",
+  path: "/v1/auth/workos",
   tags: ["Auth"],
-  operationId: "createWorkosSession",
+  operationId: "mintWorkosSession",
   summary: "Mint a console session token (admin)",
   description:
     "Admin-only. Mints a 30-day console session token for an arbitrary email, creating the user when needed. Requires the `admin` scope.",
@@ -94,12 +94,38 @@ export const workosSessionRoute = createRoute({
   },
 });
 
+// Same contract as `workosRoute`, plus the 308 hop. Clients that follow the
+// redirect still receive 201/400/401/403, so those responses stay documented
+// and dropping them would be a breaking schema change for existing consumers.
+export const workosSessionLegacyRoute = createRoute({
+  ...workosRoute,
+  path: "/v1/auth/workos-session",
+  operationId: "createWorkosSession",
+  deprecated: true,
+  summary: "Mint a console session token (deprecated path)",
+  description:
+    "Deprecated: use `POST /v1/auth/workos`. This path replies with a 308 redirect to it, which keeps the method and body. Admin-only; requires the `admin` scope.",
+  "x-mint": { metadata: { title: "Mint console session token (deprecated)" } },
+  responses: {
+    ...workosRoute.responses,
+    308: {
+      description: "Permanent redirect to `/v1/auth/workos`",
+      headers: z.object({ Location: z.string() }),
+    },
+  },
+});
+
 // These handlers parse bodies leniently (a malformed body is treated as
 // empty) and sit ahead of the /v1/* auth middleware. They are registered
 // with plain `app.post` and documented via the registry so that adding the
 // OpenAPI metadata cannot change runtime validation behavior.
 export function registerAuthDocs(app: OpenAPIHono<AppEnv>) {
-  for (const route of [loginRoute, verifyRoute, workosSessionRoute]) {
+  for (const route of [
+    loginRoute,
+    verifyRoute,
+    workosRoute,
+    workosSessionLegacyRoute,
+  ]) {
     app.openAPIRegistry.registerPath(route);
   }
 }

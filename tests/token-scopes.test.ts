@@ -100,7 +100,7 @@ describe("platform token scopes (wazoo-api#13 / wazoo-api#14)", () => {
 
     // Mint a console session token through the real admin-gated endpoint.
     const sessionRes = await api(
-      "/v1/auth/workos-session",
+      "/v1/auth/workos",
       {
         method: "POST",
         headers: {
@@ -282,7 +282,7 @@ describe("platform token scopes (wazoo-api#13 / wazoo-api#14)", () => {
 
     const attempt = (token: string) =>
       api(
-        "/v1/auth/workos-session",
+        "/v1/auth/workos",
         {
           method: "POST",
           headers: {

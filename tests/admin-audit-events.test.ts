@@ -119,7 +119,7 @@ describe("GET /v1/admin/audit-events (wazoo-api#81)", () => {
     };
 
     const sessionRes = await app.request(
-      "/v1/auth/workos-session",
+      "/v1/auth/workos",
       {
         method: "POST",
         headers: {

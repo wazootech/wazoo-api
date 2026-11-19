@@ -27,7 +27,7 @@ describe("world ownership collapse (wazoo-api#20)", () => {
     expect(created.status).toBe(201);
 
     const otherSession = await api(
-      "/v1/auth/workos-session",
+      "/v1/auth/workos",
       {
         method: "POST",
         headers: {

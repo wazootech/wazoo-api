@@ -963,12 +963,12 @@
         }
       }
     },
-    "/v1/auth/workos-session": {
+    "/v1/auth/workos": {
       "post": {
         "tags": [
           "Auth"
         ],
-        "operationId": "createWorkosSession",
+        "operationId": "mintWorkosSession",
         "summary": "Mint a console session token (admin)",
         "description": "Admin-only. Mints a 30-day console session token for an arbitrary email, creating the user when needed. Requires the `admin` scope.",
         "x-mint": {
@@ -998,6 +998,89 @@
                 "schema": {
                   "$ref": "#/components/schemas/WorkosSessionResponse"
                 }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_ARGUMENT or AGE_GATE_REQUIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin scope required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/workos-session": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "createWorkosSession",
+        "summary": "Mint a console session token (deprecated path)",
+        "description": "Deprecated: use `POST /v1/auth/workos`. This path replies with a 308 redirect to it, which keeps the method and body. Admin-only; requires the `admin` scope.",
+        "x-mint": {
+          "metadata": {
+            "title": "Mint console session token (deprecated)"
+          }
+        },
+        "security": [
+          {
+            "bearerPlatformToken": []
+          }
+        ],
+        "deprecated": true,
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkosSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Console session token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkosSessionResponse"
+                }
+              }
+            }
+          },
+          "308": {
+            "description": "Permanent redirect to `/v1/auth/workos`",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
               }
             }
           },
