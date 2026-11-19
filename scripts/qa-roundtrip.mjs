@@ -1,13 +1,25 @@
 // QA world-identity round trip (wazoo-api#72; #63 criterion 6).
 // Run: infisical run --env=qa --path=/ --path=/ci -- pnpm run roundtrip:qa [evidence.json]
 // QA hosts only; never prints token values. Writes evidence JSON to argv[2].
-import { writeFileSync } from "node:fs";
+// WAZOO_SCRIPT_MODE=mock (or --dry-run) runs the whole flow against the
+// in-process mock server: no network, no credentials (wazoo-api#149).
+import { Evidence } from "./lib/evidence.mjs";
+import { mockAwareFetch } from "./lib/http.mjs";
+import { createPlatformMock } from "./lib/mock/index.mjs";
+import { MOCK, runStamp } from "./lib/mode.mjs";
 
 const API = "https://api-qa.wazoo.dev";
 const DATA = "https://data-qa.wazoo.dev";
-const ADMIN = process.env.WAZOO_PLATFORM_ADMIN_TOKEN;
-if (!ADMIN) throw new Error("WAZOO_PLATFORM_ADMIN_TOKEN missing");
-const evidencePath = process.argv[2];
+const ADMIN = MOCK
+  ? "mock-admin-token"
+  : (process.env.WAZOO_PLATFORM_ADMIN_TOKEN ??
+    (() => {
+      throw new Error("WAZOO_PLATFORM_ADMIN_TOKEN missing");
+    })());
+const evidencePath = process.argv.filter((arg) => arg !== "--dry-run")[2];
+const http = mockAwareFetch(
+  createPlatformMock({ api: API, worlds: DATA }),
+);
 
 // BYOK embeddings acceptance (worlds-api#1, design section 6). Off unless
 // explicitly requested: without a provider key and a KEK on the target
@@ -39,27 +51,21 @@ if (HYBRID && (!DATA_ADMIN || !PROVIDER_KEY)) {
   );
 }
 
-const run = `rt${Date.now()}`;
+const run = runStamp("rt");
 const emailA = `e2e+${run}-a@wazoo.dev`;
 const emailB = `e2e+${run}-b@wazoo.dev`;
 const WORLD_ID_RE = /^w_[0-7][0-9a-hjkmnp-tv-z]{25}$/;
 const MARKER = `zephyrquokka${run}`;
 
-const evidence = { startedAt: new Date().toISOString(), run, steps: [] };
-const secrets = new Set([ADMIN, DATA_ADMIN, PROVIDER_KEY].filter(Boolean));
-let failed = false;
-
-function redact(value) {
-  let text = typeof value === "string" ? value : JSON.stringify(value);
-  for (const secret of secrets)
-    if (secret) text = text.split(secret).join("[redacted]");
-  return text;
-}
+const evidence = new Evidence(run);
+for (const secret of [ADMIN, DATA_ADMIN, PROVIDER_KEY])
+  if (secret) evidence.secrets.add(secret);
+const record = (...args) => evidence.record(...args);
 
 async function call(method, url, token, body) {
   const headers = { Authorization: `Bearer ${token}` };
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const res = await fetch(url, {
+  const res = await http(url, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -72,22 +78,6 @@ async function call(method, url, token, body) {
     /* not JSON */
   }
   return { status: res.status, json, text };
-}
-
-function record(name, pass, detail, response) {
-  if (!pass) failed = true;
-  const entry = {
-    name,
-    pass,
-    detail: redact(detail),
-    status: response?.status,
-    body: response ? redact(response.text).slice(0, 400) : undefined,
-  };
-  evidence.steps.push(entry);
-  console.log(
-    `${pass ? "PASS" : "FAIL"}  ${name}: ${entry.detail}${response ? ` [${response.status}]` : ""}`,
-  );
-  return pass;
 }
 
 async function mintPlatformToken(email, label) {
@@ -106,7 +96,7 @@ async function mintPlatformToken(email, label) {
   });
   const token =
     res.json?.token?.token ?? res.json?.token ?? res.json?.apiToken?.token;
-  if (typeof token === "string") secrets.add(token);
+  if (typeof token === "string") evidence.secrets.add(token);
   record(
     `mint platform token (${label})`,
     res.status === 201 && typeof token === "string",
@@ -222,7 +212,7 @@ try {
     { name: `${run}-wt` },
   );
   const worldToken = wt.json?.token?.token;
-  if (worldToken) secrets.add(worldToken);
+  if (worldToken) evidence.secrets.add(worldToken);
   record(
     "issue world token (user A)",
     wt.status === 201 && typeof worldToken === "string",
@@ -416,7 +406,7 @@ ex:Doc2 ex:title "Second document" ; ex:ref ex:Doc1 .`;
     { name: `${run}-bwt` },
   );
   const bWorldToken = bwt.json?.token?.token;
-  if (bWorldToken) secrets.add(bWorldToken);
+  if (bWorldToken) evidence.secrets.add(bWorldToken);
   const crossData = await call(
     "POST",
     `${DATA}/worlds/${worldId}/sparql`,
@@ -529,10 +519,5 @@ ex:Doc2 ex:title "Second document" ; ex:ref ex:Doc1 .`;
       record("cleanup error", false, String(error));
     }
   }
-  evidence.finishedAt = new Date().toISOString();
-  evidence.result = failed ? "FAIL" : "PASS";
-  if (evidencePath)
-    writeFileSync(evidencePath, redact(JSON.stringify(evidence, null, 2)));
-  console.log(`Round trip ${evidence.result}`);
-  process.exit(failed ? 1 : 0);
+  process.exit(evidence.finish(evidencePath));
 }
