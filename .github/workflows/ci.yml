@@ -85,61 +85,15 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository }}:latest
 
-  deploy-qa:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: verify
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Fetch Cloudflare deploy token from Infisical (qa)
-        uses: Infisical/secrets-action@6cd3f7c0e4cc0d2395ee4ef414eb6eeb5d3e73db # v1.0.17
-        with:
-          method: oidc
-          identity-id: ${{ vars.INFISICAL_MACHINE_ID }}
-          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
-          env-slug: "qa"
-          secret-path: /ci
-          secret-name: CLOUDFLARE_API_TOKEN
-      - run: |
-          build_sha="${GITHUB_SHA:-$(git rev-parse --verify HEAD)}"
-          pnpm run deploy --env qa --define "BUILD_GIT_SHA:\"$build_sha\""
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-
-  health-qa:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: deploy-qa
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Fetch secrets from Infisical (qa)
-        uses: Infisical/secrets-action@6cd3f7c0e4cc0d2395ee4ef414eb6eeb5d3e73db # v1.0.17
-        with:
-          method: oidc
-          identity-id: ${{ vars.INFISICAL_MACHINE_ID }}
-          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
-          env-slug: "qa"
-          secret-name: WAZOO_PLATFORM_ADMIN_TOKEN
-      - run: pnpm run health:beta
-        env:
-          API_BASE_URL: https://api-qa.wazoo.dev
-          WORLDS_API_URL: https://data-qa.wazoo.dev
-
+  # Prod is the only environment: every push to main that passes `verify` is
+  # deployed. workflow_dispatch from main redeploys the current head. Deploys
+  # queue rather than overlap so two merges cannot race each other.
   deploy-prod:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: verify
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

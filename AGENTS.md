@@ -19,9 +19,10 @@ This repository contains the Wazoo API service.
 
 ## Cross-repo impact
 
-- `deploy-qa` and `health-qa` run **only** on push to `main`, so a green
-  `verify` here is not evidence that the change works in a live environment.
-  Say so explicitly in the PR body when you could not observe it.
+- There is no QA environment. `deploy-prod` runs on push to `main` (after
+  `verify`), followed by `canary-prod`, so a green `verify` on a pull request is
+  not evidence that the change works live and merging **is** deploying. Say so
+  explicitly in the PR body when you could not observe it.
 - `/health` is liveness only. Schema correctness is asserted by `/ready` via
   `src/lib/world-readiness.ts`; use `/ready`, never `/health`, to judge whether
   a world-identity change is live.
