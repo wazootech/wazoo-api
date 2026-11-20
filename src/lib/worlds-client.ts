@@ -59,3 +59,38 @@ export function worldsApiError(result: {
 }): string {
   return worldsApiErrorDetail(result).message;
 }
+
+/**
+ * pauseWorld calls worlds-api's POST /worlds/{worldId}/pause (a time-limited,
+ * self-service suspension) with the service admin key. Typed like the
+ * generated @worlds/client results so worldsApiErrorDetail applies. A
+ * dedicated fetch keeps this independent of the generated client until
+ * wazoo-client-ts regenerates for the pause endpoint.
+ */
+export async function pauseWorld(
+  env: AppEnv["Bindings"],
+  worldId: string,
+  durationSeconds: number,
+): Promise<{ error?: unknown; response?: Response; data?: unknown }> {
+  const response = await fetch(
+    `${worldsApiBase(env)}/worlds/${worldId}/pause`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${env.WORLDS_API_ADMIN_KEY}`,
+      },
+      body: JSON.stringify({ durationSeconds }),
+    },
+  );
+  if (!response.ok) {
+    let error: unknown;
+    try {
+      error = await response.json();
+    } catch {
+      error = undefined;
+    }
+    return { error, response };
+  }
+  return { data: await response.json().catch(() => undefined), response };
+}

@@ -335,6 +335,12 @@
                   "ACTIVE",
                   "SUSPENDED"
                 ]
+              },
+              "pauseDurationSeconds": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 2592000,
+                "description": "Required when patching state to SUSPENDED: the pause time limit in seconds (60 to 2592000). The world auto-resumes in worlds-api when the limit ends. Indefinite suspension is control-plane only."
               }
             }
           }
