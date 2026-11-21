@@ -20,7 +20,10 @@ const RUN_URL = "https://github.com/wazootech/wazoo-api/actions/runs/42";
 
 type Call = string[];
 
-describe.skipIf(!hasBash)("canary-alert.sh", () => {
+// Every case spawns bash (and a stub gh, itself a bash process), which costs
+// 0.3-1s on Windows and more under parallel load, so the default 5s test
+// timeout is too tight. Keep each test to few spawns and give it headroom.
+describe.skipIf(!hasBash)("canary-alert.sh", { timeout: 30_000 }, () => {
   let dir: string;
   let log: string;
   let failFile: string;
@@ -155,29 +158,26 @@ describe.skipIf(!hasBash)("canary-alert.sh", () => {
     ).toBe(true);
   });
 
-  it("ignores a mention that is not a list of handles", () => {
-    for (const bad of [
-      "everyone",
-      "@a; echo pwned",
-      "$(whoami)",
-      "@a @",
-      " @a",
-      "@a\n@b",
-      "@a `id`",
-    ]) {
-      const { status, stderr, calls } = run({
-        CANARY_RESULT: "failure",
-        ALERT_MENTION: bad,
-      });
-      expect(status, bad).toBe(0);
-      expect(stderr, bad).toContain("ignoring it");
-      const body = bodyOf(calls[1]!);
-      expect(
-        body.startsWith("The scheduled production canary failed."),
-        bad,
-      ).toBe(true);
-      expect(body, bad).not.toContain("pwned");
-    }
+  it.each([
+    "everyone",
+    "@a; echo pwned",
+    "$(whoami)",
+    "@a @",
+    " @a",
+    "@a\n@b",
+    "@a `id`",
+  ])("ignores a mention that is not a list of handles: %j", (bad) => {
+    const { status, stderr, calls } = run({
+      CANARY_RESULT: "failure",
+      ALERT_MENTION: bad,
+    });
+    expect(status).toBe(0);
+    expect(stderr).toContain("ignoring it");
+    const body = bodyOf(calls[1]!);
+    expect(body.startsWith("The scheduled production canary failed.")).toBe(
+      true,
+    );
+    expect(body).not.toContain("pwned");
   });
 
   it("explains an empty failure file", () => {
