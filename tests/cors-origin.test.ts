@@ -6,7 +6,7 @@ const versionPreview = "https://a1b2c3d4.preview.console.wazoo.dev";
 
 describe("corsOrigin", () => {
   it("allows wazoo.dev subdomains and localhost in every env", () => {
-    for (const env of ["prod", "qa", undefined]) {
+    for (const env of ["prod", "qa", "preview", undefined]) {
       expect(corsOrigin("https://console.wazoo.dev", env)).toBe(
         "https://console.wazoo.dev",
       );
@@ -84,15 +84,19 @@ describe("corsOrigin", () => {
     }
   });
 
-  it("allows console preview origins on QA only", () => {
-    expect(corsOrigin(preview, "qa")).toBe(preview);
-    expect(corsOrigin(versionPreview, "qa")).toBe(versionPreview);
+  it("allows console preview origins on preview and QA only", () => {
+    for (const env of ["preview", "qa"]) {
+      expect(corsOrigin(preview, env)).toBe(preview);
+      expect(corsOrigin(versionPreview, env)).toBe(versionPreview);
+    }
   });
 
-  it("denies console preview origins on prod and when the env is unset", () => {
+  it("denies console preview origins on prod, unknown envs, and when unset", () => {
     // The blanket .wazoo.dev rule would otherwise let these through.
-    expect(corsOrigin(preview, "prod")).toBeNull();
-    expect(corsOrigin(versionPreview, undefined)).toBeNull();
+    for (const env of ["prod", "test", "Preview", "", undefined]) {
+      expect(corsOrigin(preview, env)).toBeNull();
+      expect(corsOrigin(versionPreview, env)).toBeNull();
+    }
   });
 
   it("denies lookalike and unrelated origins", () => {
@@ -106,7 +110,9 @@ describe("corsOrigin", () => {
       "https://preview.console.wazoo.dev",
       "https://wazoo-console-preview.ethan-r-davidson.workers.dev",
     ]) {
-      expect(corsOrigin(origin, "qa")).toBeNull();
+      for (const env of ["qa", "preview"]) {
+        expect(corsOrigin(origin, env)).toBeNull();
+      }
     }
   });
 });

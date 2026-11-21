@@ -1,0 +1,42 @@
+# PR preview Worker for the API, built by Cloudflare Workers Builds (not GitHub
+# Actions, so no PR workflow holds a deploy credential; contract-lint R5).
+#
+#   Build command:   (none; wrangler bundles src/index.ts)
+#   Deploy (main):   npx wrangler deploy -c wrangler.preview.toml
+#   Preview (PRs):   npx wrangler versions upload -c wrangler.preview.toml
+#
+# It is a separate Worker from wazoo-api / wazoo-api-qa, with a build token
+# scoped to this Worker only. Previews are served at
+# <alias>.preview.api.wazoo.dev (wildcard DNS + cert, as for the console).
+# Secrets are set on this Worker in the dashboard, never in this file.
+name = "wazoo-api-preview"
+main = "src/index.ts"
+compatibility_date = "2026-07-18"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+preview_urls = true
+
+routes = [
+  { pattern = "preview.api.wazoo.dev", custom_domain = true, previews_enabled = true, enabled = false }
+]
+
+# Previews REUSE the existing QA database (same id as [env.qa.d1_databases]);
+# this config creates and modifies no database. Every preview shares it, so a
+# migration that a PR needs must be applied to the QA database by hand before
+# that PR's preview is exercised (the preview deploy never runs migrations).
+[[d1_databases]]
+binding = "DB"
+database_name = "wazoo-api-qa"
+database_id = "54648bbf-c775-4c89-96b0-d1eb00dd2e43"
+
+# CONSOLE_URL is deliberately unset: that turns Stripe checkout off on previews.
+[vars]
+API_BASE_URL = "https://preview.api.wazoo.dev"
+# The data plane has no preview Worker yet, so previews use the QA one.
+WORLDS_API_URL = "https://data-qa.wazoo.dev"
+WAZOO_ENV = "preview"
+OTP_FROM_ADDRESS = "Wazoo <noreply@mail.wazoo.dev>"
+
+[observability]
+enabled = true
+head_sampling_rate = 1

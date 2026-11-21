@@ -43,7 +43,7 @@ Required runtime variables:
 - `WORLDS_API_URL`: data-plane API base URL.
 - `WORLDS_API_ADMIN_KEY`: admin key accepted by `worlds-api`.
 - `API_BASE_URL`: public base URL for this service.
-- `WAZOO_ENV`: deployment environment label.
+- `WAZOO_ENV`: deployment environment label (`prod`, `preview`, `qa`, `dev`, `test`).
 - `WAZOO_PLATFORM_ADMIN_TOKEN`: global admin token used by health checks and
   server-to-server admin calls. Must be seeded in the control-plane database.
   See [CONTRIBUTING.md](CONTRIBUTING.md) for how to generate and seed it. For D1, use `pnpm run launch:seed-admin-d1` with the Cloudflare credentials and target database ID.
@@ -113,6 +113,33 @@ Cloudflare Worker:
 pnpm run deploy:dry
 pnpm run deploy
 ```
+
+PR previews come from Cloudflare Workers Builds instead of GitHub Actions, using
+`wrangler.preview.toml`. The credential stays in Cloudflare and is scoped to a
+separate `wazoo-api-preview` Worker, so it can't deploy QA or prod. Every
+branch pushed to this repo gets a `<alias>.preview.api.wazoo.dev` URL
+(`WAZOO_ENV=preview`), and Cloudflare comments it on the PR. Previews share the
+QA D1 database (`wazoo-api-qa`) and its data. Schema changes are never applied
+by a preview deploy: apply the migration to that database by hand before
+exercising a PR that needs it, and note that every other open preview sees it.
+Console previews (`*.preview.console.wazoo.dev`) are allowed by CORS on the
+`preview` and `qa` environments only, never prod. Branch code runs with the
+preview Worker's secrets, so treat write access to this repo as access to them.
+
+Workers Builds settings for the `wazoo-api-preview` Worker (Settings, Builds):
+
+| Setting | Value |
+| --- | --- |
+| Git repository | `wazootech/wazoo-api` |
+| Root directory | `/` |
+| Build command | empty (wrangler bundles `src/index.ts`) |
+| Deploy command (production branch) | `npx wrangler deploy -c wrangler.preview.toml` |
+| Non-production branch deploy command | `npx wrangler versions upload -c wrangler.preview.toml` |
+| Build variables | none |
+| Runtime secrets (Variables and Secrets) | the QA values of `WORLDS_API_ADMIN_KEY`, `WAZOO_PLATFORM_ADMIN_TOKEN`, `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, plus `RESEND_API_KEY` and `GOOGLE_SERVICE_ACCOUNT_KEY` if sign-in is exercised |
+| Previews (Settings, Domains and Routes) | `preview.api.wazoo.dev` custom domain with Previews enabled, so `<alias>.preview.api.wazoo.dev` resolves |
+
+Check the config with `pnpm run preview:dry`.
 
 GitHub Actions validates formatting, typechecking, Worker dry deploy, Docker build, publishes the GHCR image on `main`, and deploys the configured Cloudflare Worker on `main`.
 
