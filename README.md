@@ -116,6 +116,12 @@ pnpm run deploy
 
 GitHub Actions validates formatting, typechecking, Worker dry deploy, Docker build, publishes the GHCR image on `main`, and deploys the configured Cloudflare Worker on `main`.
 
+Staging (`api-qa.wazoo.dev`, `data-qa.wazoo.dev`) is manual: it is not deployed
+on push and stays frozen at its last deploy. To update it from any branch, run
+`gh workflow run deploy-staging.yml --ref <branch>`. The workflow deploys that
+ref with `--env qa` and then runs `pnpm run health:beta` against both QA
+services.
+
 Docker Compose is not a supported runtime for this service because D1 is a
 Cloudflare-managed binding. Use Wrangler for local development and D1 schema
 initialization.
