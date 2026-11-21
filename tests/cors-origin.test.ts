@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { corsOrigin } from "../src/lib/cors-origin";
 
-const preview = "https://wazoo-console-preview.ethan-r-davidson.workers.dev";
-const branchPreview =
-  "https://pr-previews-wazoo-console-preview.ethan-r-davidson.workers.dev";
+const preview = "https://pr-previews.preview.console.wazoo.dev";
+const versionPreview = "https://a1b2c3d4.preview.console.wazoo.dev";
 
 describe("corsOrigin", () => {
   it("allows wazoo.dev subdomains and localhost in every env", () => {
@@ -19,9 +18,13 @@ describe("corsOrigin", () => {
 
   it("allows console preview origins on QA only", () => {
     expect(corsOrigin(preview, "qa")).toBe(preview);
-    expect(corsOrigin(branchPreview, "qa")).toBe(branchPreview);
+    expect(corsOrigin(versionPreview, "qa")).toBe(versionPreview);
+  });
+
+  it("denies console preview origins on prod and when the env is unset", () => {
+    // The blanket .wazoo.dev rule would otherwise let these through.
     expect(corsOrigin(preview, "prod")).toBeNull();
-    expect(corsOrigin(branchPreview, undefined)).toBeNull();
+    expect(corsOrigin(versionPreview, undefined)).toBeNull();
   });
 
   it("denies lookalike and unrelated origins", () => {
@@ -29,10 +32,11 @@ describe("corsOrigin", () => {
       undefined,
       "",
       "https://evil.workers.dev",
-      "http://wazoo-console-preview.ethan-r-davidson.workers.dev",
-      "https://wazoo-console-preview.ethan-r-davidson.workers.dev.evil.com",
-      "https://x.wazoo-console-preview.ethan-r-davidson.workers.dev",
-      "https://wazoo-console-preview.someone-else.workers.dev",
+      "http://pr-previews.preview.console.wazoo.dev",
+      "https://pr-previews.preview.console.wazoo.dev.evil.com",
+      "https://a.b.preview.console.wazoo.dev",
+      "https://preview.console.wazoo.dev",
+      "https://wazoo-console-preview.ethan-r-davidson.workers.dev",
     ]) {
       expect(corsOrigin(origin, "qa")).toBeNull();
     }
