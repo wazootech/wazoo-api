@@ -1,5 +1,11 @@
 export type Bindings = {
   DB: import("@cloudflare/workers-types").D1Database;
+  /**
+   * Deployment label: "prod", "preview" (PR previews, wrangler.preview.toml),
+   * "qa" (being retired), or "dev" / "test" locally. An unset or unknown value
+   * is treated as deployed and trusts no preview origin (see lib/cors-origin.ts
+   * and lib/email.ts).
+   */
   WAZOO_ENV?: string;
   API_BASE_URL?: string;
   WORLDS_API_URL: string;
