@@ -78,6 +78,16 @@ export const UpdateWorldBodySchema = z
       displayName: z.string().optional(),
       region: z.string().optional(),
       state: z.enum(["ACTIVE", "SUSPENDED"]).optional(),
+      pauseDurationSeconds: z
+        .number()
+        .int()
+        .min(60)
+        .max(30 * 24 * 60 * 60)
+        .optional()
+        .openapi({
+          description:
+            "Required when patching state to SUSPENDED: the pause time limit in seconds (60 to 2592000). The world auto-resumes in worlds-api when the limit ends. Indefinite suspension is control-plane only.",
+        }),
     }),
   })
   .openapi("UpdateWorldRequest");

@@ -1,17 +1,16 @@
-import { createRoute } from "@hono/zod-openapi";
 import type { OpenAPIHono } from "@hono/zod-openapi";
-import { z } from "@hono/zod-openapi";
 import type { AppEnv } from "../../env";
 import { db, first, now } from "../../lib/db";
 import { requireScope, respond } from "../../lib/http";
 import { updateWorld } from "@worlds/client";
 import { worldsAdminClient, worldsApiError } from "../../lib/worlds-client";
 import {
-  UpdateWorldBodySchema,
-  WorldSingleSchema,
-  worldIdParam,
-  emailQuery,
-} from "../../lib/schemas";
+  nextStateOf,
+  pauseWorldConfirmed,
+  resumeWorldConfirmed,
+  statePatchError,
+} from "./lifecycle-writes";
+import { updateRoute } from "./routes-update";
 import {
   currentUser,
   notFound,
@@ -19,40 +18,6 @@ import {
   worldResource,
   type WorldRow,
 } from "./shared";
-
-const updateRoute = createRoute({
-  method: "patch",
-  path: "/v1/worlds/{worldId}",
-  tags: ["Worlds"],
-  operationId: "updateWorld",
-  summary: "Update world",
-  "x-mint": { metadata: { title: "Update world" } },
-  security: [{ bearerPlatformToken: [] }],
-  request: {
-    params: worldIdParam,
-    query: emailQuery,
-    body: {
-      required: true,
-      content: { "application/json": { schema: UpdateWorldBodySchema } },
-    },
-  },
-  responses: {
-    200: {
-      description: "Updated World",
-      content: { "application/json": { schema: WorldSingleSchema } },
-    },
-    400: {
-      description: "Bad request",
-      content: {
-        "application/json": {
-          schema: z.object({
-            error: z.object({ code: z.string(), message: z.string() }),
-          }),
-        },
-      },
-    },
-  },
-});
 
 export function registerUpdateWorld(app: OpenAPIHono<AppEnv>) {
   app.openapi(updateRoute, async (c) => {
@@ -81,20 +46,31 @@ export function registerUpdateWorld(app: OpenAPIHono<AppEnv>) {
       );
     }
     const patch = body.world;
-    const nextState = updateMask.includes("state")
-      ? (patch.state?.toUpperCase() ?? null)
-      : null;
-    if (nextState && nextState !== "ACTIVE" && nextState !== "SUSPENDED") {
+    const nextState = nextStateOf(updateMask, patch);
+    const stateError = statePatchError(patch, nextState);
+    if (stateError) {
       return respond(
         c,
-        {
-          error: {
-            code: "INVALID_ARGUMENT",
-            message: "state can only be patched to ACTIVE or SUSPENDED",
-          },
-        },
+        { error: { code: "INVALID_ARGUMENT", message: stateError } },
         400,
       );
+    }
+
+    if (nextState !== null && existing.world_id) {
+      // Awaited worlds-api lifecycle write first: the local row only moves
+      // after worlds-api confirms, so a failure never reports success on
+      // one side only.
+      const failure =
+        nextState === "SUSPENDED"
+          ? await pauseWorldConfirmed(
+              c.env,
+              existing.world_id,
+              patch.pauseDurationSeconds!,
+            )
+          : await resumeWorldConfirmed(c.env, existing.world_id);
+      if (failure) {
+        return respond(c, failure.body, failure.status);
+      }
     }
 
     await db(c.env)
