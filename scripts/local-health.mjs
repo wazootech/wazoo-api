@@ -1,19 +1,27 @@
-import { randomInt } from "node:crypto";
-
-// A random, well-formed world ID (w_<lowercase ULID>) that no world holds.
-const CROCKFORD = "0123456789abcdefghjkmnpqrstvwxyz";
-function randomWorldId() {
-  let id = "w_0";
-  for (let i = 0; i < 25; i++) id += CROCKFORD[randomInt(32)];
-  return id;
-}
-
 // Local health test for wazoo-api
 // Usage: node scripts/local-health.mjs [baseUrl]
 //   Defaults to http://localhost:8787 for wrangler dev
 //   Set WAZOO_PLATFORM_ADMIN_TOKEN env var for authenticated tests
+// WAZOO_SCRIPT_MODE=mock (or --dry-run) runs the whole flow against the
+// in-process mock server: no network, no credentials (wazoo-api#149).
+//
+// Driver only; the tests live in scripts/local-health/, shared helpers in
+// scripts/lib/.
+import { mockAwareFetch } from "./lib/http.mjs";
+import { createPlatformMock } from "./lib/mock/index.mjs";
+import { MOCK, runStamp } from "./lib/mode.mjs";
+import { randomWorldId } from "./lib/world-id.mjs";
+import { assertOk } from "./local-health/assert.mjs";
+import {
+  testHealth,
+  testOpenApi,
+  testAuthValidation,
+  testSchemaValidation,
+} from "./local-health/tests-schema.mjs";
+import { testAuthenticatedFlow } from "./local-health/tests-flow.mjs";
+import { testWorldDeleteAndTokens } from "./local-health/tests-tokens.mjs";
 
-const BASE_URL = process.argv[2] ?? "http://localhost:8787";
+const BASE_URL = process.argv.filter((arg) => arg !== "--dry-run")[2] ?? "http://localhost:8787";
 try {
   const url = new URL(BASE_URL);
   if (
@@ -33,7 +41,6 @@ try {
     { cause: err },
   );
 }
-const ADMIN_TOKEN = required("WAZOO_PLATFORM_ADMIN_TOKEN");
 
 function required(name) {
   const value = process.env[name];
@@ -43,52 +50,38 @@ function required(name) {
   return value;
 }
 
-let passed = 0;
-let failed = 0;
+const ADMIN_TOKEN = MOCK
+  ? "mock-admin-token"
+  : required("WAZOO_PLATFORM_ADMIN_TOKEN");
+
+// The shared mock server stands in for the API in mock mode.
+const http = mockAwareFetch(
+  createPlatformMock({ api: BASE_URL, worlds: BASE_URL }),
+);
+
+const context = {
+  http,
+  BASE_URL,
+  ADMIN_TOKEN,
+  testEmail: `health-${runStamp()}@wazoo.dev`,
+  testWorldId: randomWorldId(),
+  randomWorldId,
+  passed: 0,
+  failed: 0,
+};
 
 async function test(name, fn) {
   try {
     await fn();
-    passed++;
+    context.passed++;
     console.log(`  PASS  ${name}`);
   } catch (err) {
-    failed++;
+    context.failed++;
     console.log(`  FAIL  ${name}`);
     console.log(`        ${err.message}`);
   }
 }
-
-async function assertStatus(res, expected) {
-  if (res.status !== expected) {
-    const body = await res.text();
-    throw new Error(
-      `Expected ${expected}, got ${res.status}: ${body.slice(0, 200)}`,
-    );
-  }
-}
-
-async function assertOk(res) {
-  await assertStatus(res, 200);
-}
-
-async function assertBadRequest(res) {
-  await assertStatus(res, 400);
-}
-
-async function assertUnauthorized(res) {
-  await assertStatus(res, 401);
-}
-
-async function assertNotFound(res) {
-  await assertStatus(res, 404);
-}
-
-function authHeaders() {
-  return {
-    Authorization: `Bearer ${ADMIN_TOKEN}`,
-    "Content-Type": "application/json",
-  };
-}
+context.test = test;
 
 // ── Start ──
 
@@ -98,7 +91,7 @@ console.log(
   `  Admin token: ${ADMIN_TOKEN ? "set" : "NOT SET (auth tests skipped)"}\n`,
 );
 
-const readyResponse = await fetch(`${BASE_URL}/ready`);
+const readyResponse = await http(`${BASE_URL}/ready`);
 await assertOk(readyResponse);
 const readyBody = await readyResponse.json();
 if (readyBody.status !== "ready") {
@@ -108,216 +101,22 @@ console.log(`  PASS  GET /ready confirms canonical world identity schema`);
 
 // ── Health ───
 
-await test("GET /health returns ok", async () => {
-  const res = await fetch(`${BASE_URL}/health`);
-  await assertOk(res);
-  const body = await res.json();
-  if (body.status !== "ok") throw new Error(`status is ${body.status}`);
-});
-
-await test("GET /openapi.json returns OpenAPI spec", async () => {
-  const res = await fetch(`${BASE_URL}/openapi.json`);
-  await assertOk(res);
-  const body = await res.json();
-  if (!body.openapi) throw new Error("Missing openapi version");
-  if (!body.paths) throw new Error("Missing paths");
-  if (!body.info) throw new Error("Missing info");
-  console.log(
-    `        OpenAPI ${body.openapi}: ${Object.keys(body.paths).length} paths, ${body.info.title}`,
-  );
-});
+await testHealth(context);
+await testOpenApi(context);
 
 // ── Auth validation ───
 
-await test("GET /v1/worlds without token returns 401", async () => {
-  const res = await fetch(`${BASE_URL}/v1/worlds`);
-  await assertUnauthorized(res);
-});
-
-await test("GET /v1/worlds with invalid token returns 401", async () => {
-  const res = await fetch(`${BASE_URL}/v1/worlds`, {
-    headers: { Authorization: "Bearer wzp_invalidtoken123" },
-  });
-  await assertUnauthorized(res);
-});
-
-// ── Schema validation (no auth needed for these, auth middleware catches first) ───
-
-await test("POST /v1/worlds without body returns 400", async () => {
-  const res = await fetch(`${BASE_URL}/v1/worlds`, {
-    method: "POST",
-    headers: authHeaders(),
-  });
-  await assertBadRequest(res);
-});
-
-await test("POST /v1/worlds rejects a client-supplied worldId", async () => {
-  const res = await fetch(`${BASE_URL}/v1/worlds`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({
-      worldId: "",
-      displayName: "Test",
-    }),
-  });
-  await assertBadRequest(res);
-});
-
-await test("POST /v1/users/me without email returns 400", async () => {
-  const res = await fetch(`${BASE_URL}/v1/users/me`, {
-    headers: authHeaders(),
-  });
-  await assertBadRequest(res);
-});
+await testAuthValidation(context);
+await testSchemaValidation(context);
 
 // ── Authenticated health flow (requires admin token) ───
 
-const testEmail = `health-${Date.now()}@wazoo.dev`;
-let testWorldId = randomWorldId();
-
-await test("GET /v1/users/me?email=... creates/returns user", async () => {
-  const res = await fetch(
-    `${BASE_URL}/v1/users/me?email=${encodeURIComponent(testEmail)}`,
-    { headers: authHeaders() },
-  );
-  const body = await res.json();
-  if (res.status !== 200 && res.status !== 201) {
-    throw new Error(`Unexpected status ${res.status}: ${JSON.stringify(body)}`);
-  }
-  if (!body.user?.uid) throw new Error("Missing user.uid");
-  if (body.user.email !== testEmail)
-    throw new Error(`Email mismatch: ${body.user.email}`);
-  console.log(`        user uid: ${body.user.uid}`);
-});
-
-await test("GET /v1/worlds returns list (may be empty)", async () => {
-  const res = await fetch(
-    `${BASE_URL}/v1/worlds?email=${encodeURIComponent(testEmail)}`,
-    { headers: authHeaders() },
-  );
-  await assertOk(res);
-  const body = await res.json();
-  if (!Array.isArray(body.worlds)) throw new Error("worlds is not an array");
-});
-
-await test("POST /v1/worlds creates a World", async () => {
-  const res = await fetch(`${BASE_URL}/v1/worlds`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({
-      ownerEmail: testEmail,
-      displayName: "Health Test World",
-    }),
-  });
-  const body = await res.json();
-  if (res.status !== 201) {
-    if (res.status === 429) {
-      console.log(`        SKIP (quota exceeded)`);
-      passed++;
-      return;
-    }
-    if (res.status === 502) {
-      console.log(
-        `        SKIP (provisioning failed — the data plane may not be configured)`,
-      );
-      passed++;
-      return;
-    }
-    throw new Error(`Unexpected status ${res.status}: ${JSON.stringify(body)}`);
-  }
-  const worldId = body.world?.id;
-  if (
-    typeof worldId !== "string" ||
-    !/^w_[0-7][0-9a-hjkmnp-tv-z]{25}$/.test(worldId)
-  ) {
-    throw new Error("Missing canonical world.id");
-  }
-  testWorldId = worldId;
-  console.log(`        world id: ${worldId}`);
-});
-
-await test("GET /v1/worlds/:worldId returns the World", async () => {
-  const res = await fetch(
-    `${BASE_URL}/v1/worlds/${testWorldId}?email=${encodeURIComponent(testEmail)}`,
-    { headers: authHeaders() },
-  );
-  const body = await res.json();
-  if (res.status !== 200) {
-    if (res.status === 404) {
-      console.log(`        SKIP (world not found — may not have been created)`);
-      passed++;
-      return;
-    }
-    throw new Error(`Unexpected status ${res.status}: ${JSON.stringify(body)}`);
-  }
-  if (body.world?.id !== testWorldId)
-    throw new Error(`world id mismatch: ${body.world?.id}`);
-});
-
-await test("PATCH /v1/worlds/:worldId updates displayName", async () => {
-  const res = await fetch(
-    `${BASE_URL}/v1/worlds/${testWorldId}?email=${encodeURIComponent(testEmail)}`,
-    {
-      method: "PATCH",
-      headers: authHeaders(),
-      body: JSON.stringify({
-        updateMask: "displayName",
-        world: { displayName: "Updated Health World" },
-      }),
-    },
-  );
-  const body = await res.json();
-  if (res.status !== 200) {
-    if (res.status === 404) {
-      console.log(`        SKIP (world not found)`);
-      passed++;
-      return;
-    }
-    throw new Error(`Unexpected status ${res.status}: ${JSON.stringify(body)}`);
-  }
-  if (body.world?.displayName !== "Updated Health World")
-    throw new Error(`displayName not updated: ${body.world?.displayName}`);
-});
-
-await test("DELETE /v1/worlds/:worldId deletes the World", async () => {
-  const res = await fetch(
-    `${BASE_URL}/v1/worlds/${testWorldId}?email=${encodeURIComponent(testEmail)}`,
-    { method: "DELETE", headers: authHeaders() },
-  );
-  if (res.status !== 200 && res.status !== 404) {
-    const body = await res.json();
-    throw new Error(`Unexpected status ${res.status}: ${JSON.stringify(body)}`);
-  }
-});
-
-await test("DELETE /v1/worlds/:worldId returns 404 for an unknown canonical ID", async () => {
-  const res = await fetch(
-    `${BASE_URL}/v1/worlds/${randomWorldId()}?email=${encodeURIComponent(testEmail)}`,
-    { method: "DELETE", headers: authHeaders() },
-  );
-  await assertNotFound(res);
-});
-
-await test("GET /v1/auth/api-tokens lists platform tokens", async () => {
-  const res = await fetch(`${BASE_URL}/v1/auth/api-tokens`, {
-    headers: authHeaders(),
-  });
-  await assertOk(res);
-  const body = await res.json();
-  if (!Array.isArray(body.tokens)) throw new Error("tokens is not an array");
-});
-
-await test("GET /v1/auth/api-tokens/validate returns token expiry", async () => {
-  const res = await fetch(`${BASE_URL}/v1/auth/api-tokens/validate`, {
-    headers: authHeaders(),
-  });
-  await assertOk(res);
-  const body = await res.json();
-  if (typeof body.exp !== "number")
-    throw new Error(`exp is not a number: ${typeof body.exp}`);
-});
+await testAuthenticatedFlow(context);
+await testWorldDeleteAndTokens(context);
 
 // ── Results ───
 
-console.log(`\n${passed} passed, ${failed} failed, ${passed + failed} total\n`);
-process.exit(failed > 0 ? 1 : 0);
+console.log(
+  `\n${context.passed} passed, ${context.failed} failed, ${context.passed + context.failed} total\n`,
+);
+process.exit(context.failed > 0 ? 1 : 0);

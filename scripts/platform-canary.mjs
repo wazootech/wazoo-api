@@ -16,7 +16,15 @@
  *   CONSOLE_URL     override the console base URL
  *
  * Exits non-zero if any assertion fails.
+ *
+ * WAZOO_SCRIPT_MODE=mock (or --dry-run) runs the checks against the in-process
+ * mock server: no network, no credentials (wazoo-api#149). Driver only; the
+ * checks live in scripts/platform-canary/checks.mjs.
  */
+
+import { mockAwareFetch } from "./lib/http.mjs";
+import { createPlatformMock } from "./lib/mock/index.mjs";
+import { canaryChecks } from "./platform-canary/checks.mjs";
 
 const HOSTS = {
   prod: {
@@ -60,11 +68,15 @@ try {
   process.exit(1);
 }
 
+const http = mockAwareFetch(
+  createPlatformMock({ api: API, worlds: WORLDS, console: CONSOLE }),
+);
+
 async function get(url, init = {}) {
   let lastError;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     try {
-      return await fetch(url, {
+      return await http(url, {
         ...init,
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
@@ -75,81 +87,10 @@ async function get(url, init = {}) {
   throw lastError;
 }
 
-async function json(response) {
-  try {
-    return await response.json();
-  } catch {
-    return null;
-  }
-}
-
-const checks = [
-  ["api /health", async () => {
-    const r = await get(`${API}/health`);
-    const b = await json(r);
-    return r.status === 200 && b?.status === "ok"
-      ? null
-      : `status ${r.status}, body.status ${String(b?.status)}`;
-  }],
-  ["api /ready", async () => {
-    const r = await get(`${API}/ready`);
-    const b = await json(r);
-    return r.status === 200 && b?.status === "ready"
-      ? null
-      : `status ${r.status}, body.status ${String(b?.status)}`;
-  }],
-  ["api /openapi.json", async () => {
-    const r = await get(`${API}/openapi.json`);
-    const b = await json(r);
-    return r.status === 200 && b?.openapi !== undefined && b?.paths !== undefined
-      ? null
-      : `status ${r.status}, not an OpenAPI document`;
-  }],
-  ["api rejects unauthenticated /v1/worlds", async () => {
-    const r = await get(`${API}/v1/worlds`);
-    return r.status === 401 ? null : `expected 401, got ${r.status}`;
-  }],
-  ["worlds /health", async () => {
-    const r = await get(`${WORLDS}/health`);
-    const b = await json(r);
-    return r.status === 200 && b?.status === "ok"
-      ? null
-      : `status ${r.status}, body.status ${String(b?.status)}`;
-  }],
-  ["worlds /ready", async () => {
-    const r = await get(`${WORLDS}/ready`);
-    const b = await json(r);
-    return r.status === 200 && b?.status === "ready"
-      ? null
-      : `status ${r.status}, body.status ${String(b?.status)}`;
-  }],
-  ["worlds /openapi.json", async () => {
-    const r = await get(`${WORLDS}/openapi.json`);
-    const b = await json(r);
-    return r.status === 200 && b?.openapi !== undefined && b?.paths !== undefined
-      ? null
-      : `status ${r.status}, not an OpenAPI document`;
-  }],
-  ["worlds rejects unauthenticated /worlds", async () => {
-    const r = await get(`${WORLDS}/worlds`);
-    return r.status === 401 ? null : `expected 401, got ${r.status}`;
-  }],
-  ["console /api/health", async () => {
-    const r = await get(`${CONSOLE}/api/health`);
-    const b = await json(r);
-    return r.status === 200 && b?.status === "ok"
-      ? null
-      : `status ${r.status}, body.status ${String(b?.status)}`;
-  }],
-  ["console redirects unauthenticated /worlds", async () => {
-    const r = await get(`${CONSOLE}/worlds`, { redirect: "manual" });
-    return r.status >= 300 && r.status < 400
-      ? null
-      : `expected 3xx, got ${r.status}`;
-  }],
-];
 
 console.log(`Canary (${env}): ${API} / ${WORLDS} / ${CONSOLE}`);
+
+const checks = canaryChecks({ API, WORLDS, CONSOLE, get });
 
 let failed = 0;
 for (const [name, run] of checks) {
