@@ -1,0 +1,29 @@
+name: post-deploy
+
+# Cloudflare Workers Builds deploys production and reports back as a check run.
+# When that check passes on main, run the credential-free canary against it.
+on:
+  check_run:
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  canary-prod:
+    if: >-
+      github.event.check_run.name == 'Workers Builds: wazoo-api' &&
+      github.event.check_run.conclusion == 'success' &&
+      github.event.check_run.check_suite.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.check_run.head_sha }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - run: node scripts/platform-canary.mjs
+        env:
+          CANARY_ENV: prod
