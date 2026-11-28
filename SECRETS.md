@@ -52,7 +52,7 @@ shell, and are deliberately **not** in the vault.
 | Local dev | `pnpm run dev` → `wrangler dev`, reading your own gitignored `.dev.vars`. No vault involvement. |
 | QA Worker | Infisical Secret Sync (project `wazoo-n-jx-j`, source `/wazoo-api`, env `qa`) → script `wazoo-api-qa`. Deletion protection **on**. |
 | Prod Worker | Infisical Secret Sync (project `wazoo-n-jx-j`, source `/wazoo-api`, env `prod`) → script `wazoo-api`. Deletion protection **on**. |
-| CI (`deploy-prod`) | `Infisical/secrets-action@v1.0.17` with `method: oidc`, env `prod`, `secret-path: /ci`, `secret-name: CLOUDFLARE_API_TOKEN`. The deploy credential lives at vault folder `/ci` and is deliberately **not** at the root, so no Worker Secret Sync binds it onto a runtime Worker. `wrangler deploy` sets no Worker secrets; the Worker copies belong to the sync. |
+| Production deploys | Cloudflare Workers Builds, with a build token held by Cloudflare. GitHub Actions reads no vault secret and deploys nothing. `wrangler deploy` sets no Worker secrets; the Worker copies belong to the sync. |
 
 ## Operational notes
 

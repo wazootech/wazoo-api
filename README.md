@@ -114,7 +114,20 @@ pnpm run deploy:dry
 pnpm run deploy
 ```
 
-PR previews come from Cloudflare Workers Builds instead of GitHub Actions, using
+### Production
+
+Cloudflare Workers Builds is connected to this repository on the `wazoo-api`
+Worker. On each push to `main` it runs the checks in its build command and then
+`pnpm run deploy`, stamping the commit into `BUILD_GIT_SHA`; a failing check
+stops the deploy. The commands and the build token are Worker settings in the
+Cloudflare dashboard (Settings, Builds), and builds for other branches are off.
+To redeploy the current `main`, retry its latest build on the Worker's
+Deployments page. When the `Workers Builds: wazoo-api` check passes,
+`post-deploy.yml` runs the production canary.
+
+### PR previews
+
+Previews are not set up yet. The intended design: they come from Cloudflare Workers Builds, using
 `wrangler.preview.toml`. The credential stays in Cloudflare and is scoped to a
 separate `wazoo-api-preview` Worker, so it can't deploy QA or prod. Every
 branch pushed to this repo gets a `<alias>.preview.api.wazoo.dev` URL
@@ -141,7 +154,7 @@ Workers Builds settings for the `wazoo-api-preview` Worker (Settings, Builds):
 
 Check the config with `pnpm run preview:dry`.
 
-GitHub Actions validates formatting, typechecking, Worker dry deploy, Docker build, publishes the GHCR image on `main`, and deploys the configured Cloudflare Worker on `main`.
+GitHub Actions checks pull requests and `main`. It holds no Cloudflare or Infisical credential and deploys nothing.
 
 Docker Compose is not a supported runtime for this service because D1 is a
 Cloudflare-managed binding. Use Wrangler for local development and D1 schema
