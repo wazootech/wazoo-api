@@ -127,7 +127,18 @@ Deployments page. When the `Workers Builds: wazoo-api` check passes,
 
 ### PR previews
 
-Previews are not set up yet. The intended design: they come from Cloudflare Workers Builds, using
+The `wazoo-api-preview` Worker exists and its secrets come from the vault folder of the
+same name, but nothing builds pull requests: preview builds would run unmerged
+code with a build token that can reach other Workers. Upload a preview by hand
+from the branch, signed in to the Wazoo Cloudflare account with `wrangler login`:
+
+```sh
+pnpm exec wrangler versions upload -c wrangler.preview.toml --preview-alias <alias> \
+  --define "BUILD_GIT_SHA:\"$(git rev-parse HEAD)\""
+```
+
+Wrangler prints the preview's `workers.dev` address. The `*.preview.*.wazoo.dev`
+hostnames do not serve previews yet. The intended automated design follows: previews come from Cloudflare Workers Builds, using
 `wrangler.preview.toml`. The credential stays in Cloudflare and is scoped to a
 separate `wazoo-api-preview` Worker, so it can't deploy QA or prod. Every
 branch pushed to this repo gets a `<alias>.preview.api.wazoo.dev` URL
